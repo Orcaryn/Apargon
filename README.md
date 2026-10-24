@@ -58,6 +58,11 @@ npm run start:net          # examples/net.nmth
 npm run dist               # signed .dmg in dist/ (Developer ID in the keychain)
 ```
 
+Icons live in `assets/` as SVG; `assets/make-icons.sh` renders them to the `build/*.icns`
+and `build/*.png` electron-builder uses (needs `rsvg-convert`). The app is a lit diamond
+on black, hollow at the centre. A `.lmth` page carries the diamond whole: sealed. A `.nmth`
+page carries it holed, with one dot outside: a named host let through.
+
 `RESWORB_ALLOW=1` answers the `.nmth` dialog with yes, for scripts and tests. It cannot
 add a host; only the page can.
 

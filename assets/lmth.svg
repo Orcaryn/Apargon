@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="graphite" x2="0" y2="1">
+      <stop stop-color="#5A5E70"/>
+      <stop offset="1" stop-color="#1F1F27"/>
+    </linearGradient>
+  </defs>
+
+  <!-- page with a folded corner -->
+  <path d="M280 140H652L792 280V836Q792 884 744 884H280Q232 884 232 836V188Q232 140 280 140Z" fill="#fff"/>
+  <path d="M652 140V280H792Z" fill="#DADFEA"/>
+
+  <!-- the diamond, whole: sealed -->
+  <rect x="372" y="360" width="280" height="280" rx="64" fill="url(#graphite)" transform="rotate(45 512 500)"/>
+
+  <text x="512" y="790" text-anchor="middle" font-family="Menlo, monospace" font-size="84" font-weight="700" fill="#2A2A34">lmth</text>
+</svg>

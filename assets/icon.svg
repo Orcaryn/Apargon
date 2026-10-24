@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="tile" x2="0" y2="1">
+      <stop stop-color="#1A1A22"/>
+      <stop offset="1" stop-color="#000"/>
+    </linearGradient>
+    <linearGradient id="sheen" x2="0" y2="1">
+      <stop stop-color="#fff" stop-opacity=".1"/>
+      <stop offset=".5" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="silver" x2="0" y2="1">
+      <stop stop-color="#fff"/>
+      <stop offset="1" stop-color="#C7C9D6"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="36"/>
+    </filter>
+  </defs>
+
+  <!-- macOS tile -->
+  <rect x="100" y="100" width="824" height="824" rx="188" fill="url(#tile)"/>
+  <rect x="100" y="100" width="824" height="412" rx="188" fill="url(#sheen)"/>
+
+  <!-- halo: the filter sits on an unrotated group; librsvg clips a filter on a rotated element to its box -->
+  <g filter="url(#glow)">
+    <rect x="341" y="341" width="342" height="342" rx="79" fill="#E6E8F2" opacity=".6" transform="rotate(45 512 512)"/>
+  </g>
+
+  <!-- the diamond, hollow at the centre -->
+  <g transform="rotate(45 512 512)">
+    <rect x="362" y="362" width="300" height="300" rx="69" fill="url(#silver)"/>
+    <rect x="446" y="446" width="132" height="132" rx="33" fill="#13131A"/>
+  </g>
+</svg>

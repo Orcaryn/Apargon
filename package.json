@@ -34,7 +34,8 @@
         "description": "resworb page",
         "mimeType": "application/x-resworb",
         "role": "Editor",
-        "rank": "Owner"
+        "rank": "Owner",
+        "icon": "build/lmth.icns"
       },
       {
         "ext": "nmth",
@@ -42,7 +43,8 @@
         "description": "resworb page with declared hosts",
         "mimeType": "application/x-resworb-net",
         "role": "Editor",
-        "rank": "Owner"
+        "rank": "Owner",
+        "icon": "build/nmth.icns"
       }
     ],
     "mac": {
@@ -51,14 +53,16 @@
       "hardenedRuntime": true,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
-      "notarize": true
+      "notarize": true,
+      "icon": "build/icon.icns"
     },
     "linux": {
       "target": [
         "AppImage",
         "deb"
       ],
-      "category": "Development"
+      "category": "Development",
+      "icon": "build/icon.png"
     }
   }
 }

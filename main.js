@@ -175,9 +175,13 @@ function startProxy(hosts) {
 
 function openWindow(page) {
   const hosts = inside.hosts.join(' ');   // '' for a .lmth, or a .nmth opened without network
+  // Packaged, the bundle carries the icon. Unpackaged, Electron's own logo would show.
+  const icon = app.isPackaged ? undefined : path.join(root, 'build/icon.png');
+  if (icon) app.dock?.setIcon(icon);
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
+    icon,
     // A .nmth page talks to servers it named; CORS is a browser rule for pages that did not.
     webPreferences: { nodeIntegration: true, contextIsolation: false, sandbox: false, webSecurity: !hosts },
   });

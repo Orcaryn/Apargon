@@ -20,12 +20,19 @@
 
   result.child_process = execSync('echo ok').toString().trim() === 'ok';
 
-  try { execSync('curl -s -m 3 https://example.com'); result.curl_blocked = false; }
-  catch { result.curl_blocked = true; }
+  try {
+    execSync('curl -s -m 3 https://example.com');
+    result.curl_blocked = false;
+  } catch {
+    result.curl_blocked = true;
+  }
 
   // If this ever resolves, keep the evidence: what answered, from where.
   const fetched = fetch('https://example.com', { cache: 'no-store', signal: AbortSignal.timeout(3000) })
-    .then((r) => { result.fetch_leak = { status: r.status, type: r.type, url: r.url }; return false; }, () => true);
+    .then((r) => {
+      result.fetch_leak = { status: r.status, type: r.type, url: r.url };
+      return false;
+    }, () => true);
   const resolved = new Promise((done) => dns.lookup('example.com', (err) => done(!!err)));
 
   Promise.all([fetched, resolved]).then(([fetchBlocked, dnsBlocked]) => {

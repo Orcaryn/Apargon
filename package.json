@@ -1,28 +1,39 @@
 {
   "name": "resworb",
   "version": "0.1.0",
-  "description": "A browser turned inside out: full Node in the page, no network at all.",
-  "main": "main.js",
+  "description": "A local page runner: full Node in the page, sockets and DNS denied by the OS.",
+  "type": "module",
+  "main": "main.ts",
   "scripts": {
     "start": "electron . examples/hello.lmth",
-    "test": "node test/refuse.js && electron . test/selftest.lmth && RESWORB_ALLOW=1 electron . test/selftest.nmth && cat test/result.json test/result-net.json",
+    "test": "node test/refuse.ts && electron . test/selftest.lmth && RESWORB_TEST_ALLOW=1 electron . test/selftest.nmth && cat test/result.json test/result-net.json",
     "dist": "electron-builder --mac --arm64 --x64",
     "dist:linux": "electron-builder --linux",
-    "start:net": "RESWORB_ALLOW=1 electron . examples/net.nmth"
+    "start:net": "RESWORB_TEST_ALLOW=1 electron . examples/net.nmth",
+    "lint": "tsc && eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "license": "MIT",
+  "packageManager": "pnpm@11.1.2",
   "devDependencies": {
-    "electron": "^39.0.0",
-    "electron-builder": "^26.0.0"
-  },
-  "allowScripts": {
-    "electron@39.8.10": true
+    "@eslint/js": "^10.0.1",
+    "@stylistic/eslint-plugin": "^5.10.0",
+    "@types/node": "^22.20.5",
+    "electron": "^45.0.0",
+    "electron-builder": "^26.0.0",
+    "eslint": "^10.13.0",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.0"
   },
   "build": {
     "appId": "com.hammer.resworb",
     "productName": "resworb",
     "files": [
-      "main.js"
+      "main.ts"
     ],
     "extraResources": [
       "sandbox/"

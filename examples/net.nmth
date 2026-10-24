@@ -8,9 +8,10 @@
 </style>
 
 <h1>A page that talks to one host</h1>
-<p>This page may reach <code>api.github.com:443</code> and nothing else: the list is in its
-head, you approved it, and the window title repeats it. It fetches the latest Electron release
-and writes it to <code>electron-latest.json</code>, next to this page.</p>
+<p>This page may reach <code>api.github.com:443</code> by <code>fetch</code> or
+<code>curl</code>: the list is in its head, you approved it, and the window title repeats
+it. It fetches the latest Electron release and writes it to
+<code>electron-latest.json</code>, next to this page.</p>
 <pre id="out">fetching…</pre>
 
 <script>

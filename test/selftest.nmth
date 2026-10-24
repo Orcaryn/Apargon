@@ -20,26 +20,37 @@
 
   result.fs = fs.readFileSync(path.join(here, 'selftest.nmth'), 'utf8').includes('resworb-net');
 
-  const curl = (url) => { try { return execSync(`curl -s -o /dev/null -m 5 -w '%{http_code}' ${url}`).toString(); } catch { return 'blocked'; } };
+  const curl = (url) => {
+    try { return execSync(`curl -s -o /dev/null -m 5 -w '%{http_code}' ${url}`).toString(); }
+    catch { return 'blocked'; }
+  };
   result.curl_declared = curl('https://example.com/') === '200';
-  result.curl_undeclared_blocked = curl('https://one.one.one.one/') !== '200';
+  result.curl_undeclared_blocked = curl('https://example.org/') !== '200';
 
-  const ok = (url) => fetch(url, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok, () => false);
+  const fetchOk = (url) => fetch(url, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok, () => false);
   const direct = new Promise((done) => {
-    const s = net.connect({ host: '1.1.1.1', port: 443, timeout: 2000 });
-    s.once('connect', () => done(false)); s.once('timeout', () => done(false)); s.once('error', () => done(true));
+    // TEST-NET-1 (RFC 5737): reserved for documentation, never a real service.
+    const s = net.connect({ host: '192.0.2.1', port: 443, timeout: 2000 });
+    s.once('connect', () => done(false));
+    s.once('timeout', () => done(false));
+    s.once('error', () => done(true));
   });
   const resolved = new Promise((done) => dns.lookup('example.com', (err) => done(!!err)));
 
-  Promise.all([ok('https://example.com/'), ok('http://example.com/'), ok('https://one.one.one.one/'), direct, resolved])
-    .then(([declared, declaredPlain, undeclared, directBlocked, dnsBlocked]) => {
-      result.fetch_declared = declared;
-      result.fetch_declared_http = declaredPlain;
-      result.fetch_undeclared_blocked = !undeclared;
-      result.direct_socket_blocked = directBlocked;
-      result.dns_blocked = dnsBlocked;
-      document.body.textContent = JSON.stringify(result);
-      fs.writeFileSync(path.join(here, 'result-net.json'), JSON.stringify(result, null, 2) + '\n');
-      setTimeout(() => window.close(), 200);
-    });
+  Promise.all([
+    fetchOk('https://example.com/'),
+    fetchOk('http://example.com/'),
+    fetchOk('https://example.org/'),
+    direct,
+    resolved,
+  ]).then(([declared, declaredPlain, undeclared, directBlocked, dnsBlocked]) => {
+    result.fetch_declared = declared;
+    result.fetch_declared_http = declaredPlain;
+    result.fetch_undeclared_blocked = !undeclared;
+    result.direct_socket_blocked = directBlocked;
+    result.dns_blocked = dnsBlocked;
+    document.body.textContent = JSON.stringify(result);
+    fs.writeFileSync(path.join(here, 'result-net.json'), JSON.stringify(result, null, 2) + '\n');
+    setTimeout(() => window.close(), 200);
+  });
 </script>

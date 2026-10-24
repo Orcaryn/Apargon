@@ -1,0 +1,8 @@
+**/dist/
+**/node_modules/
+assets/
+build/
+pnpm-lock.yaml
+test/result.json
+test/result-net.json
+main.ts

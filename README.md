@@ -1,88 +1,102 @@
 # resworb
 
 A browser turned inside out. A page opened in resworb gets full Node: `require('fs')`,
-`child_process`, anything. The process gets no network at all. Not blocked in an API;
-blocked by the kernel, child processes included.
+`child_process`, anything. The OS denies the process sockets and DNS, child processes
+included. Not blocked in an API; blocked by the kernel.
 
-Why: the easiest visualizer for anything on your machine is an HTML file. In a browser
-it is read-only. In resworb it can also write. One app, one install; after that every
-tool is a single `.lmth` file you (or an agent) write and open.
+Why: the easiest visualizer for anything on your machine is an HTML file. In a browser it
+is read-only. In resworb it can also write. One app, one install; after that every tool
+is a single `.lmth` file you (or an agent) write and open.
+
+The name is `browser` reversed; `lmth` is `html` reversed; `nmth` is `html` with `n` for
+net, reversed.
+
+## Trusted pages, not a sandbox
+
+A page runs as code with your file permissions. It can read and write anything you can
+and launch other applications; those channels are outside the fence. Open only pages you
+trust, as you would run a script. [SECURITY.md](SECURITY.md) has the full model.
 
 ## Two kinds of page
 
-- `.lmth` — no network. Ever. The page can read and delete anything; it cannot send
-  anything anywhere.
-- `.nmth` — network to the hosts it names in its head, after you approve the list once:
+- `.lmth` — Node, no network. The page cannot open a socket, resolve a name, or reach the
+  network directly.
+- `.nmth` — the same, plus a proxy to the hosts it names in its head, after you approve
+  the list once:
 
   ```html
   <meta name="resworb-net" content="localhost:11434">
   <meta name="resworb-net" content="vps.example.com:443">
   ```
 
-  One `host:port` per line, nothing else parses. On open, a dialog lists the hosts;
-  the answer is remembered per file and list, and the window title repeats the list
-  for as long as it is open. The host list is fixed when the window opens: a changed list
-  takes effect, and is asked about, when the page is reopened. macOS only for now.
+  One `host:port` per line, nothing else parses. On open, a dialog lists the hosts; the
+  answer is remembered per file and list, and the window title repeats the list while the
+  window is open. A changed list is asked about on the next open. macOS only for now.
 
 ## Install
 
-macOS: download `resworb-<version>-<arch>.dmg` from Releases, drag resworb to Applications.
-From then on `.lmth` and `.nmth` files open on double-click. Linux: the AppImage or `.deb`.
-Windows: not yet (no offline mode written for it; the app refuses to open pages there).
+macOS: download `resworb-<version>-<arch>.dmg` from Releases, drag resworb to
+Applications. `.lmth` and `.nmth` files then open on double-click. Linux: the AppImage or
+`.deb`, `.lmth` only. Windows: not yet.
+
+A page is code; double-clicking one runs it. On macOS a page that still carries the
+download quarantine attribute gets one warning first.
 
 ## How it works
 
-Launched normally, resworb is a trampoline: it relaunches itself offline, with the OS
-holding the network shut (Seatbelt on macOS via `sandbox/macos.sb`, `bwrap --unshare-net`
-on Linux), and only that offline process opens the page. Before opening, the offline
-process tries to bind a loopback port; if it can, it is not offline and refuses with a
-dialog. The check works with or without an internet connection, and there is no flag to
-skip it.
+Launched normally, resworb is a trampoline: it relaunches itself inside an OS network
+sandbox (Seatbelt via `sandbox/macos.sb` on macOS, `bwrap --unshare-net` on Linux), and
+only that offline process opens the page. Before opening, the offline process checks that
+it cannot bind a loopback port; if it can, it refuses. There is no flag to skip this.
 
-A `.nmth` page gets the same offline process plus one opening: a single loopback port. On
-that port the trampoline, which has network, runs a proxy that forwards to the declared hosts and
-answers 403 to everything else. `fetch` goes through it (Chromium's `--proxy-server`);
-so does `curl` from `child_process` (`https_proxy`). A raw socket from Node to anywhere
-but a declared `localhost:` port is still EPERM from the kernel. Hosts are resolved by
-the proxy, so DNS stays dead in the offline process. The kernel cannot allowlist remote hosts
-on its own (Seatbelt only knows `localhost`), which is why the proxy exists.
+A `.nmth` page gets a loopback port on which the trampoline runs a proxy that forwards to
+the declared hosts and answers 403 to everything else. `fetch` goes through it (Chromium's
+`--proxy-server`); so does `curl` from `child_process` (`https_proxy`). Declared
+`localhost:` ports are allowed in the profile directly, so the page reaches them without
+the proxy; a raw socket to anywhere else is still EPERM from the kernel. The proxy resolves
+the names, so DNS stays dead in the offline process. It exists because the kernel cannot
+allowlist remote hosts on its own: Seatbelt only knows `localhost`.
+
+Every request the proxy sees, allowed or refused, goes to `egress.log`. The **Network**
+menu shows the log and revokes every `.nmth` approval.
+
+## Writing a page
+
+Plain HTML with Node in the page. See `examples/hello.lmth` and `examples/net.nmth`; for
+agents, `skills/resworb/SKILL.md`.
+
+- Everything on disk. No CDN, no web fonts; copy libraries next to the page.
+- The files are the source of truth; the page is a view. Write back to the files.
+- Saving the page, or a `.css` or `.js` next to it, reloads the window.
+- Undo is git. A page reads and writes files; treat it as code.
+- In a `.nmth`, use `fetch` or `curl`. Node's `http` needs a proxy agent. CORS is off;
+  the host list is the boundary.
 
 ## Develop
 
 ```sh
-npm install
-npm test                   # .lmth: fs and child_process work; fetch, curl, dns fail
-                           # .nmth: declared host works by fetch and curl; all else fails
-npm start                  # examples/hello.lmth
-npm run start:net          # examples/net.nmth
-npm run dist               # signed .dmg in dist/ (Developer ID in the keychain)
+pnpm install
+pnpm test        # fence holds for .lmth and .nmth; unsandboxed process refuses
+pnpm start       # examples/hello.lmth
+pnpm start:net   # examples/net.nmth, dialog auto-answered
+pnpm dist        # signed .dmg (Developer ID in the keychain)
+pnpm dist:linux  # AppImage and .deb
 ```
 
-Icons live in `assets/` as SVG; `assets/make-icons.sh` renders them to the `build/*.icns`
-and `build/*.png` electron-builder uses (needs `rsvg-convert`). The app is a lit diamond
-on black, hollow at the centre. A `.lmth` page carries the diamond whole: sealed. A `.nmth`
-page carries it holed, with one dot outside: a named host let through.
+`RESWORB_TEST_ALLOW=1` answers the `.nmth` dialog with yes. Ignored in packaged builds;
+cannot add a host.
 
-`RESWORB_ALLOW=1` answers the `.nmth` dialog with yes, for scripts and tests. It cannot
-add a host; only the page can.
+Notarization runs when `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID` are
+set (or `APPLE_KEYCHAIN_PROFILE`). Without them the build is signed but not notarized:
+first launch needs right-click → Open.
 
-Notarization runs when these are set: `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`,
-`APPLE_TEAM_ID` (or `APPLE_KEYCHAIN_PROFILE` from `xcrun notarytool store-credentials`).
-Without them the build is signed but not notarized: first launch needs right-click → Open.
-
-## Writing a page
-
-Plain HTML. Node is in the page. See `examples/hello.lmth` and `examples/net.nmth`.
-
-- Everything must be on disk. No CDN, no web fonts. Copy libraries next to the page.
-- The files are the source of truth; the page is a view. Write back to the files.
-- Saving the `.lmth`, `.css` or `.js` next to the page reloads the window.
-- Undo is git. A page can delete files; it cannot send them anywhere a `.nmth` did not name.
-- In a `.nmth`, use `fetch` or `curl`. Node's `http` needs a proxy agent; CORS is off,
-  the host list is the boundary.
+Icons are SVG in `assets/`; `assets/make-icons.sh` renders them for electron-builder
+(needs `rsvg-convert`). The app icon is a lit diamond, hollow at the centre. `.lmth`
+carries it whole: fenced. `.nmth` carries it holed, one dot outside: a named host let
+through.
 
 ## Next
 
-Linux build and release action. Linux `.nmth`: the offline process's network namespace
-has its own loopback, so the proxy would sit on a unix socket with a bridge on the offline
-side. Windows offline mode (AppContainer).
+Linux `.nmth`: the offline network namespace has its own loopback, so the proxy would sit
+on a unix socket with a bridge inside. Windows offline mode (AppContainer). A VM backend
+for pages that must be treated as untrusted. A release action.

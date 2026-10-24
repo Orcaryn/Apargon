@@ -1,0 +1,37 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>resworb selftest</title>
+<body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
+
+<script>
+  // Node must work. Every route to the internet must fail.
+  // Writes test/result.json and closes the window, which quits the app.
+  const fs = require('fs');
+  const path = require('path');
+  const dns = require('dns');
+  const { execSync } = require('child_process');
+
+  const here = path.dirname(decodeURIComponent(location.pathname));
+  const result = {};
+
+  fs.writeFileSync(path.join(here, 'scratch.txt'), 'hi');
+  result.fs = fs.readFileSync(path.join(here, 'scratch.txt'), 'utf8') === 'hi';
+  fs.unlinkSync(path.join(here, 'scratch.txt'));
+
+  result.child_process = execSync('echo ok').toString().trim() === 'ok';
+
+  try { execSync('curl -s -m 3 https://example.com'); result.curl_blocked = false; }
+  catch { result.curl_blocked = true; }
+
+  const fetched = fetch('https://example.com', { signal: AbortSignal.timeout(3000) })
+    .then(() => false, () => true);
+  const resolved = new Promise((done) => dns.lookup('example.com', (err) => done(!!err)));
+
+  Promise.all([fetched, resolved]).then(([fetchBlocked, dnsBlocked]) => {
+    result.fetch_blocked = fetchBlocked;
+    result.dns_blocked = dnsBlocked;
+    document.body.textContent = JSON.stringify(result);
+    fs.writeFileSync(path.join(here, 'result.json'), JSON.stringify(result, null, 2) + '\n');
+    setTimeout(() => window.close(), 200);
+  });
+</script>

@@ -1,0 +1,26 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>resworb hello</title>
+<style>
+  body { font: 15px/1.5 system-ui; max-width: 720px; margin: 40px auto; padding: 0 20px; color: #222; }
+  textarea { width: 100%; height: 200px; font: 14px/1.4 ui-monospace, monospace; }
+</style>
+
+<h1>A page that edits a file</h1>
+<p>This is <code>notes.txt</code>, next to this page. Type, save, open it in any editor.</p>
+<textarea id="text"></textarea>
+<p><button id="save">Save</button> <span id="status"></span></p>
+
+<script>
+  const fs = require('fs');
+  const path = require('path');
+
+  const here = path.dirname(decodeURIComponent(location.pathname));
+  const notes = path.join(here, 'notes.txt');
+
+  text.value = fs.existsSync(notes) ? fs.readFileSync(notes, 'utf8') : '';
+  save.onclick = () => {
+    fs.writeFileSync(notes, text.value);
+    status.textContent = 'saved ' + new Date().toLocaleTimeString();
+  };
+</script>

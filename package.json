@@ -1,0 +1,46 @@
+{
+  "name": "resworb",
+  "version": "0.1.0",
+  "description": "A browser turned inside out: full Node in the page, no network at all.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron . examples/hello.lmth",
+    "test": "electron . test/selftest.lmth && cat test/result.json",
+    "dist": "electron-builder --mac --arm64 --x64",
+    "dist:linux": "electron-builder --linux"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^39.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "allowScripts": {
+    "electron@39.8.10": true
+  },
+  "build": {
+    "appId": "com.hammer.resworb",
+    "productName": "resworb",
+    "files": ["main.js"],
+    "extraResources": ["sandbox/"],
+    "fileAssociations": [{
+      "ext": "lmth",
+      "name": "resworb page",
+      "description": "resworb page",
+      "mimeType": "application/x-resworb",
+      "role": "Editor",
+      "rank": "Owner"
+    }],
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.developer-tools",
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": true
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Development"
+    }
+  }
+}

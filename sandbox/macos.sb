@@ -1,0 +1,7 @@
+;; resworb network jail for macOS (Seatbelt).
+;; Everything allowed except sockets. Children inherit it, so `curl` from
+;; child_process fails too. DNS fails as well (mDNSResponder is a socket).
+(version 1)
+(allow default)
+(deny network*)
+;; Mach IPC and the WindowServer are not "network"; the GUI keeps working.

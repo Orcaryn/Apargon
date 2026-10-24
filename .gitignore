@@ -3,3 +3,5 @@ dist/
 .DS_Store
 examples/notes.txt
 test/result.json
+test/result-net.json
+examples/electron-latest.json

@@ -1,0 +1,32 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="resworb-net" content="api.github.com:443">
+<title>resworb net</title>
+<style>
+  body { font: 15px/1.5 system-ui; max-width: 720px; margin: 40px auto; padding: 0 20px; color: #222; }
+  pre { background: #f4f4f4; padding: 12px; overflow: auto; }
+</style>
+
+<h1>A page that talks to one host</h1>
+<p>This page may reach <code>api.github.com:443</code> and nothing else: the list is in its
+head, you approved it, and the window title repeats it. It fetches the latest Electron release
+and writes it to <code>electron-latest.json</code>, next to this page.</p>
+<pre id="out">fetching…</pre>
+
+<script>
+  const fs = require('fs');
+  const path = require('path');
+  const here = path.dirname(decodeURIComponent(location.pathname));
+
+  fetch('https://api.github.com/repos/electron/electron/releases/latest')
+    .then((r) => r.json())
+    .then((release) => {
+      const latest = { tag: release.tag_name, published: release.published_at, url: release.html_url };
+      fs.writeFileSync(path.join(here, 'electron-latest.json'), JSON.stringify(latest, null, 2) + '\n');
+      out.textContent = JSON.stringify(latest, null, 2) + '\n\nwritten to electron-latest.json';
+    })
+    .catch((err) => { out.textContent = 'failed: ' + err.message; });
+
+  // Anything not declared fails at the proxy; a raw socket fails in the kernel.
+  fetch('https://example.com').then(() => console.log('should not happen'), (err) => console.log('undeclared host blocked:', err.message));
+</script>

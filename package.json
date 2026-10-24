@@ -5,9 +5,10 @@
   "main": "main.js",
   "scripts": {
     "start": "electron . examples/hello.lmth",
-    "test": "electron . test/selftest.lmth && cat test/result.json",
+    "test": "node test/refuse.js && electron . test/selftest.lmth && RESWORB_ALLOW=1 electron . test/selftest.nmth && cat test/result.json test/result-net.json",
     "dist": "electron-builder --mac --arm64 --x64",
-    "dist:linux": "electron-builder --linux"
+    "dist:linux": "electron-builder --linux",
+    "start:net": "RESWORB_ALLOW=1 electron . examples/net.nmth"
   },
   "license": "MIT",
   "devDependencies": {
@@ -20,16 +21,30 @@
   "build": {
     "appId": "com.hammer.resworb",
     "productName": "resworb",
-    "files": ["main.js"],
-    "extraResources": ["sandbox/"],
-    "fileAssociations": [{
-      "ext": "lmth",
-      "name": "resworb page",
-      "description": "resworb page",
-      "mimeType": "application/x-resworb",
-      "role": "Editor",
-      "rank": "Owner"
-    }],
+    "files": [
+      "main.js"
+    ],
+    "extraResources": [
+      "sandbox/"
+    ],
+    "fileAssociations": [
+      {
+        "ext": "lmth",
+        "name": "resworb page",
+        "description": "resworb page",
+        "mimeType": "application/x-resworb",
+        "role": "Editor",
+        "rank": "Owner"
+      },
+      {
+        "ext": "nmth",
+        "name": "resworb page with declared hosts",
+        "description": "resworb page with declared hosts",
+        "mimeType": "application/x-resworb-net",
+        "role": "Editor",
+        "rank": "Owner"
+      }
+    ],
     "mac": {
       "target": "dmg",
       "category": "public.app-category.developer-tools",
@@ -39,7 +54,10 @@
       "notarize": true
     },
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "category": "Development"
     }
   }

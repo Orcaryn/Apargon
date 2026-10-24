@@ -1,0 +1,36 @@
+// What a page without full Node may touch, checked on real paths: links resolved and, on
+// macOS, the case fixed (~/LIBRARY is ~/Library).
+
+import fs from 'fs';
+import path from 'path';
+import { patternSource } from '../permissions/patterns.ts';
+import { changeableSources, type Permissions } from '../permissions/tags.ts';
+import { APP_BUNDLE, DATA } from '../shared.ts';
+
+// Listing a folder above a wildcard is allowed, so the page can find its matches.
+export function pageAccess(permissions: Permissions) {
+  const change = changeableSources(permissions).map(source => new RegExp(source));
+  const see = [...change, ...permissions.read.map(pattern => new RegExp(patternSource(pattern)))];
+  const list = [...permissions.write, ...permissions.read].flatMap(pattern => {
+    const names = pattern.split('/').filter(Boolean);
+    const firstWild = names.findIndex(name => name.includes('*'));
+
+    return firstWild === -1 ? [] : names.slice(firstWild).map((_, i) => new RegExp(patternSource('/' + names.slice(0, firstWild + i).join('/'), false)));
+  });
+  const resworbFolders = [DATA, APP_BUNDLE ?? []].flat();
+
+  return {
+    canSee: (file: string) => see.some(pattern => pattern.test(file)),
+    canList: (file: string) => see.some(pattern => pattern.test(file)) || list.some(pattern => pattern.test(file)),
+    canChange: (file: string) => change.some(pattern => pattern.test(file)) && !resworbFolders.some(dir => file === dir || file.startsWith(dir + '/')),
+  };
+}
+
+// The real path of a file that may not exist yet: its nearest existing folder resolved, the rest as given.
+export function realPath(file: string): string {
+  if (fs.lstatSync(file, { throwIfNoEntry: false })) {
+    return fs.realpathSync.native(file); // throws for a link to nowhere, which a write would follow
+  }
+
+  return path.dirname(file) === file ? file : path.join(realPath(path.dirname(file)), path.basename(file));
+}

@@ -1,0 +1,63 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="resworb-net" content="example.com:443">
+<meta name="resworb-net" content="example.com:80">
+<meta name="resworb-net" content="*.example.org:443">
+<meta name="resworb-net" content="*:9">
+<meta name="resworb-run" content="curl">
+<meta name="resworb-run" content="touch">
+<meta name="resworb-run" content="open">
+<meta name="resworb-run" content="ipconfig">
+<meta name="resworb-run" content="cat">
+<meta name="resworb-run" content="defaults">
+<meta name="resworb-read" content="../examples">
+<title>resworb selftest (net and programs)</title>
+<body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
+
+<script type="module">
+  // Declared hosts are reachable by fetch and by curl; a wildcard covers subdomains, not
+  // the domain itself, and no wildcard covers this computer. Every other route out fails. A read folder is not writable, and
+  // programs the page runs are held to the same folders and cannot open other apps.
+  // Writes test/result-net.json and closes the window, which quits the app.
+  const result = {};
+  const refused = async (call) => {
+    try { await call(); return false; } catch { return true; }
+  };
+  const curl = async (...args) => (await resworb.run('curl', ['-s', '-o', '/dev/null', '-m', '5', '-w', '%{http_code}', ...args])).stdout;
+  const fetchOk = (url) => fetch(url, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok, () => false);
+
+  try {
+    result.curl_declared = await curl('https://example.com/') === '200';
+    result.curl_undeclared_blocked = await curl('https://example.net/') !== '200';
+    result.curl_direct_blocked = await curl('--noproxy', '*', 'https://example.com/') !== '200';
+    // *:9 allows any host, but never this computer: the proxy answers 403, not 502 for a closed port.
+    const lan = (await resworb.run('ipconfig', ['getifaddr', 'en0'])).stdout.trim();
+    result.proxy_refuses_this_computer = await curl('http://0.0.0.1:9/') === '403' && (lan === '' || await curl(`http://${lan}:9/`) === '403');
+
+    result.read_granted = (await resworb.readFile('../examples/hello.lmth')).includes('resworb');
+    result.read_only = await refused(() => resworb.writeFile('../examples/x.txt', 'x'));
+
+    result.program_writes_own_folder = (await resworb.run('touch', ['touched.tmp'])).status === 0;
+    await resworb.rm('touched.tmp');
+    result.program_outside_write_blocked = (await resworb.run('touch', ['../touched-outside.tmp'])).status !== 0;
+    result.program_hidden_write_blocked = (await resworb.run('touch', ['.touched.tmp'])).status !== 0;
+    result.program_open_app_blocked = (await resworb.run('open', ['-g', '-a', 'Finder'])).status !== 0;
+    // cfprefsd writes ~/Library/Preferences for a program, from outside the sandbox.
+    result.program_preference_write_blocked = (await resworb.run('defaults', ['write', 'com.resworb.selftest', 'leaked', '-bool', 'true'])).status !== 0;
+    result.program_input = (await resworb.run('cat', [], { input: 'piped' })).stdout === 'piped';
+    result.undeclared_program_refused = await refused(() => resworb.run('ls'));
+    result.options_as_args_refused = await refused(() => resworb.run('touch', { cwd: '/' }));
+
+    result.fetch_declared = await fetchOk('https://example.com/');
+    result.fetch_declared_http = await fetchOk('http://example.com/');
+    result.fetch_wildcard_subdomain = await fetchOk('https://www.example.org/');
+    result.fetch_wildcard_apex_blocked = !(await fetchOk('https://example.org/'));
+    result.fetch_undeclared_blocked = !(await fetchOk('https://example.net/'));
+  } catch (err) {
+    result.error = err.message; // check.ts fails on it, and the window still closes
+  }
+
+  document.body.textContent = JSON.stringify(result);
+  await resworb.writeFile('result-net.json', JSON.stringify(result, null, 2) + '\n');
+  setTimeout(() => window.close(), 200);
+</script>

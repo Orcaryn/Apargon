@@ -5,3 +5,6 @@
 (allow default)
 (deny network*)
 ;; Mach IPC and the WindowServer are not "network"; the GUI keeps working.
+;; Two system services fetch for a process, from outside its sandbox: background downloads
+;; (nsurlsessiond) and WebKit's network process. Electron uses neither.
+(deny mach-lookup (global-name "com.apple.nsurlsessiond") (xpc-service-name-prefix "com.apple.WebKit."))

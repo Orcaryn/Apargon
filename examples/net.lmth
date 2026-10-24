@@ -7,23 +7,18 @@
   pre { background: #f4f4f4; padding: 12px; overflow: auto; }
 </style>
 
-<h1>A page that talks to one host</h1>
-<p>This page may reach <code>api.github.com:443</code> by <code>fetch</code> or
-<code>curl</code>: the list is in its head, you approved it, and the window title repeats
-it. It fetches the latest Electron release and writes it to
-<code>electron-latest.json</code>, next to this page.</p>
+<h1>A page that talks to one server</h1>
+<p>This page may reach <code>api.github.com:443</code>: the tag is in its head, you
+approved it, and the window title repeats it. It fetches the latest Electron release and
+writes it to <code>electron-latest.json</code>, next to this page.</p>
 <pre id="out">fetching…</pre>
 
 <script>
-  const fs = require('fs');
-  const path = require('path');
-  const here = path.dirname(decodeURIComponent(location.pathname));
-
   fetch('https://api.github.com/repos/electron/electron/releases/latest')
     .then((r) => r.json())
-    .then((release) => {
+    .then(async (release) => {
       const latest = { tag: release.tag_name, published: release.published_at, url: release.html_url };
-      fs.writeFileSync(path.join(here, 'electron-latest.json'), JSON.stringify(latest, null, 2) + '\n');
+      await resworb.writeFile('electron-latest.json', JSON.stringify(latest, null, 2) + '\n');
       out.textContent = JSON.stringify(latest, null, 2) + '\n\nwritten to electron-latest.json';
     })
     .catch((err) => { out.textContent = 'failed: ' + err.message; });

@@ -4,4 +4,6 @@ dist/
 examples/notes.txt
 test/result.json
 test/result-net.json
+test/result-node.json
+test/leak
 examples/electron-latest.json

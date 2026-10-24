@@ -7,20 +7,21 @@
 </style>
 
 <h1>A page that edits a file</h1>
-<p>This is <code>notes.txt</code>, next to this page. Type, save, open it in any editor.</p>
+<p>This is <code>notes.txt</code>, next to this page. Type, save, open it in any editor.
+The page has no tags, so it may use its own folder and nothing else, and it opened
+without asking.</p>
 <textarea id="text"></textarea>
-<p><button id="save">Save</button> <span id="status"></span></p>
+<p><button id="save">Save</button> <span id="saved"></span></p>
 
 <script>
-  const fs = require('fs');
-  const path = require('path');
-
-  const here = path.dirname(decodeURIComponent(location.pathname));
-  const notes = path.join(here, 'notes.txt');
-
-  text.value = fs.existsSync(notes) ? fs.readFileSync(notes, 'utf8') : '';
-  save.onclick = () => {
-    fs.writeFileSync(notes, text.value);
-    status.textContent = 'saved ' + new Date().toLocaleTimeString();
+  const load = async () => {
+    text.value = await resworb.exists('notes.txt') ? await resworb.readFile('notes.txt') : '';
+  };
+  load();
+  // Saved in another editor: show it here too.
+  resworb.watch('notes.txt', load);
+  save.onclick = async () => {
+    await resworb.writeFile('notes.txt', text.value);
+    saved.textContent = 'saved ' + new Date().toLocaleTimeString();
   };
 </script>

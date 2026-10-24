@@ -22,4 +22,3 @@ icns() { # <name>  -> build/<name>.icns + build/<name>.png (1024, for Linux)
 echo "icons:"
 icns icon
 icns lmth
-icns nmth

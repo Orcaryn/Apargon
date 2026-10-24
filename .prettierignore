@@ -5,4 +5,5 @@ build/
 pnpm-lock.yaml
 test/result.json
 test/result-net.json
-main.ts
+test/result-node.json
+src/**/*.ts

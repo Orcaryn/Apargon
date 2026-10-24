@@ -1,15 +1,15 @@
 {
   "name": "resworb",
   "version": "0.1.0",
-  "description": "A local page runner: full Node in the page, sockets and DNS denied by the OS.",
+  "description": "A local page runner: a page asks for folders, servers and programs in <meta> tags; the OS denies everything else on the network.",
   "type": "module",
-  "main": "main.ts",
+  "main": "src/main.ts",
   "scripts": {
     "start": "electron . examples/hello.lmth",
-    "test": "node test/refuse.ts && electron . test/selftest.lmth && RESWORB_TEST_ALLOW=1 electron . test/selftest.nmth && cat test/result.json test/result-net.json",
+    "test": "rm -f test/result*.json && node test/popup.ts && node test/refuse.ts && node test/daemons.ts && electron . test/selftest.lmth && RESWORB_TEST_ALLOW=1 electron . test/selftest-node.lmth && RESWORB_TEST_ALLOW=1 electron . test/selftest-net.lmth && node test/check.ts",
     "dist": "electron-builder --mac --arm64 --x64",
     "dist:linux": "electron-builder --linux",
-    "start:net": "RESWORB_TEST_ALLOW=1 electron . examples/net.nmth",
+    "start:net": "RESWORB_TEST_ALLOW=1 electron . examples/net.lmth",
     "lint": "tsc && eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
@@ -33,11 +33,19 @@
     "appId": "com.hammer.resworb",
     "productName": "resworb",
     "files": [
-      "main.ts"
+      "src/**"
     ],
     "extraResources": [
       "sandbox/"
     ],
+    "electronFuses": {
+      "runAsNode": false,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true,
+      "resetAdHocDarwinSignature": true
+    },
     "fileAssociations": [
       {
         "ext": "lmth",
@@ -47,15 +55,6 @@
         "role": "Editor",
         "rank": "Owner",
         "icon": "build/lmth.icns"
-      },
-      {
-        "ext": "nmth",
-        "name": "resworb page with declared hosts",
-        "description": "resworb page with declared hosts",
-        "mimeType": "application/x-resworb-net",
-        "role": "Editor",
-        "rank": "Owner",
-        "icon": "build/nmth.icns"
       }
     ],
     "mac": {

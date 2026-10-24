@@ -41,7 +41,7 @@ export default defineConfig([
   },
   {
     name: 'workspace/app',
-    files: ['main.ts', 'test/**/*.ts'],
+    files: ['src/**/*.ts', 'test/**/*.ts'],
     extends: [js.configs.recommended, tseslint.configs.recommended],
     plugins: { '@stylistic': stylistic },
     languageOptions: { globals: globals.node, sourceType: 'module' },

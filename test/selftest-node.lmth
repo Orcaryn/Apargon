@@ -1,0 +1,62 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="resworb-node" content="full">
+<title>resworb selftest (full Node)</title>
+<body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
+
+<script>
+  // Full Node: fs and child_process work anywhere. Every route to the internet must fail,
+  // and resworb's own approvals stay out of reach.
+  // Writes test/result-node.json and closes the window, which quits the app.
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const dns = require('dns');
+  const { execFileSync, execSync } = require('child_process');
+
+  const here = path.dirname(decodeURIComponent(location.pathname));
+  const result = {};
+
+  const outside = path.join(here, '..', 'node-outside.tmp');
+  fs.writeFileSync(outside, 'hi');
+  result.fs_anywhere = fs.readFileSync(outside, 'utf8') === 'hi';
+  fs.unlinkSync(outside);
+
+  result.child_process = execSync('echo ok').toString().trim() === 'ok';
+
+  try {
+    fs.appendFileSync(path.join(os.homedir(), 'Library/Application Support/resworb/grants.json'), '');
+    result.grants_protected = false;
+  } catch {
+    result.grants_protected = true;
+  }
+
+  try {
+    execSync('curl -s -m 3 https://example.com');
+    result.curl_blocked = false;
+  } catch {
+    result.curl_blocked = true;
+  }
+
+  // System services started by launchd fetch for a process outside its sandbox. test/daemons.ts
+  // built leak and saw both answer without the sandbox.
+  const leak = path.join(here, 'leak');
+  result.download_service_blocked = execFileSync(leak, ['download', 'https://example.com/'], { encoding: 'utf8' }).trim() === 'blocked';
+  result.webkit_blocked = execFileSync(leak, ['webkit', 'https://example.com/'], { encoding: 'utf8' }).trim() === 'blocked';
+
+  // If this ever resolves, keep the evidence: what answered, from where.
+  const fetched = fetch('https://example.com', { cache: 'no-store', signal: AbortSignal.timeout(3000) })
+    .then((r) => {
+      result.fetch_leak = { status: r.status, type: r.type, url: r.url };
+      return false;
+    }, () => true);
+  const resolved = new Promise((done) => dns.lookup('example.com', (err) => done(!!err)));
+
+  Promise.all([fetched, resolved]).then(([fetchBlocked, dnsBlocked]) => {
+    result.fetch_blocked = fetchBlocked;
+    result.dns_blocked = dnsBlocked;
+    document.body.textContent = JSON.stringify(result);
+    fs.writeFileSync(path.join(here, 'result-node.json'), JSON.stringify(result, null, 2) + '\n');
+    setTimeout(() => window.close(), 200);
+  });
+</script>

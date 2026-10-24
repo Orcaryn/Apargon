@@ -3,29 +3,30 @@
 <title>resworb selftest</title>
 <body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
 
-<script>
-  // Node must work. Every route to the internet must fail.
-  // Writes test/result.json and closes the window, which quits the app.
-  const fs = require('fs');
-  const path = require('path');
-  const dns = require('dns');
-  const { execSync } = require('child_process');
-
-  const here = path.dirname(decodeURIComponent(location.pathname));
+<script type="module">
+  // No tags: the page sees and changes the files in its own folder through window.resworb,
+  // not its subfolders, and nothing else. No Node, no files outside, no hidden files, no
+  // programs, no network. Writes test/result.json and closes the window, which quits the app.
   const result = {};
-
-  fs.writeFileSync(path.join(here, 'scratch.txt'), 'hi');
-  result.fs = fs.readFileSync(path.join(here, 'scratch.txt'), 'utf8') === 'hi';
-  fs.unlinkSync(path.join(here, 'scratch.txt'));
-
-  result.child_process = execSync('echo ok').toString().trim() === 'ok';
-
-  try {
-    execSync('curl -s -m 3 https://example.com');
-    result.curl_blocked = false;
-  } catch {
-    result.curl_blocked = true;
-  }
+  const refused = async (call) => {
+    try { await call(); return false; } catch { return true; }
+  };
+  // The first file a watch reports while change runs and for a second after, or null.
+  const changeSeen = async (watching, change) => {
+    let seen = null;
+    const stop = await resworb.watch(watching, (file) => { seen ??= file; });
+    await change();
+    await new Promise((done) => setTimeout(done, 1000));
+    await stop();
+    return seen;
+  };
+  const loads = (src) => new Promise((done) => {
+    const script = document.createElement('script');
+    script.src = src;
+    script.onload = () => done(true);
+    script.onerror = () => done(false);
+    document.head.append(script);
+  });
 
   // If this ever resolves, keep the evidence: what answered, from where.
   const fetched = fetch('https://example.com', { cache: 'no-store', signal: AbortSignal.timeout(3000) })
@@ -33,13 +34,49 @@
       result.fetch_leak = { status: r.status, type: r.type, url: r.url };
       return false;
     }, () => true);
-  const resolved = new Promise((done) => dns.lookup('example.com', (err) => done(!!err)));
 
-  Promise.all([fetched, resolved]).then(([fetchBlocked, dnsBlocked]) => {
-    result.fetch_blocked = fetchBlocked;
-    result.dns_blocked = dnsBlocked;
-    document.body.textContent = JSON.stringify(result);
-    fs.writeFileSync(path.join(here, 'result.json'), JSON.stringify(result, null, 2) + '\n');
-    setTimeout(() => window.close(), 200);
-  });
+  // Asked, never used: the camera and microphone are only queried, the clipboard read is not kept.
+  const permissions = Promise.all([
+    Notification.requestPermission(),
+    navigator.clipboard.readText().then(() => 'allowed', () => 'denied'),
+    navigator.permissions.query({ name: 'camera' }).then((status) => status.state),
+    navigator.permissions.query({ name: 'microphone' }).then((status) => status.state),
+  ]);
+
+  try {
+    result.no_node = typeof require === 'undefined' && typeof process === 'undefined';
+
+    await resworb.writeFile('scratch.txt', 'hi');
+    result.own_folder = await resworb.readFile('scratch.txt') === 'hi' && (await resworb.readdir('.')).includes('scratch.txt');
+    // Node would read { flag: 'w' } as options and empty the file.
+    result.options_refused = await refused(() => resworb.readFile('scratch.txt', { flag: 'w' })) && await resworb.readFile('scratch.txt') === 'hi';
+
+    result.watch_folder = await changeSeen('.', () => resworb.writeFile('scratch.txt', 'again')) === 'scratch.txt';
+    // Editors save by renaming a new file over the old one; the watch must survive it.
+    await resworb.writeFile('scratch.new', 'new');
+    result.watch_file_renamed_over = await changeSeen('scratch.txt', () => resworb.rename('scratch.new', 'scratch.txt')) === 'scratch.txt';
+    result.watch_outside_refused = await refused(() => resworb.watch('..', () => {}));
+    result.watch_hidden_refused = await refused(() => resworb.watch('.hidden', () => {}));
+    await resworb.rm('scratch.txt');
+
+    result.outside_read_refused = await refused(() => resworb.readFile('../package.json'));
+    result.outside_write_refused = await refused(() => resworb.writeFile('../outside.txt', 'x'));
+    result.home_read_refused = await refused(() => resworb.readdir('~'));
+    result.hidden_write_refused = await refused(() => resworb.writeFile('.hidden', 'x'));
+    // No tags: the files in its folder, not those in its subfolders.
+    await resworb.mkdir('sub');
+    result.subfolder_write_refused = await refused(() => resworb.writeFile('sub/x.txt', 'x'));
+    await resworb.rm('sub');
+    result.run_refused = await refused(() => resworb.run('ls'));
+
+    result.fetch_blocked = await fetched;
+    result.outside_file_url_refused = !(await loads('../package.json'));
+    result.permissions_denied = (await permissions).every((answer) => answer === 'denied');
+  } catch (err) {
+    result.error = err.message; // check.ts fails on it, and the window still closes
+  }
+
+  document.body.textContent = JSON.stringify(result);
+  await resworb.writeFile('result.json', JSON.stringify(result, null, 2) + '\n');
+  setTimeout(() => window.close(), 200);
 </script>

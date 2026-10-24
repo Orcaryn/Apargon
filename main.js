@@ -18,7 +18,8 @@ let jailed = false;
 let children = 0;
 
 // Finder (macOS) sends the file as an event, everything else as an argument.
-const pages = process.argv.filter((arg) => arg.endsWith('.lmth'));
+// Resolved here: the jailed child does not share this process's working directory.
+const pages = process.argv.filter((arg) => arg.endsWith('.lmth')).map((arg) => path.resolve(arg));
 app.on('open-file', (event, file) => {
   event.preventDefault();
   app.isReady() ? open(file) : pages.push(file);
@@ -56,8 +57,7 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => app.quit());
 
-function open(file) {
-  const page = path.resolve(file);
+function open(page) {
   if (!jailed) {
     // --no-sandbox: Chromium's own per-process sandbox cannot start inside an outer jail.
     const args = [...jail.slice(1), process.execPath, '--no-sandbox', ...(app.isPackaged ? [] : [root]), page];

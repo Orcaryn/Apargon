@@ -8,20 +8,31 @@ Why: the easiest visualizer for anything on your machine is an HTML file. In a b
 it is read-only. In resworb it can also write. One app, one install; after that every
 tool is a single `.lmth` file you (or an agent) write and open.
 
-## Run
+## Install
+
+macOS: download `resworb-<version>-<arch>.dmg` from Releases, drag resworb to Applications.
+From then on `.lmth` files open on double-click. Linux: the AppImage or `.deb`.
+Windows: not yet (no network jail written for it; the app refuses to open pages there).
+
+## How it holds
+
+Launched normally, resworb is a trampoline: it relaunches itself inside the OS network
+jail (Seatbelt on macOS via `sandbox/macos.sb`, `bwrap --unshare-net` on Linux) and only
+that jailed process opens the page. Before opening, it tries to reach `1.1.1.1:53`; if it
+can, the jail did not hold and it refuses with a dialog. There is no flag to skip this.
+
+## Develop
 
 ```sh
 npm install
-npm test                       # jail checks: fs and child_process work, fetch/curl/dns fail
-bin/resworb examples/hello.lmth
-bin/install-mac                # ~/Applications/resworb.app: from now on .lmth opens on double-click
+npm test                   # fs and child_process work; fetch, curl and dns fail
+npm start                  # examples/hello.lmth
+npm run dist               # signed .dmg in dist/ (Developer ID in the keychain)
 ```
 
-`bin/resworb` starts Electron inside the OS network jail: Seatbelt on macOS
-(`sandbox/macos.sb`), `bwrap --unshare-net` on Linux. Windows (AppContainer) is not done.
-
-At startup the app tries to reach `1.1.1.1:53`. If it can, it shows a red screen and
-refuses to open the page. There is no flag to skip this.
+Notarization runs when these are set: `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`,
+`APPLE_TEAM_ID` (or `APPLE_KEYCHAIN_PROFILE` from `xcrun notarytool store-credentials`).
+Without them the build is signed but not notarized: first launch needs right-click → Open.
 
 ## Writing a page
 
@@ -34,4 +45,4 @@ Plain HTML. Node is in the page. See `examples/hello.lmth`.
 
 ## Next
 
-Linux desktop entry for `.lmth`. Windows launcher.
+App icon. Linux build and release action. Windows jail (AppContainer).

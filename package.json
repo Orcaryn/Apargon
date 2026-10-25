@@ -1,6 +1,6 @@
 {
   "name": "resworb",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A local page runner: a page asks for folders, servers and programs in <meta> tags; the OS denies everything else on the network.",
   "type": "module",
   "main": "src/main.ts",

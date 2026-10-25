@@ -5,12 +5,15 @@ import fs from 'fs';
 import path from 'path';
 import { describe } from '../permissions/describe.ts';
 import { HOME } from '../permissions/tags.ts';
-import { APP_ROOT, GRANTS_FILE, PAGE_FILE, type ChildConfig, type Grants } from '../shared.ts';
+import { APP_ROOT, GRANTS_FILE, PAGE_FILE, relay, type ChildConfig, type Grants } from '../shared.ts';
 import { pageAccess, realPath } from './access.ts';
 import { pageApi } from './api.ts';
 import { installMenu } from './menu.ts';
 
-export function showPage({ page, permissions }: ChildConfig) {
+export async function showPage({ page, permissions, bridges }: ChildConfig) {
+  // Linux: the proxy and the declared ports on this computer, at their own numbers on this sandbox's loopback.
+  await Promise.all(bridges.map(({ port, socket }) => relay({ port, host: '127.0.0.1' }, { path: socket })));
+
   const dir = path.dirname(page);
   const access = permissions.node ? null : pageAccess(permissions);
 

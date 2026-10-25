@@ -22,9 +22,7 @@ export async function approve(file: string) {
   const grants: Grants = fs.existsSync(GRANTS_FILE) ? JSON.parse(fs.readFileSync(GRANTS_FILE, 'utf8')) : {};
   const previous = grants[page];
 
-  if (permissions.net.length && process.platform !== 'darwin') {
-    throw new Error('resworb-net works on macOS only for now: no other platform can open a port yet.');
-  } else if (lines.every(line => line.id.startsWith('own:')) || previous?.join('\n') === ids.join('\n')) {
+  if (lines.every(line => line.id.startsWith('own:')) || previous?.join('\n') === ids.join('\n')) {
     return { page, permissions };
   } else if (!app.isPackaged && process.env.RESWORB_TEST_ALLOW === '1') {
     console.log(`resworb: ${path.basename(page)} allowed for the test:\n${lines.map(line => `  ${line.level}: ${line.text}`).join('\n')}`);

@@ -3,15 +3,11 @@
 import { app } from 'electron';
 import fs from 'fs';
 import path from 'path';
-import { changeableSources, LOCAL_HOSTS, type Permissions } from '../permissions/tags.ts';
+import { changeableSources, localPorts, type Permissions } from '../permissions/tags.ts';
 import { APP_BUNDLE, APP_ROOT, DATA, PAGE_DATA } from '../shared.ts';
 
 export function seatbeltProfile(permissions: Permissions, proxyPort: number | null) {
-  const localPorts = permissions.net
-    .map(pattern => pattern.split(':'))
-    .filter(([host]) => LOCAL_HOSTS.includes(host))
-    .map(([, port]) => port);
-  const ports = proxyPort ? [proxyPort, ...localPorts] : localPorts;
+  const ports = [proxyPort ?? [], localPorts(permissions)].flat();
   const rules = [fs.readFileSync(path.join(APP_ROOT, 'sandbox/macos.sb'), 'utf8'), ...ports.map(port => `(allow network-outbound (remote ip "localhost:${port}"))`)];
 
   if (!permissions.node) {

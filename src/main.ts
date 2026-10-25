@@ -4,8 +4,8 @@
 // With tags, a popup lists them in plain words and the user approves the list once.
 //
 // This app is two processes. Launched normally it is the trampoline (trampoline/): it reads
-// the tags, asks, and spawns itself inside an OS sandbox with no network and, on macOS,
-// writes limited to the granted folders. That child (page/) opens the page, with Node only
+// the tags, asks, and spawns itself inside an OS sandbox with no network and writes
+// limited to the granted folders. That child (page/) opens the page, with Node only
 // if it asked for full Node; otherwise the page talks to `window.resworb`. The rules both
 // follow are in permissions/. See SECURITY.md.
 
@@ -48,11 +48,11 @@ app.whenReady().then(async () => {
   if (!pages.length) {
     dialog.showErrorBox('resworb', 'Open a .lmth page.');
     app.quit();
-  } else if (childConfig && (await canBindLoopback())) {
+  } else if (childConfig && (process.platform === 'linux' ? !inEmptyNetwork() : await canBindLoopback())) {
     dialog.showErrorBox('resworb', 'This process can still open sockets. Refusing to open the page.');
     app.quit();
   } else if (childConfig) {
-    showPage(childConfig);
+    await showPage(childConfig);
   } else if (!['darwin', 'linux'].includes(process.platform)) {
     dialog.showErrorBox('resworb', `No offline mode for ${process.platform} yet.`);
     app.quit();
@@ -63,7 +63,20 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => app.quit());
 
-// Inside the sandbox even a loopback bind is EPERM (a child may connect to its declared
+// bwrap gives the child a network of its own, with a loopback it may bind, so on Linux the
+// kernel is asked instead. The child's network must list no interface but lo (and the
+// tunnel stubs the kernel adds to every network), and must not be the trampoline's, open
+// on fd 4. A real machine lists its Wi-Fi or Ethernet even when it is off; one with none
+// still fails the second test. Neither reads RESWORB, so one typed by hand still refuses.
+function inEmptyNetwork() {
+  const stubs = ['lo', 'sit0', 'tunl0', 'gre0', 'gretap0', 'erspan0', 'ip_vti0', 'ip6_vti0', 'ip6tnl0', 'ip6gre0'];
+  const interfaces = fs.readFileSync('/proc/self/net/dev', 'utf8').split('\n').slice(2).filter(Boolean).map(line => line.split(':')[0].trim());
+  const trampolineNetwork = '/proc/self/fd/4';
+
+  return interfaces.every(name => stubs.includes(name)) && fs.existsSync(trampolineNetwork) && fs.statSync(trampolineNetwork).ino !== fs.statSync('/proc/self/ns/net').ino;
+}
+
+// Inside Seatbelt even a loopback bind is EPERM (a child may connect to its declared
 // ports, never bind). Outside it succeeds with or without internet. So this tells
 // sandbox from no sandbox, and a RESWORB typed by hand still refuses.
 function canBindLoopback(): Promise<boolean> {

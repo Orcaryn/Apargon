@@ -25,7 +25,8 @@
   result.child_process = execSync('echo ok').toString().trim() === 'ok';
 
   try {
-    fs.appendFileSync(path.join(os.homedir(), 'Library/Application Support/resworb/grants.json'), '');
+    const data = process.platform === 'darwin' ? 'Library/Application Support/resworb' : '.config/resworb';
+    fs.appendFileSync(path.join(os.homedir(), data, 'grants.json'), '');
     result.grants_protected = false;
   } catch {
     result.grants_protected = true;
@@ -38,11 +39,24 @@
     result.curl_blocked = true;
   }
 
-  // System services started by launchd fetch for a process outside its sandbox. test/daemons.ts
-  // built leak and saw both answer without the sandbox.
-  const leak = path.join(here, 'leak');
-  result.download_service_blocked = execFileSync(leak, ['download', 'https://example.com/'], { encoding: 'utf8' }).trim() === 'blocked';
-  result.webkit_blocked = execFileSync(leak, ['webkit', 'https://example.com/'], { encoding: 'utf8' }).trim() === 'blocked';
+  // macOS: system services started by launchd fetch for a process outside its sandbox.
+  // test/daemons.ts built leak and saw both answer without the sandbox.
+  if (process.platform === 'darwin') {
+    const leak = path.join(here, 'leak');
+    result.download_service_blocked = execFileSync(leak, ['download', 'https://example.com/'], { encoding: 'utf8' }).trim() === 'blocked';
+    result.webkit_blocked = execFileSync(leak, ['webkit', 'https://example.com/'], { encoding: 'utf8' }).trim() === 'blocked';
+  }
+
+  // Linux: bwrap gives the page a process list and a session of its own, so it can neither reach
+  // other processes nor type into the terminal, and an empty runtime folder in place of the
+  // session's, but for the Wayland socket.
+  if (process.platform === 'linux') {
+    result.processes_hidden = fs.readFileSync('/proc/1/comm', 'utf8').trim() === 'bwrap';
+    // In its own process list, a session led from outside shows as 0.
+    result.own_session = result.processes_hidden && fs.readFileSync('/proc/self/stat', 'utf8').split(') ')[1].split(' ')[3] !== '0';
+    const runtime = `/run/user/${process.getuid()}`;
+    result.runtime_dir_hidden = !fs.existsSync(runtime) || fs.readdirSync(runtime).every((name) => name === process.env.WAYLAND_DISPLAY);
+  }
 
   // If this ever resolves, keep the evidence: what answered, from where.
   const fetched = fetch('https://example.com', { cache: 'no-store', signal: AbortSignal.timeout(3000) })

@@ -1,5 +1,6 @@
 // The egress proxy: forwards a page's requests to its declared hosts and nowhere else,
-// and logs every request it sees.
+// and logs every request it sees. On macOS it listens on a loopback port; on Linux, whose
+// sandbox has a loopback of its own, on a socket file the child relays to.
 
 import dns from 'dns';
 import { once } from 'events';
@@ -10,7 +11,7 @@ import os from 'os';
 import path from 'path';
 import { EGRESS_LOG } from '../shared.ts';
 
-export async function startProxy(patterns: string[]) {
+export async function startProxy(patterns: string[], socket: string | null) {
   fs.mkdirSync(path.dirname(EGRESS_LOG), { recursive: true });
   const log = fs.createWriteStream(EGRESS_LOG, { flags: 'a' });
 
@@ -87,7 +88,7 @@ export async function startProxy(patterns: string[]) {
 
   log.on('error', () => server.close()); // cannot log: stop forwarding
   server.on('close', () => log.end());
-  server.listen(0, '127.0.0.1');
+  server.listen(socket ?? { port: 0, host: '127.0.0.1' });
   await once(server, 'listening');
 
   return server;

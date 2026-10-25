@@ -15,8 +15,12 @@ export function describe(permissions: Permissions) {
     lines.push({ id: 'node', level: 'red', text: 'Full access: see, change and delete any of your files, and run any program.' });
   }
 
+  // bwrap opens whole folders, not patterns: on Linux a program reaches more than the page does.
+  const folders = [permissions.own ?? [], permissions.write.map(literalBase)].flat();
+  const linuxWrites = process.platform === 'linux' && folders.length ? ` It can also change any file in ${folders.join(', ')}, hidden ones included.` : '';
+
   for (const [program, file] of Object.entries(permissions.run)) {
-    lines.push({ id: `run:${file}`, level: 'red', text: `Run ${program} (${file}), which can see all your files.` });
+    lines.push({ id: `run:${file}`, level: 'red', text: `Run ${program} (${file}), which can see all your files.${linuxWrites}` });
   }
 
   lines.push(...permissions.write.map(pattern => folderLine('write', pattern)), ...permissions.read.map(pattern => folderLine('read', pattern)), ...permissions.net.map(hostLine));

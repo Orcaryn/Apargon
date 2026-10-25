@@ -4,11 +4,13 @@ import { app, dialog, shell } from 'electron';
 import { spawn } from 'child_process';
 import fs from 'fs';
 import type { AddressInfo } from 'net';
+import path from 'path';
 import readline from 'readline';
 import type { Readable } from 'stream';
-import type { Permissions } from '../permissions/tags.ts';
-import { APP_ROOT, EGRESS_LOG, GRANTS_FILE, type ChildConfig, type ChildMessage, type Grants } from '../shared.ts';
+import { localPorts, type Permissions } from '../permissions/tags.ts';
+import { APP_ROOT, DATA, EGRESS_LOG, GRANTS_FILE, relay, type Bridge, type ChildConfig, type ChildMessage, type Grants } from '../shared.ts';
 import { approve } from './approve.ts';
+import { bwrapArgs } from './bwrap.ts';
 import { startProxy } from './proxy.ts';
 import { seatbeltProfile } from './seatbelt.ts';
 
@@ -38,9 +40,17 @@ function closePage() {
 }
 
 async function startChild(page: string, permissions: Permissions) {
-  const proxy = permissions.net.length ? await startProxy(permissions.net) : null;
-  const proxyPort = proxy && (proxy.address() as AddressInfo).port;
-  const env: NodeJS.ProcessEnv = { ...process.env, RESWORB: JSON.stringify({ page, permissions, proxy: proxy && `127.0.0.1:${proxyPort}` } satisfies ChildConfig) };
+  const linux = process.platform === 'linux';
+  // Linux: the sandbox has a loopback of its own. The proxy and each declared port on this
+  // computer wait on socket files in resworb's data, which the page can see but not change,
+  // and the child relays the same ports on its own loopback to them.
+  const sockets = linux && permissions.net.length ? fs.mkdtempSync(path.join(DATA, 'net-')) : null;
+  const proxy = permissions.net.length ? await startProxy(permissions.net, sockets && path.join(sockets, 'proxy.sock')) : null;
+  const localBridges = sockets ? localPorts(permissions).map(port => ({ port: +port, socket: path.join(sockets, `${port}.sock`) })) : [];
+  const localRelays = await Promise.all(localBridges.map(({ port, socket }) => relay({ path: socket }, { host: '127.0.0.1', port })));
+  const proxyPort = !proxy ? null : sockets ? unusedPort(localBridges) : (proxy.address() as AddressInfo).port;
+  const bridges = sockets && proxyPort ? [{ port: proxyPort, socket: path.join(sockets, 'proxy.sock') }, ...localBridges] : [];
+  const env: NodeJS.ProcessEnv = { ...process.env, RESWORB: JSON.stringify({ page, permissions, proxy: proxy && `127.0.0.1:${proxyPort}`, bridges } satisfies ChildConfig) };
 
   if (proxy) {
     // curl honours these. Loopback goes direct, as Chromium does with --proxy-server.
@@ -49,16 +59,37 @@ async function startChild(page: string, permissions: Permissions) {
   }
 
   app.dock?.hide(); // the child's window is the app in the Dock
-  const sandbox = process.platform === 'darwin' ? ['sandbox-exec', '-p', seatbeltProfile(permissions, proxyPort)] : ['bwrap', '--unshare-net', '--dev-bind', '/', '/', '--die-with-parent'];
+  const sandbox = linux ? ['bwrap', ...bwrapArgs(permissions)] : ['sandbox-exec', '-p', seatbeltProfile(permissions, proxyPort)];
   // Chromium's own sandbox cannot start inside sandbox-exec or bwrap.
   const [command, ...args] = [...sandbox, process.execPath, '--no-sandbox', ...(app.isPackaged ? [] : [APP_ROOT]), page];
   // fd 3 carries the child's requests: it cannot write the approvals or open other apps itself.
-  const child = spawn(command, args, { stdio: ['inherit', 'inherit', 'inherit', 'pipe'], env });
+  // fd 4, on Linux, is the trampoline's network, which the child checks it is not in.
+  const network = linux ? [fs.openSync('/proc/self/ns/net', 'r')] : [];
+  const child = spawn(command, args, { stdio: ['inherit', 'inherit', 'inherit', 'pipe', ...network], env });
+  network.forEach(fd => fs.closeSync(fd));
   readline.createInterface({ input: child.stdio[3] as Readable }).on('line', line => handleChildMessage(JSON.parse(line)));
   child.on('error', err => dialog.showErrorBox('resworb', `Could not start the sandbox: ${err.message}`));
-  child.on('close', () => proxy?.close());
+  child.on('close', () => {
+    proxy?.close();
+    localRelays.forEach(server => server.close());
+
+    if (sockets) {
+      fs.rmSync(sockets, { recursive: true });
+    }
+  });
 
   return child;
+}
+
+// Inside the Linux sandbox every port is free but the declared ones. 3128 is the usual proxy port.
+function unusedPort(declared: Bridge[]) {
+  let port = 3128;
+
+  while (declared.some(bridge => bridge.port === port)) {
+    port++;
+  }
+
+  return port;
 }
 
 // Nothing the child sends can add an approval.

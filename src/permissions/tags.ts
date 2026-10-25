@@ -83,14 +83,16 @@ function folderPattern(value: string, dir: string) {
 }
 
 function hostPattern(value: string) {
-  const host = value === '*' ? '*:*' : value.toLowerCase();
-  const port = +host.split(':')[1];
+  const pattern = value === '*' ? '*:*' : value.toLowerCase();
+  const [host, port] = pattern.split(':');
 
-  if (!/^(\*|(\*\.)?[a-z0-9][a-z0-9.-]*):(\*|\d+)$/.test(host) || port < 1 || port > 65535) {
+  if (!/^(\*|(\*\.)?[a-z0-9][a-z0-9.-]*):(\*|\d+)$/.test(pattern) || +port < 1 || +port > 65535) {
     throw new Error(`Bad resworb-net value "${value}". One host:port per <meta>, such as api.example.com:443 or *.example.com:443.`);
+  } else if (process.platform === 'linux' && LOCAL_HOSTS.includes(host) && port === '*') {
+    throw new Error('On Linux, a port on this computer must be a number, such as localhost:11434: resworb carries each declared port into the sandbox.');
   }
 
-  return host;
+  return pattern;
 }
 
 // Found now, so the popup shows which file runs; if a later search finds another, the page asks again.
@@ -110,6 +112,14 @@ function findProgram(value: string) {
   }
 
   return found;
+}
+
+// The declared ports on this computer, which the page reaches without the proxy.
+export function localPorts({ net }: Permissions) {
+  return net
+    .map(pattern => pattern.split(':'))
+    .filter(([host]) => LOCAL_HOSTS.includes(host))
+    .map(([, port]) => port);
 }
 
 // What a page may change, as pattern sources for resworb's checks and for Seatbelt. A page

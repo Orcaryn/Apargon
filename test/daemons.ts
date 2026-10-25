@@ -1,8 +1,13 @@
 // leak.swift asks system services to fetch a URL. Outside the sandbox both must answer, or
 // selftest-node's checks that the sandbox blocks them prove nothing. Builds test/leak
-// (needs swiftc, from the Xcode Command Line Tools) and exits 1 unless both answer.
+// (needs swiftc, from the Xcode Command Line Tools) and exits 1 unless both answer. macOS only.
 import { execFileSync } from 'child_process';
 import path from 'path';
+
+if (process.platform !== 'darwin') {
+  console.log('daemons: skipped, macOS only');
+  process.exit(0);
+}
 
 const leak = path.join(import.meta.dirname, 'leak');
 execFileSync('swiftc', ['-O', path.join(import.meta.dirname, 'leak.swift'), '-o', leak], { stdio: 'inherit' });

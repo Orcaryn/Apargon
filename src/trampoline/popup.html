@@ -63,7 +63,7 @@
     letter-spacing: -0.015em;
     overflow-wrap: anywhere;
   }
-  .path {
+  .folder {
     margin-top: 3px;
     color: var(--muted);
     font-size: 11.5px;
@@ -173,20 +173,23 @@
     background: var(--ink);
     color: var(--surface);
   }
+  button:active {
+    filter: brightness(0.92);
+  }
   button:disabled {
     opacity: 0.35;
   }
   button:focus-visible,
   input:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px color-mix(in srgb, var(--ink) 35%, transparent);
+    outline: 3px solid -webkit-focus-ring-color; /* the system's ring, in the user's accent colour */
+    outline-offset: 1px;
   }
 </style>
 
 <main>
   <p class="origin" id="source"></p>
   <h1 id="pageName"></h1>
-  <p class="path" id="pagePath"></p>
+  <p class="folder" id="folder"></p>
   <p class="worst" id="worst" hidden></p>
   <h2>If you allow it, this page can:</h2>
   <ol id="lines"></ol>
@@ -207,7 +210,7 @@
     worst.hidden = popup.worst === null;
     note.textContent = popup.note;
     note.hidden = popup.note === null;
-    pagePath.textContent = popup.path;
+    folder.textContent = popup.folder;
     trust.hidden = !popup.trust;
     allow.disabled = popup.trust;
 

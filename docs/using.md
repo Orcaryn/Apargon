@@ -51,7 +51,7 @@ A page with no tags opens without a popup. A page with tags shows one first:
 ```text
 Made on this computer
 report.lmth
-~/git/report/report.lmth
+~/git/report/
 
 If you allow it, this page can:
 ▌ Run git (/usr/bin/git), which can see all your files.
@@ -70,7 +70,7 @@ The same page, downloaded, leads with where it came from and what its lines allo
 ```text
 Downloaded from example.com
 report.lmth
-~/Downloads/report/report.lmth
+~/Downloads/report/
 
 It can run programs that see all your files. Through other apps, they may send them anywhere.
 

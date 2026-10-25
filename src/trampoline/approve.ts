@@ -33,7 +33,7 @@ export async function approve(file: string) {
     worst,
     lines: lines.map(line => ({ level: line.level, text: line.text.replaceAll(HOME + '/', '~/'), isNew: previous !== undefined && !previous.includes(line.id) })),
     note: seesFiles ? `Hidden files (names starting with a dot), keys and logins (~/.ssh and others) are left out unless named.${permissions.write.length ? ' Pages (.lmth) can be changed only if named.' : ''}` : null,
-    path: page.replaceAll(HOME + '/', '~/'),
+    folder: (path.dirname(page) + '/').replaceAll(HOME + '/', '~/'), // the name is the title; the folder tells two pages of one name apart
     // A page made here is your own code: its red lines warn, and only a page from elsewhere must be trusted.
     trust: from !== null && (worst !== null || lines.some(line => line.level === 'red')),
   };

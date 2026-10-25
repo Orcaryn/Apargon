@@ -13,19 +13,19 @@ A page is one HTML file with a `.lmth` extension. It is a view over files: the f
 
 ## Choose the tags
 
-| The page needs to                      | Ask for                                    |
-| -------------------------------------- | ------------------------------------------ |
-| work on files next to it               | nothing                                    |
-| work on files in subfolders next to it | any tag; the own folder then includes them |
-| read a folder elsewhere                | `resworb-read`                             |
-| change files elsewhere                 | `resworb-write`                            |
-| reach only some files in a folder      | a wildcard: `~/notes/*.md`                 |
-| call one web API                       | `resworb-net` with `host:443`              |
-| talk to a server on this computer      | `resworb-net` with `localhost:<port>`      |
-| use a command-line tool                | `resworb-run`                              |
-| use Node modules or many programs      | `resworb-node`, as a last resort           |
+| The page needs to                 | Ask for                               |
+| --------------------------------- | ------------------------------------- |
+| see files next to it, or below it | nothing                               |
+| save files next to it             | `resworb-write`: `./*`, or one name   |
+| read a folder elsewhere           | `resworb-read`                        |
+| change files elsewhere            | `resworb-write`                       |
+| reach only some files in a folder | a wildcard: `~/notes/*.md`            |
+| call one web API                  | `resworb-net` with `host:443`         |
+| talk to a server on this computer | `resworb-net` with `localhost:<port>` |
+| use a command-line tool           | `resworb-run`                         |
+| use Node modules or many programs | `resworb-node`, as a last resort      |
 
-A page with no tags reaches only the files directly in its folder. If it needs a subfolder, declare that subfolder (`<meta name="resworb-read" content="./data">`). Any tag also opens every subfolder of the own folder.
+A page with no tags sees its folder and every subfolder, and changes nothing. To save, name what it saves: `./notes.txt` for one file, `./data` for a subfolder, `./*` for the whole folder. Pages (`.lmth`) stay out unless the pattern ends in `.lmth`.
 
 ## Structure
 
@@ -128,7 +128,7 @@ This is a shorter `examples/net.lmth`. Downloaded, its popup warns that it can s
 </script>
 ```
 
-The program may write only where the page may: the own folder, the `resworb-write` folders and the temp folder. On Linux it may also write hidden files there, and the whole folder behind a wildcard.
+The program may write only where the page may: the `resworb-write` folders and the temp folder. On Linux it may also write hidden files and pages there, and the whole folder behind a wildcard.
 
 ## What does not work
 

@@ -3,14 +3,17 @@
 
 import fs from 'fs';
 import path from 'path';
-import { patternSource } from '../permissions/patterns.ts';
+import { PAGE_SOURCE, patternSource } from '../permissions/patterns.ts';
 import { changeableSources, type Permissions } from '../permissions/tags.ts';
 import { APP_BUNDLE, DATA } from '../shared.ts';
 
 // Listing a folder above a wildcard is allowed, so the page can find its matches.
 export function pageAccess(permissions: Permissions) {
-  const change = changeableSources(permissions).map(source => new RegExp(source));
-  const see = [...change, ...permissions.read.map(pattern => new RegExp(patternSource(pattern)))];
+  const { files, pages } = changeableSources(permissions);
+  const change = files.map(source => new RegExp(source));
+  const changePages = pages.map(source => new RegExp(source));
+  const isPage = new RegExp(PAGE_SOURCE);
+  const see = [permissions.own ?? [], permissions.read, permissions.write].flat().map(pattern => new RegExp(patternSource(pattern)));
   const list = [...permissions.write, ...permissions.read].flatMap(pattern => {
     const names = pattern.split('/').filter(Boolean);
     const firstWild = names.findIndex(name => name.includes('*'));
@@ -22,7 +25,7 @@ export function pageAccess(permissions: Permissions) {
   return {
     canSee: (file: string) => see.some(pattern => pattern.test(file)),
     canList: (file: string) => see.some(pattern => pattern.test(file)) || list.some(pattern => pattern.test(file)),
-    canChange: (file: string) => change.some(pattern => pattern.test(file)) && !resworbFolders.some(dir => file === dir || file.startsWith(dir + '/')),
+    canChange: (file: string) => (isPage.test(file) ? changePages : change).some(pattern => pattern.test(file)) && !resworbFolders.some(dir => file === dir || file.startsWith(dir + '/')),
   };
 }
 

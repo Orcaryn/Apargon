@@ -19,18 +19,21 @@ pnpm test
 | any                                   | process handed `RESWORB` by hand, no sandbox      | refuses to open |
 | popup (`popup.ts`, macOS)             | `~/LIBRARY`, `~/DOCUMENTS` typed in another case  | red             |
 | popup                                 | a line break or right-to-left mark in a value     | refused         |
-| no tags (`selftest.lmth`)             | no `require`, no `process`                        | absent          |
-| no tags                               | read, write, list, delete in its own folder       | works           |
-| no tags                               | read or write outside it, list `~`                | refused         |
-| no tags                               | write a hidden file in its own folder             | refused         |
-| no tags                               | write in a subfolder of its own folder            | refused         |
-| no tags                               | `watch` a folder, a file renamed over             | reports change  |
-| no tags                               | `watch` outside its folder, a hidden file         | refused         |
-| no tags                               | `readFile` with options `{ flag: 'w' }`           | refused         |
-| no tags                               | `<script src>` outside its folder                 | refused         |
-| no tags                               | `run`                                             | refused         |
-| no tags                               | `fetch`                                           | blocked         |
-| no tags                               | notifications, clipboard read, camera, microphone | denied          |
+| writes only (`selftest.lmth`)         | no `require`, no `process`                        | absent          |
+| writes only                           | read, list in its own folder and a subfolder      | works           |
+| writes only                           | write in its own folder or a subfolder, unnamed   | refused         |
+| writes only                           | write, delete a file `scratch*` names             | works           |
+| writes only                           | write a page `scratch*` matches, a page beside it | refused         |
+| writes only                           | rename onto a page, rename a page away            | refused         |
+| writes only                           | read or write outside it, list `~`                | refused         |
+| writes only                           | write a hidden file, also below a match           | refused         |
+| writes only                           | `watch` a folder, a file renamed over             | reports change  |
+| writes only                           | `watch` outside its folder, a hidden file         | refused         |
+| writes only                           | `readFile` with options `{ flag: 'w' }`           | refused         |
+| writes only                           | `<script src>` outside its folder                 | refused         |
+| writes only                           | `run`                                             | refused         |
+| writes only                           | `fetch`                                           | blocked         |
+| writes only                           | notifications, clipboard read, camera, microphone | denied          |
 | `resworb-node` (`selftest-node.lmth`) | `fs` anywhere, `child_process`                    | works           |
 | `resworb-node`                        | write resworb's `grants.json`                     | blocked         |
 | `resworb-node`                        | `curl`, `fetch`, DNS                              | blocked         |
@@ -46,10 +49,12 @@ pnpm test
 | net and run                           | `*:9` to `0.0.0.1`                                | refused (403)   |
 | net and run, macOS                    | `*:9` to this computer's LAN address              | refused (403)   |
 | net and run                           | `resworb-read` folder: read / write               | works / refused |
-| net and run                           | program writes its own folder                     | works           |
+| net and run                           | program writes a `resworb-write` match            | works           |
 | net and run                           | program reads `input` on stdin                    | works           |
 | net and run                           | program writes outside it                         | blocked         |
 | net and run, macOS                    | program writes a hidden file                      | blocked         |
+| net and run, macOS                    | program writes its own folder, unnamed            | blocked         |
+| net and run, macOS                    | program creates a page                            | blocked         |
 | net and run, macOS                    | program opens another app (`open -a Finder`)      | blocked         |
 | net and run, macOS                    | program writes preferences (`defaults write`)     | blocked         |
 | net and run                           | undeclared program                                | refused         |

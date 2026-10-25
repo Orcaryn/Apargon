@@ -1,6 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="resworb-net" content="api.github.com:443">
+<meta name="resworb-write" content="./electron-latest.json">
 <title>resworb net</title>
 <style>
   body { font: 15px/1.5 system-ui; max-width: 720px; margin: 40px auto; padding: 0 20px; color: #222; }

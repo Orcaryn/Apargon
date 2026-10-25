@@ -11,10 +11,10 @@ The point: a single HTML file is the quickest viewer or editor for files on your
 
 A page asks in `<meta>` tags for what it needs: folders to see or change, servers to reach, programs to run, or full Node.
 
-| Page      | Gets                         | Asks first?     |
-| --------- | ---------------------------- | --------------- |
-| no tags   | its own folder, nothing else | no              |
-| with tags | what the tags list           | yes, in a popup |
+| Page      | Gets                   | Asks first?     |
+| --------- | ---------------------- | --------------- |
+| no tags   | its own folder, to see | no              |
+| with tags | what the tags list     | yes, in a popup |
 
 The OS denies sockets and DNS to the page's process and every process it starts.
 
@@ -37,8 +37,11 @@ On Linux it also hides the session's runtime folder (D-Bus, the sound server) bu
 
 **Own folder.** The page's folder, unless that is `/`, `~`, Desktop, Documents or Downloads, or the page has full Node.
 
-- With no tags: the files directly in it, granted without asking.
-- With tags: its subfolders too, listed in the popup.
+- To see only, with its subfolders, hidden files left out. Writes need `resworb-write`.
+- With no tags: granted without asking, wherever the page came from.
+- With tags: listed in the popup.
+
+**Pages are not writable by default.** A `resworb-write` pattern reaches a `.lmth` only if it ends in `.lmth`, which the popup marks red. Otherwise a page could rewrite another approved for more. `PAGE_SOURCE` in `src/permissions/patterns.ts` is the rule for both Seatbelt and resworb's checks.
 
 **Trampoline.** The first process, with network. It:
 
@@ -73,7 +76,7 @@ On Linux it then relays its own loopback ports to the trampoline's socket files.
 1. `popup.ts`: popup colours, and values the popup cannot show.
 2. `refuse.ts`: the offline check.
 3. `daemons.ts` (macOS only): builds `test/leak` with `swiftc` and checks that system services fetch for it outside the sandbox.
-4. `selftest.lmth` (no tags), `selftest-node.lmth`, `selftest-net.lmth`.
+4. `selftest.lmth` (only writes, for its results), `selftest-node.lmth`, `selftest-net.lmth`.
 5. `check.ts`: fails if any result is not `true`.
 
 On Linux, `daemons.ts` and the checks marked macOS skip. From source on Ubuntu 23.10 and later, the sandbox needs the setup in the README's Develop section. `docs/verification.md` tests the installed `.deb` instead.
@@ -84,11 +87,11 @@ In dev builds only, `RESWORB_TEST_ALLOW=1` answers the popup and prints what it 
 
 ### Platforms
 
-| Platform | State                                                                                                                                                             |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| macOS    | works end to end                                                                                                                                                  |
-| Linux    | every Linux check passes in the installed `.deb` on a headless Ubuntu 24.04 server; not yet run on a desktop; programs' writes are limited by folder, not pattern |
-| Windows  | refuses to open pages                                                                                                                                             |
+| Platform | State                                                                                                                                                                                                                        |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS    | works end to end                                                                                                                                                                                                             |
+| Linux    | every Linux check passed in the installed `.deb` on a headless Ubuntu 24.04 server, before the own folder became read-only (not re-run since); not yet run on a desktop; programs' writes are limited by folder, not pattern |
+| Windows  | refuses to open pages                                                                                                                                                                                                        |
 
 ### TypeScript without a build
 
@@ -117,8 +120,8 @@ That dialog means the offline check worked. Find out why the process is not in t
 
 **The fence**
 
-- Keep it strict. A change to any of these must keep `pnpm test` green and add no way to skip the offline check: `sandbox/macos.sb`, `seatbeltProfile`, `bwrapArgs`, `canBindLoopback`, `inEmptyNetwork`, `startProxy`, `relay`, `declaredPermissions`, `patternSource`, `changeableSources`, `pageAccess`, `pageApi`.
-- `patternSource` is the one pattern source for Seatbelt and for resworb's checks. Do not write a second matcher.
+- Keep it strict. A change to any of these must keep `pnpm test` green and add no way to skip the offline check: `sandbox/macos.sb`, `seatbeltProfile`, `bwrapArgs`, `canBindLoopback`, `inEmptyNetwork`, `startProxy`, `relay`, `declaredPermissions`, `patternSource`, `PAGE_SOURCE`, `changeableSources`, `pageAccess`, `pageApi`.
+- `patternSource` and `PAGE_SOURCE` are the one pattern source for Seatbelt and for resworb's checks. Do not write a second matcher.
 - The window loads only `file:` URLs. A link to a declared host does not navigate, and no new windows open.
 - The app makes no network calls of its own: no update check, crash reporter or telemetry.
 

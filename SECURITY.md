@@ -4,7 +4,7 @@ A page asks for what it needs in `<meta>` tags.
 
 | Page      | May use                                                             |
 | --------- | ------------------------------------------------------------------- |
-| no tags   | its own folder; no other files, no programs, no network             |
+| no tags   | to see its own folder; no changes, no programs, no network          |
 | with tags | what the tags list, after the user allows the whole list in a popup |
 
 The guarantees below hold for any page **without** `resworb-node`, whoever wrote it.
@@ -39,6 +39,9 @@ A page **with** `resworb-node` runs with your permissions, like a script. Open i
 - `window.resworb` checks every call against the granted folders, on real paths with symlinks resolved.
 - Every `file:` request gets the same check, including the page's own scripts and images.
 - Hidden files and folders (names that start with a dot) are outside every grant unless a tag names them. A `*` never matches one.
+- The own folder is to see only, with its subfolders. A page changes only what `resworb-write` lists.
+- A page (`.lmth`) can be changed only through a `resworb-write` pattern that ends in `.lmth`, such as `./*.lmth`, which the popup marks red. Any other pattern skips pages, so a page cannot rewrite another page that was approved for more.
+- Deleting or moving a folder needs every file in it to be changeable, hidden files and pages included.
 
 ### Writes
 
@@ -46,13 +49,12 @@ For a page without full Node, the OS also limits where the page and its programs
 
 | Writable                     | Why                 |
 | ---------------------------- | ------------------- |
-| its own folder               | granted             |
 | its `resworb-write` folders  | granted             |
 | the temp folder              | Electron needs it   |
 | `/dev`                       | the system needs it |
 | the page's own Electron data | Electron needs it   |
 
-- macOS: the OS and resworb's checks use the same patterns.
+- macOS: the OS and resworb's checks use the same patterns, and the OS also keeps pages out of every pattern that does not name them.
 - macOS: the programs cannot open other apps (`open`, LaunchServices).
 - macOS: they cannot write app settings (`defaults write`). `cfprefsd` would otherwise write them from outside the sandbox.
 - Linux: `bwrap` makes the disk read-only and each of these folders writable. It takes folders, not patterns, so the limit is looser than on macOS (see "Not enforced").
@@ -89,7 +91,7 @@ Declared `localhost` and `127.0.0.1` ports bypass the proxy, so they are not log
 
 - It loads only `file:` URLs. A link to a declared host does not navigate, and no new windows open.
 - A page gets only three web permissions: clipboard writing, fullscreen and pointer lock. Camera, microphone, screen capture, clipboard reading, notifications and location are denied, for full-Node pages too.
-- A page marked as downloaded gets a popup that leads with the site and with what its lines allow together. It must be trusted with a checkbox if a line is red or it can send files out. With no tags, it still asks about its own folder. The mark stays, so a later change of tags is asked about the same way. A page made here gets the lines, without the checkbox.
+- A page marked as downloaded gets a popup that leads with the site and with what its lines allow together. It must be trusted with a checkbox if a line is red or it can send files out. With no tags it opens without asking: it can see its folder but not change it. The mark stays, so a later change of tags is asked about the same way. A page made here gets the lines, without the checkbox.
   - macOS: the quarantine attribute, which browsers, Mail, Messages and AirDrop set; Spotlight keeps the site.
   - Linux: `user.xdg.origin.url`, which Chrome sets, read with `getfattr`.
 
@@ -119,6 +121,7 @@ Declared `localhost` and `127.0.0.1` ports bypass the proxy, so they are not log
 
 **Writable folders**
 
+- A program the page runs can move a folder that holds pages, or make a hard link to a page. The OS checks the paths it names, not what is inside them or what they point to.
 - A writable folder can hold files other tools later run without asking: `package.json` scripts, a `Makefile`. Hidden ones (`.git/hooks`, `.envrc`, `.vscode`) are excluded unless named. On Linux that holds for the page only, not for the programs it runs.
 - If iCloud Drive, Dropbox, OneDrive or a git auto-push syncs a writable folder, what the page writes there leaves the machine.
 - The temp folder is writable, because Electron needs it.
@@ -137,7 +140,7 @@ Declared `localhost` and `127.0.0.1` ports bypass the proxy, so they are not log
 
 **Linux**
 
-- The OS limits a program's writes by folder, not by pattern. A program the page runs may change any file in the page's writable folders: for `~/notes/*.md`, all of `~/notes`, and hidden files too (`.git/hooks`, `.envrc`). The popup's `resworb-run` line names those folders. resworb's own checks still hold the page itself to the patterns.
+- The OS limits a program's writes by folder, not by pattern. A program the page runs may change any file in the page's writable folders: for `~/notes/*.md`, all of `~/notes`, hidden files (`.git/hooks`, `.envrc`) and pages too. The popup's `resworb-run` line names those folders. resworb's own checks still hold the page itself to the patterns.
 - `--unshare-net` isolates IP networking only. Unix sockets outside the runtime folder remain, and each can be a way out for a program the page runs, or for a page that exploits Chromium:
   - on X11, the display, which the window needs: a program can type into another window, such as a terminal;
   - tmux and GNU screen (`/tmp/tmux-<uid>`, `/run/screen`): a program can type a command into your shell, which has network;
@@ -168,9 +171,9 @@ resworb remembers an approval by file path and permission list. Editing an appro
 
 This matters because pages can change each other:
 
-- Pages in one folder share it. A page with no tags opens without asking, yet it can rewrite an approved page beside it, or the scripts that page loads.
-- A page with any tag can change its subfolders, so an approved page can rewrite pages below it.
-- An open page reloads when its files change, so new code runs at once with the approved permissions.
+- No page without full Node can change a page unless a `resworb-write` pattern names pages.
+- A page with `resworb-write` can still change the `.js` and `.css` files in those folders. If an approved page loads them, its new code runs with the approved permissions.
+- An open page reloads when its files change, so new code runs at once.
 
 So:
 
@@ -203,11 +206,11 @@ A firm "nothing leaves" guarantee needs a VM with no network card, no shared fol
 
 `pnpm test` runs every check in the real app and fails if one fails. [docs/verification.md](docs/verification.md) lists the checks, the egress matrix, and manual canaries for channels the suite cannot cover.
 
-| Platform      | Last verified                                                                                                    |
-| ------------- | ---------------------------------------------------------------------------------------------------------------- |
-| macOS         | 2026-10-25, `pnpm test`: every check                                                                             |
-| Linux         | 2026-10-25, the installed `.deb` on a headless Ubuntu 24.04 server with the AppArmor limit on: every Linux check |
-| Linux desktop | not yet: no run with a real display and a double-click                                                           |
+| Platform      | Last verified                                                                                                                                                                                                 |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS         | 2026-10-25, `pnpm test`: every check                                                                                                                                                                          |
+| Linux         | 2026-10-25, the installed `.deb` on a headless Ubuntu 24.04 server with the AppArmor limit on: every Linux check, before the own folder became read-only and pages left `resworb-write`; not yet re-run since |
+| Linux desktop | not yet: no run with a real display and a double-click                                                                                                                                                        |
 
 ## Reporting
 

@@ -20,7 +20,8 @@ export function pageApi(dir: string, programs: Record<string, string>, { canSee,
     }
   };
 
-  // Deleting a folder deletes what is in it, hidden files included: each must be changeable.
+  // Deleting or moving a folder changes what is in it, hidden files and pages included: each must
+  // be changeable. Else a page could move its own folder of pages to where approved ones were.
   const needChangeAll = (file: string) => {
     need(canChange(file), file, 'change');
 
@@ -83,8 +84,9 @@ export function pageApi(dir: string, programs: Record<string, string>, { canSee,
     },
     rename(from: string, to: string) {
       const [source, destination] = [where(from), where(to)];
-      need(canChange(source), source, 'change');
-      need(canChange(destination), destination, 'change');
+      needChangeAll(source);
+      need(canChange(destination), destination, 'change'); // a rename replaces only a file or an empty folder
+
       fs.renameSync(source, destination);
     },
     run(name: string, args: string[] = [], options: { cwd?: string; input?: string } = {}) {

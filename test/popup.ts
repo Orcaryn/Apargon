@@ -1,7 +1,8 @@
 // The popup's colours follow the folder, not how its name was typed. macOS paths ignore
 // case: ~/LIBRARY is ~/Library and must be red. A line break or invisible mark in a value
-// could pass for a permission of its own, so it stops the page. A page from elsewhere gets one
-// sentence for what its lines allow together. Exits 1 if a check fails.
+// could pass for a permission of its own, so it stops the page. Changing pages is red: an
+// approved one could be rewritten. A page from elsewhere gets one sentence for what its lines
+// allow together. Exits 1 if a check fails.
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -15,7 +16,7 @@ if (process.platform !== 'darwin') {
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'resworb-popup-'));
 const page = path.join(dir, 'case.lmth');
-fs.writeFileSync(page, '<meta name="resworb-write" content="~/LIBRARY">\n<meta name="resworb-write" content="~/DOCUMENTS">\n');
+fs.writeFileSync(page, '<meta name="resworb-write" content="~/LIBRARY">\n<meta name="resworb-write" content="~/DOCUMENTS">\n<meta name="resworb-write" content="./*.lmth">\n');
 const lines = describe(declaredPermissions(page)).filter(line => line.id.startsWith('write:'));
 
 fs.mkdirSync(path.join(dir, 'data'));

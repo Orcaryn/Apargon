@@ -30,16 +30,15 @@ New tags take effect when you reopen the page, and the popup asks again.
 
 A page's own folder is the folder it sits in:
 
-| Page                                         | Own folder                                  |
-| -------------------------------------------- | ------------------------------------------- |
-| no tags                                      | the files directly in it, not in subfolders |
-| at least one tag                             | the folder and everything below it          |
-| in `/`, `~`, Desktop, Documents or Downloads | none                                        |
-| with `resworb-node`                          | none; full Node reaches everything          |
+| Page                                         | Own folder                         |
+| -------------------------------------------- | ---------------------------------- |
+| any other                                    | the folder and everything below it |
+| in `/`, `~`, Desktop, Documents or Downloads | none                               |
+| with `resworb-node`                          | none; full Node reaches everything |
 
-The page may see, change and delete files in its own folder.
+The page may see the files in its own folder, not change them. To change some, it asks for `resworb-write`: `./*` for everything in its folder, `./data` for one subfolder.
 
-- With no tags, it opens without a popup. It may create and delete empty subfolders, but not touch files in them.
+- With no tags, it opens without a popup, wherever it came from.
 - With tags, the popup lists the own folder as a plain line.
 
 A page with no own folder can load itself, and only the files its tags grant. Even its own `.css` sitting next to it is refused. Give every page a folder of its own.
@@ -51,6 +50,14 @@ A hidden name starts with a dot: `.git`, `.env`, `.DS_Store`. No grant covers on
 - `~/project` covers `~/project/src/app.js`, not `~/project/.git/config`.
 - `~/project/.git` covers `~/project/.git/config`, and shows red.
 - A `*` never matches the start of a hidden name: `~/notes/*` does not cover `~/notes/.x`.
+
+## Pages
+
+A page (`.lmth`) can be seen like any file, but `resworb-write` reaches one only if the pattern ends in `.lmth`: `./*.lmth` or `./tool.lmth`. That line shows red.
+
+- `./*` and `./data` skip pages, at any depth.
+- A page that may change another could rewrite one you approved for more, and the new code would run with that page's approval.
+- Deleting or moving a folder needs every file in it to be changeable, so a page cannot move a folder of pages either.
 
 ## Folders: `resworb-read` and `resworb-write`
 
@@ -74,11 +81,11 @@ A hidden name starts with a dot: `.git`, `.env`, `.DS_Store`. No grant covers on
 | `/var/log`       | an absolute path                         |
 | `~/notes/*.md`   | each match, and everything below a match |
 
-- The part before the first `*` must exist when the page opens. resworb resolves it to its real path.
+- The part before the first `*` must exist when the page opens. resworb resolves it to its real path. A value without `*` may name a file that does not exist yet, if its folder does: `./notes.txt`.
 - `*` stands for part of one name. It never crosses a `/`.
 - `*` alone is refused. Write `/` for the whole disk or `~` for your home folder.
 - A value may not be empty or contain `"` or `\`.
-- The path of a writable folder, or of the own folder, may not contain `"`.
+- The path of a writable folder may not contain `"`.
 - After the first `*`, the value is matched as written, with case: `*.MD` does not match `notes.md`.
 
 ### What the page reaches
@@ -94,7 +101,7 @@ With a wildcard, the page may also list the folders on the way to a match. With 
 
 The OS also limits writes, for the page and every program it runs, to:
 
-- the own folder and the `resworb-write` folders;
+- the `resworb-write` folders, pages left out on macOS;
 - the temp folder, `$TMPDIR` (not `/tmp`, which is a different folder);
 - `/dev`;
 - the page's browser data.

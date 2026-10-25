@@ -14,7 +14,7 @@ resworb opens an HTML file from disk. The page may read and write your files, bu
 
 ## In one minute
 
-A page with no tags may see and change the files in its own folder, and nothing else. It opens without asking.
+A page with no tags may see the files in its own folder and its subfolders, and nothing else. It opens without asking. To save, it asks for `resworb-write`.
 
 ```html
 <!doctype html>

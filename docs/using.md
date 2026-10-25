@@ -40,24 +40,25 @@ Double-click a `.lmth` file, run `open page.lmth` on macOS or `resworb page.lmth
 
 Each page gets its own popup, sandboxed process and window. You can open several at once. The app quits when the last window closes.
 
-A page is code, and opening it runs it. resworb words the popup by where the page came from: a page marked as downloaded leads with the site and with what its lines allow together, and it shows the popup even with no tags if it can change files in its folder. On macOS, browsers, Mail, Messages and AirDrop mark what they save; on Linux, Chrome does, and resworb reads the mark with `getfattr`. `git clone`, `curl` and USB sticks leave no mark, so such a page counts as made here.
+A page is code, and opening it runs it. resworb words the popup by where the page came from: a page marked as downloaded leads with the site and with what its lines allow together. A page with no tags opens without a popup wherever it came from: it can only look. On macOS, browsers, Mail, Messages and AirDrop mark what they save; on Linux, Chrome does, and resworb reads the mark with `getfattr`. `git clone`, `curl` and USB sticks leave no mark, so such a page counts as made here.
 
 ## The popup
 
-A page you made with no tags opens without a popup. A page with tags shows one first:
+A page with no tags opens without a popup. A page with tags shows one first:
 
 ```text
-report.lmth will:
+Made on this computer
+report.lmth
+~/git/report/report.lmth
 
-🔴 Run git (/usr/bin/git), which can see all your files.
-🟡 See, change and delete files matching /Users/you/git/report/reports/*.md (12 now, and any added later).
-•  See files in /Users/you/logs.
-•  Send and receive data with api.example.com, on port 443.
-•  See, change and delete files in its own folder, /Users/you/git/report.
+If you allow it, this page can:
+▌ Run git (/usr/bin/git), which can see all your files.
+┊ See, change and delete files matching ~/git/report/reports/*.md (12 now, and any added later).
+│ See files in ~/logs.
+│ Send and receive data with api.example.com, on port 443.
+│ See files in its own folder and its subfolders, ~/git/report.
 
-Hidden files (names starting with a dot) are left out unless named.
-
-/Users/you/git/report/report.lmth
+Hidden files (names starting with a dot) are left out unless named. Pages (.lmth) can be changed only if named.
 
                                              [ Don't open ]  [ Allow and open ]
 ```
@@ -65,28 +66,31 @@ Hidden files (names starting with a dot) are left out unless named.
 The same page, downloaded, leads with where it came from and what its lines allow together:
 
 ```text
-report.lmth came from example.com.
+Downloaded from example.com
+report.lmth
+~/Downloads/report/report.lmth
 
 It can run programs that see all your files. Through other apps, they may send them anywhere.
 
-🔴 Run git (/usr/bin/git), which can see all your files.
-🟡 See, change and delete files matching /Users/you/git/report/reports/*.md (12 now, and any added later).
-•  See files in /Users/you/logs.
-•  Send and receive data with api.example.com, on port 443.
-•  See, change and delete files in its own folder, /Users/you/git/report.
+If you allow it, this page can:
+▌ Run git (/usr/bin/git), which can see all your files.
+┊ See, change and delete files matching ~/git/report/reports/*.md (12 now, and any added later).
+│ See files in ~/logs.
+│ Send and receive data with api.example.com, on port 443.
+│ See files in its own folder and its subfolders, ~/git/report.
 
-Hidden files (names starting with a dot) are left out unless named.
+Hidden files (names starting with a dot) are left out unless named. Pages (.lmth) can be changed only if named.
 
-/Users/you/Downloads/report/report.lmth
+[ ] I trust where this page came from.
 
-[ ] I trust where this page came from.      [ Don't open ]  [ Allow and open ]
+                                             [ Don't open ]  [ Allow and open ]
 ```
 
-| Mark      | Means               | Note                                                         |
-| --------- | ------------------- | ------------------------------------------------------------ |
-| 🔴 red    | a broad request     | on a downloaded page, tick "I trust" before "Allow and open" |
-| 🟡 yellow | a narrower wildcard | the line counts the files it matches now                     |
-| • plain   | everything else     |                                                              |
+| Bar      | Means               | Note                                                         |
+| -------- | ------------------- | ------------------------------------------------------------ |
+| ▌ red    | a broad request     | on a downloaded page, tick "I trust" before "Allow and open" |
+| ┊ yellow | a narrower wildcard | the line counts the files it matches now                     |
+| │ plain  | everything else     |                                                              |
 
 [Permissions](permissions.md#colours) lists what makes a line red or yellow.
 
@@ -102,9 +106,9 @@ resworb asks again when:
 - a tag is added, removed or changed;
 - a `resworb-run` program now resolves to a different file.
 
-The new popup marks the changed lines "New:".
+The new popup marks the changed lines "New".
 
-resworb does **not** ask again when the page's content changes but its tags do not. Keep approved pages where only you can write.
+resworb does **not** ask again when the page's content changes but its tags do not. Other pages cannot rewrite it unless they ask for `resworb-write` on pages, which shows red, but they can rewrite `.js` and `.css` files in their writable folders. Keep approved pages where only you can write.
 
 ## The Permissions menu
 

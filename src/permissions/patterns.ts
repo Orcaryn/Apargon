@@ -25,3 +25,7 @@ export function literalBase(pattern: string) {
 
   return '/' + (firstWild === -1 ? names : names.slice(0, firstWild)).join('/');
 }
+
+// A page (.lmth), in any case: macOS paths ignore it. A page that may change another could
+// rewrite one approved for more, so writes reach a page only through a pattern that ends in one.
+export const PAGE_SOURCE = '\\.[lL][mM][tT][hH]/?$';

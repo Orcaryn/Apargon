@@ -15,7 +15,9 @@ The name is `browser` backwards; `lmth` is `html` backwards.
 
 ## What a page may do
 
-**With no tags**, a page may see and change the files in its own folder, but not in its subfolders. Nothing else: no other files, no programs, no network. It opens without asking.
+**With no tags**, a page may see the files in its own folder and its subfolders. Nothing else: no changes, no other files, no programs, no network. It opens without asking.
+
+To save, a page asks for `resworb-write`, such as `./*` for its own folder.
 
 **With tags**, it asks for more, one value per tag:
 
@@ -36,23 +38,25 @@ The name is `browser` backwards; `lmth` is `html` backwards.
 
 - `resworb-node` already covers every folder and program, so it goes only with `resworb-net`.
 - Hidden files (names that start with a dot) stay out unless a tag names them.
+- Pages (`.lmth`) stay out of `resworb-write` unless the pattern ends in `.lmth`, which shows red: a page that may rewrite another could give itself what that page was approved for.
 
 ## The popup
 
 Before a page with tags runs, a popup lists each one in plain words:
 
 ```text
-report.lmth will:
+Made on this computer
+report.lmth
+~/git/report/report.lmth
 
-🔴 Run git (/usr/bin/git), which can see all your files.
-🟡 See, change and delete files matching /Users/you/git/report/reports/*.md (12 now, and any added later).
-•  See files in /Users/you/logs.
-•  Send and receive data with api.example.com, on port 443.
-•  See, change and delete files in its own folder, /Users/you/git/report.
+If you allow it, this page can:
+▌ Run git (/usr/bin/git), which can see all your files.
+┊ See, change and delete files matching ~/git/report/reports/*.md (12 now, and any added later).
+│ See files in ~/logs.
+│ Send and receive data with api.example.com, on port 443.
+│ See files in its own folder and its subfolders, ~/git/report.
 
-Hidden files (names starting with a dot) are left out unless named.
-
-/Users/you/git/report/report.lmth
+Hidden files (names starting with a dot) are left out unless named. Pages (.lmth) can be changed only if named.
 
                                              [ Don't open ]  [ Allow and open ]
 ```
@@ -60,33 +64,37 @@ Hidden files (names starting with a dot) are left out unless named.
 The same page, downloaded, leads with where it came from and what its lines allow together:
 
 ```text
-report.lmth came from example.com.
+Downloaded from example.com
+report.lmth
+~/Downloads/report/report.lmth
 
 It can run programs that see all your files. Through other apps, they may send them anywhere.
 
-🔴 Run git (/usr/bin/git), which can see all your files.
-🟡 See, change and delete files matching /Users/you/git/report/reports/*.md (12 now, and any added later).
-•  See files in /Users/you/logs.
-•  Send and receive data with api.example.com, on port 443.
-•  See, change and delete files in its own folder, /Users/you/git/report.
+If you allow it, this page can:
+▌ Run git (/usr/bin/git), which can see all your files.
+┊ See, change and delete files matching ~/git/report/reports/*.md (12 now, and any added later).
+│ See files in ~/logs.
+│ Send and receive data with api.example.com, on port 443.
+│ See files in its own folder and its subfolders, ~/git/report.
 
-Hidden files (names starting with a dot) are left out unless named.
+Hidden files (names starting with a dot) are left out unless named. Pages (.lmth) can be changed only if named.
 
-/Users/you/Downloads/report/report.lmth
+[ ] I trust where this page came from.
 
-[ ] I trust where this page came from.      [ Don't open ]  [ Allow and open ]
+                                             [ Don't open ]  [ Allow and open ]
 ```
 
-| Mark      | Means               | Example                   |
-| --------- | ------------------- | ------------------------- |
-| 🔴 red    | a broad request     | `~`, `*:443`, any program |
-| 🟡 yellow | a narrower wildcard | `~/notes/*.md`            |
-| • plain   | everything else     | `~/logs`                  |
+| Bar      | Means               | Example                   |
+| -------- | ------------------- | ------------------------- |
+| ▌ red    | a broad request     | `~`, `*:443`, any program |
+| ┊ yellow | a narrower wildcard | `~/notes/*.md`            |
+| │ plain  | everything else     | `~/logs`                  |
 
 Red requests:
 
 - **folders:** the whole disk, a folder right under `/`, `~`, Desktop, Documents, Downloads, `~/Library`, hidden files, a wildcard right under `/` or `~`;
 - **servers:** any server (`*`, `*.com`), any port;
+- **pages:** changing `.lmth` files;
 - **always:** every program, and full Node.
 
 How the answer works:
@@ -114,7 +122,7 @@ There are no releases yet, so build resworb yourself (see [Develop](#develop)).
 | Linux    | `pnpm dist:linux`, then `sudo apt install ./dist/resworb_0.1.0_amd64.deb`. Tested on a headless Ubuntu 24.04 server, not yet on a desktop. Skip the AppImage: it is untested. |
 | Windows  | not supported yet                                                                                                                                                             |
 
-A page is code, and double-clicking it runs it. A downloaded page always shows the popup, even with no tags, if it can change files in its folder.
+A page is code, and double-clicking it runs it. A page with no tags can only look, so it opens without a popup, even if downloaded.
 
 ## How it works
 

@@ -3,11 +3,10 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { literalBase, patternSource } from './patterns.ts';
+import { literalBase, PAGE_SOURCE, patternSource } from './patterns.ts';
 
 export type Permissions = {
-  own: string | null; // the page's folder, unless the page has full Node or sits in a big folder
-  ownSubfolders: boolean; // false for a page with no tags: the files in its folder, not those below
+  own: string | null; // the page's folder and its subfolders, to see; none for full Node or a big folder
   read: string[];
   write: string[];
   net: string[];
@@ -21,7 +20,7 @@ export const LOCAL_HOSTS = ['localhost', '127.0.0.1'];
 
 export function declaredPermissions(page: string) {
   const dir = path.dirname(page);
-  const permissions: Permissions = { own: null, ownSubfolders: false, read: [], write: [], net: [], run: {}, node: false };
+  const permissions: Permissions = { own: null, read: [], write: [], net: [], run: {}, node: false };
 
   for (const [, attrs] of fs.readFileSync(page, 'utf8').matchAll(/<meta\s+([^>]*)>/gi)) {
     const name = /\bname=["']resworb-([^"']*)["']/i.exec(attrs)?.[1].toLowerCase();
@@ -29,11 +28,7 @@ export function declaredPermissions(page: string) {
 
     if (name === undefined) {
       continue;
-    }
-
-    permissions.ownSubfolders = true;
-
-    if (name === 'read' || name === 'write') {
+    } else if (name === 'read' || name === 'write') {
       permissions[name].push(folderPattern(value, dir));
     } else if (name === 'net') {
       permissions.net.push(hostPattern(value));
@@ -55,7 +50,7 @@ export function declaredPermissions(page: string) {
   permissions.own = permissions.node || ['/', HOME, ...BIG_FOLDERS].includes(dir) ? null : dir;
 
   // The sandbox profile quotes the folders a page may change: a " in one would end the quote.
-  const quoted = [permissions.own ?? [], permissions.write].flat().find(folder => folder.includes('"'));
+  const quoted = permissions.write.find(folder => folder.includes('"'));
 
   if (quoted) {
     throw new Error(`Folder ${quoted} has a " in its path, which the sandbox cannot take. Rename it.`);
@@ -81,7 +76,8 @@ function folderPattern(value: string, dir: string) {
   }
 
   const absolute = path.resolve(dir, value === '~' ? HOME : value.replace(/^~\//, HOME + '/'));
-  const base = literalBase(absolute);
+  // A value without * may name a file yet to be made: then its folder must exist.
+  const base = absolute.includes('*') || fs.existsSync(absolute) ? literalBase(absolute) : path.dirname(absolute);
 
   if (!fs.existsSync(base)) {
     throw new Error(`Folder ${base} does not exist (from "${value}").`);
@@ -130,11 +126,11 @@ export function localPorts({ net }: Permissions) {
     .map(([, port]) => port);
 }
 
-// What a page may change, as pattern sources for resworb's checks and for Seatbelt. A page
-// with no tags opens without asking, so its own folder is the folder and the names in it,
-// not its subfolders' contents: the pages and scripts there may be approved for more.
-export function changeableSources({ own, ownSubfolders, write }: Permissions) {
-  const ownSources = own === null ? [] : ownSubfolders ? [patternSource(own)] : [patternSource(own, false), patternSource(path.join(own, '*'), false)];
-
-  return [...ownSources, ...write.map(pattern => patternSource(pattern))];
+// What a page may change, as pattern sources for resworb's checks and for Seatbelt: its
+// resworb-write patterns, never its own folder. Only those in pages reach a page.
+export function changeableSources({ write }: Permissions) {
+  return {
+    files: write.map(pattern => patternSource(pattern)),
+    pages: write.filter(pattern => new RegExp(PAGE_SOURCE).test(pattern)).map(pattern => patternSource(pattern)),
+  };
 }

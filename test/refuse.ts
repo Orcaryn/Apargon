@@ -10,7 +10,7 @@ const result = path.join(import.meta.dirname, 'result.json');
 fs.rmSync(result, { force: true });
 
 const page = path.join(import.meta.dirname, 'selftest.lmth');
-const permissions = { own: import.meta.dirname, ownSubfolders: false, read: [], write: [], net: [], run: {}, node: false };
+const permissions = { own: import.meta.dirname, read: [], write: [], net: [], run: {}, node: false };
 const child = spawn(electron, ['.', page], { env: { ...process.env, RESWORB: JSON.stringify({ page, permissions, proxy: null, bridges: [] }) }, stdio: 'inherit' });
 setTimeout(() => {
   child.kill('SIGKILL'); // the error dialog is modal and shrugs off SIGTERM

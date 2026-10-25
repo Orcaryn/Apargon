@@ -31,7 +31,7 @@ A page without `resworb-node` has no Node. It reaches files and programs only th
 | `watch(path, callback)`             | list          | a function that stops the watch          |
 | `dir`                               | nothing       | the page's folder, as a string           |
 
-"See" means the page may read the file. "List" adds the folders on the way to a wildcard match. "Change" means the own folder or a `resworb-write` folder.
+"See" means the page may read the file. "List" adds the folders on the way to a wildcard match. "Change" means a `resworb-write` folder, pages left out unless the value ends in `.lmth`.
 
 ## Files
 

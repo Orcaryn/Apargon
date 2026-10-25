@@ -1,12 +1,16 @@
 <!doctype html>
 <meta charset="utf-8">
+<meta name="resworb-write" content="./result.json">
+<meta name="resworb-write" content="./scratch*">
 <title>resworb selftest</title>
 <body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
 
 <script type="module">
-  // No tags: the page sees and changes the files in its own folder through window.resworb,
-  // not its subfolders, and nothing else. No Node, no files outside, no hidden files, no
-  // programs, no network. Writes test/result.json and closes the window, which quits the app.
+  // Only writes: the page sees its own folder and its subfolders through window.resworb, and
+  // changes only what resworb-write names. No Node, no files outside, no hidden files, no pages
+  // but those a pattern names, no programs, no network. The two writes are only for the
+  // results and scratch files: without them the own folder is the same, read-only.
+  // Writes test/result.json and closes the window, which quits the app.
   const result = {};
   const refused = async (call) => {
     try { await call(); return false; } catch { return true; }
@@ -46,8 +50,16 @@
   try {
     result.no_node = typeof require === 'undefined' && typeof process === 'undefined';
 
+    result.own_folder_read = (await resworb.readFile('selftest.lmth')).includes('resworb selftest') && (await resworb.readdir('.')).includes('selftest-node.lmth');
+    result.own_subfolder_read = (await resworb.readFile('subfolder/note.txt')).includes('subfolder');
+    result.own_folder_write_refused = await refused(() => resworb.writeFile('own.txt', 'x'));
+    result.own_subfolder_write_refused = await refused(() => resworb.writeFile('subfolder/x.txt', 'x')) && await refused(() => resworb.mkdir('sub'));
+
     await resworb.writeFile('scratch.txt', 'hi');
-    result.own_folder = await resworb.readFile('scratch.txt') === 'hi' && (await resworb.readdir('.')).includes('scratch.txt');
+    result.granted_write = await resworb.readFile('scratch.txt') === 'hi' && (await resworb.readdir('.')).includes('scratch.txt');
+    // A page that may change another could rewrite one approved for more: scratch* names no pages.
+    result.page_write_refused = await refused(() => resworb.writeFile('scratch.lmth', 'x')) && await refused(() => resworb.writeFile('selftest-node.lmth', 'x'));
+    result.page_rename_refused = await refused(() => resworb.rename('scratch.txt', 'scratch.lmth')) && await refused(() => resworb.rename('selftest-node.lmth', 'scratch.txt'));
     // Node would read { flag: 'w' } as options and empty the file.
     result.options_refused = await refused(() => resworb.readFile('scratch.txt', { flag: 'w' })) && await resworb.readFile('scratch.txt') === 'hi';
 
@@ -58,15 +70,14 @@
     result.watch_outside_refused = await refused(() => resworb.watch('..', () => {}));
     result.watch_hidden_refused = await refused(() => resworb.watch('.hidden', () => {}));
     await resworb.rm('scratch.txt');
+    await resworb.mkdir('scratch-dir');
+    result.hidden_below_match_refused = await refused(() => resworb.writeFile('scratch-dir/.hidden', 'x'));
+    await resworb.rm('scratch-dir');
 
     result.outside_read_refused = await refused(() => resworb.readFile('../package.json'));
     result.outside_write_refused = await refused(() => resworb.writeFile('../outside.txt', 'x'));
     result.home_read_refused = await refused(() => resworb.readdir('~'));
     result.hidden_write_refused = await refused(() => resworb.writeFile('.hidden', 'x'));
-    // No tags: the files in its folder, not those in its subfolders.
-    await resworb.mkdir('sub');
-    result.subfolder_write_refused = await refused(() => resworb.writeFile('sub/x.txt', 'x'));
-    await resworb.rm('sub');
     result.run_refused = await refused(() => resworb.run('ls'));
 
     result.fetch_blocked = await fetched;

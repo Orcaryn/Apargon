@@ -18,9 +18,8 @@ export async function approve(file: string) {
   const ids = lines.map(line => line.id).sort();
   const grants: Grants = fs.existsSync(GRANTS_FILE) ? JSON.parse(fs.readFileSync(GRANTS_FILE, 'utf8')) : {};
   const previous = grants[page];
-  // A page made here with no tags opens without asking. One from elsewhere asks about its folder too:
-  // saved beside your files, it could delete them.
-  const quiet = from === null ? lines.every(line => line.id.startsWith('own:')) : !lines.length;
+  // A page with no tags opens without asking, wherever it came from: it may only see its folder.
+  const quiet = lines.every(line => line.id.startsWith('own:'));
   const worst = from === null ? null : worstCase(permissions);
 
   if (quiet || previous?.join('\n') === ids.join('\n')) {
@@ -33,7 +32,7 @@ export async function approve(file: string) {
     name: path.basename(page),
     worst,
     lines: lines.map(line => ({ level: line.level, text: line.text.replaceAll(HOME + '/', '~/'), isNew: previous !== undefined && !previous.includes(line.id) })),
-    note: seesFiles ? `Hidden files (names starting with a dot) are left out unless named.` : null,
+    note: seesFiles ? `Hidden files (names starting with a dot) are left out unless named.${permissions.write.length ? ' Pages (.lmth) can be changed only if named.' : ''}` : null,
     path: page.replaceAll(HOME + '/', '~/'),
     // A page made here is your own code: its red lines warn, and only a page from elsewhere must be trusted.
     trust: from !== null && (worst !== null || lines.some(line => line.level === 'red')),

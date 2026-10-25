@@ -3,7 +3,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { literalBase, patternSource } from './patterns.ts';
+import { literalBase, PAGE_SOURCE, patternSource } from './patterns.ts';
 import { BIG_FOLDERS, HOME, LOCAL_HOSTS, type Permissions } from './tags.ts';
 
 export type Line = { id: string; level: 'red' | 'yellow' | 'plain'; text: string };
@@ -16,8 +16,8 @@ export function describe(permissions: Permissions) {
   }
 
   // bwrap opens whole folders, not patterns: on Linux a program reaches more than the page does.
-  const folders = [permissions.own ?? [], permissions.write.map(literalBase)].flat();
-  const linuxWrites = process.platform === 'linux' && folders.length ? ` It can also change any file in ${folders.join(', ')}, hidden ones included.` : '';
+  const writable = permissions.write.map(literalBase);
+  const linuxWrites = process.platform === 'linux' && writable.length ? ` It can also change any file in ${writable.join(', ')}, hidden ones and pages included.` : '';
 
   for (const [program, file] of Object.entries(permissions.run)) {
     lines.push({ id: `run:${file}`, level: 'red', text: `Run ${program} (${file}), which can see all your files.${linuxWrites}` });
@@ -26,8 +26,7 @@ export function describe(permissions: Permissions) {
   lines.push(...permissions.write.map(pattern => folderLine('write', pattern)), ...permissions.read.map(pattern => folderLine('read', pattern)), ...permissions.net.map(hostLine));
 
   if (permissions.own) {
-    const where = permissions.ownSubfolders ? 'in its own folder' : 'directly in its own folder, not its subfolders';
-    lines.push({ id: `own:${permissions.own}`, level: 'plain', text: `See, change and delete files ${where}, ${permissions.own}.` });
+    lines.push({ id: `own:${permissions.own}`, level: 'plain', text: `See files in its own folder and its subfolders, ${permissions.own}.` });
   }
 
   const order = { red: 0, yellow: 1, plain: 2 };
@@ -57,7 +56,9 @@ function folderLine(kind: 'read' | 'write', pattern: string): Line {
   const base = literalBase(pattern);
   const library = path.join(HOME, 'Library');
 
-  if (pattern === '/') {
+  if (kind === 'write' && new RegExp(PAGE_SOURCE).test(pattern)) {
+    return { id, level: 'red', text: `${verb} pages matching ${pattern}. A page you approved could be rewritten to do anything it was allowed.` };
+  } else if (pattern === '/') {
     return { id, level: 'red', text: `${verb} all your files.` };
   } else if (pattern === HOME) {
     return { id, level: 'red', text: `${verb} all files in your home folder.` };

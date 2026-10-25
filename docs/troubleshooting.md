@@ -16,7 +16,7 @@ These appear in a dialog titled "resworb".
 | A folder of "\*" is unclear. Use / for the whole disk or ~ for your home folder.              | Name a folder.                                                                                                                                                                                                                  |
 | Bad folder "x". Use a path such as ./data, ~/notes or ~/notes/\*.md.                          | The value is empty or contains `"` or `\`.                                                                                                                                                                                      |
 | Folder /path does not exist (from "x").                                                       | The part before the first `*` must exist. Create it or fix the path.                                                                                                                                                            |
-| Folder /path has a " in its path, which the sandbox cannot take. Rename it.                   | Rename the folder. This applies to writable folders and the own folder.                                                                                                                                                         |
+| Folder /path has a " in its path, which the sandbox cannot take. Rename it.                   | Rename the folder. This applies to writable folders.                                                                                                                                                                            |
 | Bad resworb-net value "x". One host:port per <meta>, …                                        | Write `host:port`, without a scheme or path. See [Permissions](permissions.md#servers-resworb-net).                                                                                                                             |
 | On Linux, a port on this computer must be a number, such as localhost:11434: …                | Replace `localhost:*` with each port the page needs.                                                                                                                                                                            |
 | "x" has a line break or another invisible character, which the popup cannot show. …           | Write the value on one line. If the value is fine, a folder or the page's own path has such a name: rename it.                                                                                                                  |
@@ -47,28 +47,30 @@ No flag skips this check.
 
 ## While the page runs
 
-| You see                                                                    | Cause and fix                                                                            |
-| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| resworb: this page may not see /path. Ask for it with … resworb-read …     | Add `resworb-read` for the folder. Check for a hidden name, or a symlink that leads out. |
-| resworb: this page may not change /path. Ask for it with … resworb-write … | Add `resworb-write`. With no tags, a page cannot change files in subfolders.             |
-| resworb: this page may not run x. Ask for it with … resworb-run …          | Declare the program, and call it by its file name, not its path.                         |
-| resworb: run takes its arguments as an array.                              | Write `run('git', ['status'])`, not `run('git', 'status')`.                              |
-| resworb: readFile takes an encoding name, or null for bytes.               | Pass `'utf8'`, another encoding, or `null`, not an options object.                       |
-| A script, style or image gets a 403: `resworb: this page may not see …`    | The file is out of the page's reach.                                                     |
-| `fetch` over http gets a 403: `resworb: host not declared`                 | Declare the host with `resworb-net`.                                                     |
-| `fetch` over https fails with a network error                              | The host is not declared; for https, the proxy's refusal looks like this.                |
-| `fetch` fails in a page without `resworb-net`                              | The page has no network. Add `resworb-net`.                                              |
-| `fetch` to a server on this computer fails                                 | The proxy refuses this computer. Declare `localhost:<port>`.                             |
-| `curl` reports a 403 from the proxy                                        | The host is not declared. `*.example.com` does not cover `example.com`.                  |
-| A program cannot connect                                                   | It ignores `https_proxy`, or needs DNS. Only proxy-aware programs reach servers.         |
-| A program cannot write (macOS)                                             | It writes outside the page's folders. Use `$TMPDIR`, not `/tmp`.                         |
-| `rm` refuses a folder                                                      | The folder holds a hidden file, such as `.DS_Store`.                                     |
+| You see                                                                    | Cause and fix                                                                                            |
+| -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| resworb: this page may not see /path. Ask for it with … resworb-read …     | Add `resworb-read` for the folder. Check for a hidden name, or a symlink that leads out.                 |
+| resworb: this page may not change /path. Ask for it with … resworb-write … | Add `resworb-write`. The own folder is to see only. For a page (`.lmth`), the value must end in `.lmth`. |
+| resworb: this page may not run x. Ask for it with … resworb-run …          | Declare the program, and call it by its file name, not its path.                                         |
+| resworb: run takes its arguments as an array.                              | Write `run('git', ['status'])`, not `run('git', 'status')`.                                              |
+| resworb: readFile takes an encoding name, or null for bytes.               | Pass `'utf8'`, another encoding, or `null`, not an options object.                                       |
+| A script, style or image gets a 403: `resworb: this page may not see …`    | The file is out of the page's reach.                                                                     |
+| `fetch` over http gets a 403: `resworb: host not declared`                 | Declare the host with `resworb-net`.                                                                     |
+| `fetch` over https fails with a network error                              | The host is not declared; for https, the proxy's refusal looks like this.                                |
+| `fetch` fails in a page without `resworb-net`                              | The page has no network. Add `resworb-net`.                                                              |
+| `fetch` to a server on this computer fails                                 | The proxy refuses this computer. Declare `localhost:<port>`.                                             |
+| `curl` reports a 403 from the proxy                                        | The host is not declared. `*.example.com` does not cover `example.com`.                                  |
+| A program cannot connect                                                   | It ignores `https_proxy`, or needs DNS. Only proxy-aware programs reach servers.                         |
+| A program cannot write (macOS)                                             | It writes outside the page's folders. Use `$TMPDIR`, not `/tmp`.                                         |
+| `rm` refuses a folder                                                      | The folder holds a hidden file, such as `.DS_Store`.                                                     |
 
 ## Other problems
 
 **A file next to the page does not load.** The page sits in `~`, Desktop, Documents or Downloads, where it has no own folder. Move it into a folder of its own.
 
-**A subfolder is out of reach.** With no tags, a page reaches only the files directly in its folder. Any tag opens the subfolders.
+**A page cannot save next to itself.** The own folder is to see only. Ask for `resworb-write`, such as `./notes.txt` or `./*`.
+
+**A save to a `.lmth` file is refused.** `resworb-write` skips pages unless its value ends in `.lmth`.
 
 **New tags have no effect.** resworb reads tags when the page opens. Reopen it.
 

@@ -1,6 +1,6 @@
 // resworb: a browser turned inside out. A page is HTML from disk. It asks in <meta> tags
 // for what it needs: folders to see or change, servers to reach, programs to run, or full
-// Node. With no tags it gets its own folder and nothing else, and opens without asking.
+// Node. With no tags it may see its own folder and nothing else, and opens without asking.
 // With tags, a popup lists them in plain words and the user approves the list once.
 //
 // This app is two processes. Launched normally it is the trampoline (trampoline/): it reads

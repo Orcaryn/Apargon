@@ -9,7 +9,7 @@ A `.lmth` file is HTML that opens in resworb.
 
 | Page      | Gets                                                                         | Asks first?  |
 | --------- | ---------------------------------------------------------------------------- | ------------ |
-| no tags   | the files directly in its own folder, through `window.resworb`; nothing else | no           |
+| no tags   | to see its own folder and subfolders, through `window.resworb`; nothing else | no           |
 | with tags | what its `<meta>` tags list                                                  | yes, a popup |
 
 ## When
@@ -34,11 +34,12 @@ Do not use it when:
 | the app needs the camera, microphone, screen capture, notifications or location       | they are denied                             |
 | the app needs a second window, or must run with its window closed                     | a page has one window, and closing it quits |
 
-## A page with no tags
+## A page that saves
 
-Put the page in the folder it works on. Paths are relative to that folder.
+Put the page in the folder it works on. Paths are relative to that folder. With no tags it may only look; to save, it names what it saves.
 
 ```html
+<meta name="resworb-write" content="./notes.txt">
 <script type="module">
   const notes = (await resworb.exists('notes.txt')) ? await resworb.readFile('notes.txt') : '';
   await resworb.writeFile('notes.txt', notes + '\nmore');
@@ -73,7 +74,8 @@ Rules for the page:
 - The files are the truth; the page is a view. Write back in the files' own format, and never keep the only copy of anything in the page.
 - Saving the page, or a `.css` or `.js` file in its folder or below, reloads the window.
 - A page in the home folder, Desktop, Documents or Downloads gets no folder. Give it a folder of its own.
-- With no tags, data and libraries must sit in the page's folder itself, not in a subfolder. With any tag, the page also gets its subfolders.
+- The own folder is to see only, subfolders included. Ask for `resworb-write` with the narrowest value: one file, one subfolder, or `./*`.
+- `resworb-write` skips pages (`.lmth`) unless the value ends in `.lmth`, which shows red. Ask for that only for a page that edits pages.
 
 ## Tags
 
@@ -90,7 +92,7 @@ One value per tag. Ask for as little as the page needs: every tag adds a line to
 **Folders** (`resworb-read`, `resworb-write`)
 
 - Relative to the page, `~/…`, or absolute.
-- The part before the first `*` must exist.
+- The part before the first `*` must exist. A value without `*` may name a file yet to be made, if its folder exists.
 - A folder includes its subfolders.
 - `*` matches within one name: `~/notes/*.md`, `~/git/*/docs`.
 

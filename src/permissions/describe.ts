@@ -35,6 +35,22 @@ export function describe(permissions: Permissions) {
   return lines.sort((a, b) => order[a.level] - order[b.level]);
 }
 
+// What a page from another computer could do with the lines together, or null if each line says it
+// all. Programs and full Node reach the internet through other apps (SECURITY.md, "Not enforced").
+export function worstCase({ node, run, net, own, read, write }: Permissions) {
+  const hosts = [...new Set(net.map(pattern => pattern.split(':')[0]))];
+
+  if (node) {
+    return 'It can do anything you can, including sending your files anywhere.';
+  } else if (Object.keys(run).length) {
+    return 'It can run programs that see all your files. Through other apps, they may send them anywhere.';
+  } else if (hosts.length && (own || read.length || write.length)) {
+    return `It can send the files it sees to ${hosts.includes('*') ? 'any server' : hosts.join(', ')}.`;
+  }
+
+  return null;
+}
+
 function folderLine(kind: 'read' | 'write', pattern: string): Line {
   const id = `${kind}:${pattern}`;
   const verb = kind === 'read' ? 'See' : 'See, change and delete';

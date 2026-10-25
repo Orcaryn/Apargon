@@ -61,6 +61,14 @@ export function declaredPermissions(page: string) {
     throw new Error(`Folder ${quoted} has a " in its path, which the sandbox cannot take. Rename it.`);
   }
 
+  // The popup shows each path on a line of its own. A line break in one, typed in the tag or
+  // in a real folder name, would show as another permission; bidi and zero-width marks hide text.
+  const invisible = [page, ...permissions.read, ...permissions.write, ...Object.values(permissions.run)].find(text => /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(text));
+
+  if (invisible) {
+    throw new Error(`${JSON.stringify(invisible)} has a line break or another invisible character, which the popup cannot show. Write the value on one line, or rename the file.`);
+  }
+
   return permissions;
 }
 

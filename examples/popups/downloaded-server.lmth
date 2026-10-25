@@ -1,0 +1,5 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="resworb-net" content="api.github.com:443">
+<title>Downloaded: a server</title>
+<p>Downloaded, sees its folder and reaches <code>api.github.com</code>. The popup said it can send the files it sees there, and asked you to trust the site.</p>

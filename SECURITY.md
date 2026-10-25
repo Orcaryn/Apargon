@@ -140,7 +140,7 @@ Declared `localhost` and `127.0.0.1` ports bypass the proxy, so they are not log
 
 **Linux**
 
-- The OS limits a program's writes by folder, not by pattern. A program the page runs may change any file in the page's writable folders: for `~/notes/*.md`, all of `~/notes`, hidden files (`.git/hooks`, `.envrc`) and pages too. The popup's `resworb-run` line names those folders. resworb's own checks still hold the page itself to the patterns.
+- The OS limits a program's writes by folder, not by pattern. A program the page runs may change any file in the page's writable folders: for `~/notes/*.md` or `~/notes/todo.md`, all of `~/notes`, hidden files (`.git/hooks`, `.envrc`) and pages too. The popup's `resworb-run` line names those folders. resworb's own checks still hold the page itself to the patterns.
 - `--unshare-net` isolates IP networking only. Unix sockets outside the runtime folder remain, and each can be a way out for a program the page runs, or for a page that exploits Chromium:
   - on X11, the display, which the window needs: a program can type into another window, such as a terminal;
   - tmux and GNU screen (`/tmp/tmux-<uid>`, `/run/screen`): a program can type a command into your shell, which has network;
@@ -206,11 +206,11 @@ A firm "nothing leaves" guarantee needs a VM with no network card, no shared fol
 
 `pnpm test` runs every check in the real app and fails if one fails. [docs/verification.md](docs/verification.md) lists the checks, the egress matrix, and manual canaries for channels the suite cannot cover.
 
-| Platform      | Last verified                                                                                                                                                                                                 |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| macOS         | 2026-10-25, `pnpm test`: every check                                                                                                                                                                          |
-| Linux         | 2026-10-25, the installed `.deb` on a headless Ubuntu 24.04 server with the AppArmor limit on: every Linux check, before the own folder became read-only and pages left `resworb-write`; not yet re-run since |
-| Linux desktop | not yet: no run with a real display and a double-click                                                                                                                                                        |
+| Platform      | Last verified                                                                                                                                                                    |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS         | 2026-10-25, `pnpm test`: every check                                                                                                                                             |
+| Linux         | 2026-10-25, the installed `.deb` on a headless Ubuntu 24.04 server with the AppArmor limit on: every Linux check, with the own folder read-only and pages out of `resworb-write` |
+| Linux desktop | not yet: no run with a real display and a double-click                                                                                                                           |
 
 ## Reporting
 

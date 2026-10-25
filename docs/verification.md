@@ -68,20 +68,20 @@ The raw results are in `test/result.json`, `test/result-node.json` and `test/res
 
 ## Linux
 
-Last run 2026-10-25 on a headless Ubuntu 24.04 server (x86_64, kernel 6.8, `apparmor_restrict_unprivileged_userns = 1`), as an ordinary user. Every check not marked macOS passed: 16 without tags, 6 with full Node, 16 with servers and programs.
+Last run 2026-10-25 on a headless Ubuntu 24.04 server (x86_64, kernel 6.8, `apparmor_restrict_unprivileged_userns = 1`), as an ordinary user. Every check not marked macOS passed: 22 writing only its results, 9 with full Node, 16 with servers and programs, and the refusal with its control.
 
 The installed app ignores `RESWORB_TEST_ALLOW`, so the run tests it as a user runs it:
 
 1. Build: `pnpm dist:linux`. Install: `sudo apt install ./dist/resworb_0.1.0_amd64.deb xvfb xauth`.
-2. Run the page without tags: `xvfb-run -a resworb test/selftest.lmth`.
-3. Approve the two pages with tags once, at a real display. Without one, write their approvals to `~/.config/resworb/grants.json`: each page's real path, mapped to the sorted `id`s of `describe(declaredPermissions(page))`.
-4. Run them: `xvfb-run -a resworb test/selftest-node.lmth`, then `test/selftest-net.lmth`.
+2. Approve the three pages once, at a real display. All have tags: `selftest.lmth` asks to write its results. Without a display, write their approvals to `~/.config/resworb/grants.json`: each page's real path, mapped to the sorted `id`s of `describe(declaredPermissions(page))`.
+3. Delete any `test/result*.json`, so each page must create its own.
+4. Run them: `xvfb-run -a resworb test/selftest.lmth`, then `test/selftest-node.lmth` and `test/selftest-net.lmth`.
 5. Check: `node test/check.ts`.
 6. Refusal, with a control: run `resworb test/selftest.lmth` with `RESWORB` set by hand to a `ChildConfig` for it. No `test/result.json` may appear. Then run it normally: now one must.
 
 On 2026-10-25 the hidden runtime folder, own process list and own session were also checked with `pnpm test` from source, in Docker on Ubuntu 24.04 with a setuid `bwrap`, a session D-Bus at `/run/user/1000/bus` and a terminal. Without them a full-Node page reached the bus, saw every process and could open the terminal; with them it could do none of these, and every Linux check passed. The container needed `SYS_ADMIN`, `NET_ADMIN` and `SYS_PTRACE` and no seccomp, AppArmor or `/proc` masking for `bwrap`, and `ELECTRON_DISABLE_SANDBOX=1` for the trampoline's Chromium.
 
-The run found three packaging bugs, now fixed in `package.json`: the `.deb` lacked `bubblewrap` and `libasound2t64`, and it could not be built without a maintainer and a homepage.
+The first run found three packaging bugs, now fixed in `package.json`: the `.deb` lacked `bubblewrap` and `libasound2t64`, and it could not be built without a maintainer and a homepage. The run after the own folder became read-only found that `bwrap` would not start for a page naming a file not yet made, now fixed in `writableFolder`.
 
 ## Egress matrix
 

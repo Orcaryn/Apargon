@@ -87,11 +87,11 @@ In dev builds only, `RESWORB_TEST_ALLOW=1` answers the popup and prints what it 
 
 ### Platforms
 
-| Platform | State                                                                                                                                                                                                                        |
-| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| macOS    | works end to end                                                                                                                                                                                                             |
-| Linux    | every Linux check passed in the installed `.deb` on a headless Ubuntu 24.04 server, before the own folder became read-only (not re-run since); not yet run on a desktop; programs' writes are limited by folder, not pattern |
-| Windows  | refuses to open pages                                                                                                                                                                                                        |
+| Platform | State                                                                                                                                                             |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS    | works end to end                                                                                                                                                  |
+| Linux    | every Linux check passes in the installed `.deb` on a headless Ubuntu 24.04 server; not yet run on a desktop; programs' writes are limited by folder, not pattern |
+| Windows  | refuses to open pages                                                                                                                                             |
 
 ### TypeScript without a build
 

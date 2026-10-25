@@ -3,7 +3,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { literalBase, PAGE_SOURCE, patternSource } from './patterns.ts';
+import { literalBase, PAGE_SOURCE, patternSource, writableFolder } from './patterns.ts';
 import { BIG_FOLDERS, HOME, LOCAL_HOSTS, type Permissions } from './tags.ts';
 
 export type Line = { id: string; level: 'red' | 'yellow' | 'plain'; text: string };
@@ -16,7 +16,7 @@ export function describe(permissions: Permissions) {
   }
 
   // bwrap opens whole folders, not patterns: on Linux a program reaches more than the page does.
-  const writable = permissions.write.map(literalBase);
+  const writable = [...new Set(permissions.write.map(writableFolder))];
   const linuxWrites = process.platform === 'linux' && writable.length ? ` It can also change any file in ${writable.join(', ')}, hidden ones and pages included.` : '';
 
   for (const [program, file] of Object.entries(permissions.run)) {

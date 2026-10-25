@@ -85,6 +85,10 @@ On Linux, `daemons.ts` and the checks marked macOS skip. From source on Ubuntu 2
 
 In dev builds only, `RESWORB_TEST_ALLOW=1` answers the popup and prints what it would have listed.
 
+### Releases
+
+`./release.sh --major | --minor | --patch` is the only way to release. It refuses before changing anything, and runs every check before it builds. Do not add a way to skip a check. Each release needs `release-notes/<version>.md`, written for users, with security fixes first: the app never checks for updates, so the notes are the only notice users get.
+
 ### Platforms
 
 | Platform | State                                                                                                                                                             |

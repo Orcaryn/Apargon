@@ -122,6 +122,8 @@ There are no releases yet, so build resworb yourself (see [Develop](#develop)).
 | Linux    | `pnpm dist:linux`, then `sudo apt install ./dist/resworb_0.1.0_amd64.deb`. Tested on a headless Ubuntu 24.04 server, not yet on a desktop. Skip the AppImage: it is untested. |
 | Windows  | not supported yet                                                                                                                                                             |
 
+resworb never checks for updates, so release notes are the only way you will hear about security fixes. To get them, watch this repository: **Watch → Custom → Releases**.
+
 A page is code, and double-clicking it runs it. A page with no tags can only look, so it opens without a popup, even if downloaded.
 
 ## How it works
@@ -201,6 +203,8 @@ pnpm dist:linux  # AppImage and .deb
 
 **Notarization** runs when these are set: `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID`, or `APPLE_KEYCHAIN_PROFILE`. Without them, macOS blocks the first launch until you allow it in System Settings → Privacy & Security.
 
+**Releases** come from `./release.sh --major`, `--minor` or `--patch`, on macOS. It refuses unless `main` is clean and up to date and `release-notes/<version>.md` is committed. Then it runs `format:check`, `lint` and `test`, bumps the version, builds a notarized `.dmg` for each Mac architecture and a `.deb`, commits and tags the version, pushes, and publishes a GitHub release with a `SHA256SUMS` file. It needs the Developer ID in the keychain, the `notarize` keychain profile for `notarytool`, and a `gh` account that can push to the repository. It does not run the Linux checks: do that first with [docs/verification.md](docs/verification.md#linux). Write the notes for users. They never get an update prompt, so put security fixes first.
+
 **Icons** are SVGs in `assets/`. `assets/make-icons.sh` renders them and needs `rsvg-convert`.
 
 ## Next
@@ -210,4 +214,3 @@ pnpm dist:linux  # AppImage and .deb
 - Close the Unix sockets the sandbox still shows on Linux: X11, the system D-Bus, Docker.
 - An offline mode for Windows (AppContainer).
 - A VM backend, for a guarantee that covers full Node.
-- A release workflow.

@@ -28,6 +28,8 @@ sudo apt install ./dist/resworb_0.1.0_amd64.deb
 
 Skip the AppImage. It is untested and brings neither `bwrap` nor the profile; on Ubuntu 23.10 and later, expect "Could not start the sandbox".
 
+resworb never checks for updates, so release notes are the only way you will hear about security fixes. To get them, watch the repository on GitHub: **Watch → Custom → Releases**.
+
 To run a page without building:
 
 ```sh

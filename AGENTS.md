@@ -24,7 +24,7 @@ A page is code the user chose to run, by double-click or from the command line. 
 
 **`.lmth`.** A page (`html` backwards).
 
-**Tags.** `resworb-read`, `resworb-write`, `resworb-net`, `resworb-run`, `resworb-node`. One value per `<meta>`, read from disk before the page runs.
+**Tags.** `resworb-read`, `resworb-write`, `resworb-net`, `resworb-run`, `resworb-env`, `resworb-node`. One value per `<meta>`, read from disk before the page runs.
 
 **`window.resworb`.** The only way out for a page without full Node. `src/page/preload.cjs` forwards each call; `pageApi` in `src/page/api.ts` checks it.
 
@@ -33,7 +33,9 @@ A page is code the user chose to run, by double-click or from the command line. 
 - cannot open other apps;
 - cannot write app settings.
 
-On Linux it also hides the session's runtime folder (D-Bus, the sound server) but for the Wayland socket, and gives the page its own process list and session.
+On Linux it also hides the session's runtime folder (D-Bus, the sound server) but for the Wayland socket, covers tmux's, screen's and Docker's sockets, and gives the page its own process list and session.
+
+Both hide keys and logins (`SECRETS`) from the page and its programs unless a tag names one, and give a program a short environment plus the `resworb-env` names.
 
 **Own folder.** The page's folder, unless that is `/`, `~`, Desktop, Documents or Downloads, or the page has full Node.
 
@@ -47,7 +49,8 @@ On Linux it also hides the session's runtime folder (D-Bus, the sound server) bu
 
 1. reads the tags and shows the popup;
 2. relaunches itself in the OS sandbox (`sandbox-exec` on macOS, `bwrap --unshare-net` on Linux);
-3. for `resworb-net`, runs the proxy that forwards only to declared hosts: on a loopback port on macOS, on a socket file on Linux.
+3. for `resworb-net`, runs the proxy that forwards only to declared hosts: on a loopback port on macOS, on a socket file on Linux;
+4. once a day at most, asks GitHub for a new version (`src/trampoline/update.ts`). macOS installs it on the next start; Linux shows a notice.
 
 Declared `localhost` and `127.0.0.1` ports skip the proxy. On macOS the sandbox profile lets them through; on Linux the trampoline relays each from a socket file. Only the trampoline writes `grants.json`.
 
@@ -61,7 +64,7 @@ On Linux it then relays its own loopback ports to the trampoline's socket files.
 ## What the fence does not cover
 
 - resworb enforces read grants, not the OS.
-- A declared program can read every file.
+- A declared program can read every file but keys and logins (`SECRETS` in `src/permissions/tags.ts`).
 - A full-Node page can launch another app that has network, write into a synced folder, or use the clipboard.
 - An approval is remembered by file path and permission list, not content.
 
@@ -87,7 +90,7 @@ In dev builds only, `RESWORB_TEST_ALLOW=1` answers the popup and prints what it 
 
 ### Releases
 
-`./release.sh --major | --minor | --patch` is the only way to release. It refuses before changing anything, and runs every check before it builds. Do not add a way to skip a check. Each release needs `release-notes/<version>.md`, written for users, with security fixes first: the app never checks for updates, so the notes are the only notice users get.
+`./release.sh --major | --minor | --patch` is the only way to release. It refuses before changing anything, and runs every check before it builds. Do not add a way to skip a check. Each release needs `release-notes/<version>.md`, written for users, with security fixes first: Linux users get a link to them and nothing else, and users who turned the update check off get nothing. `release.sh` also uploads the feeds installed copies read, `update-<platform>-<arch>.json`; a release without them reaches no one.
 
 ### Platforms
 
@@ -95,7 +98,7 @@ In dev builds only, `RESWORB_TEST_ALLOW=1` answers the popup and prints what it 
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | macOS    | works end to end                                                                                                                                                  |
 | Linux    | every Linux check passes in the installed `.deb` on a headless Ubuntu 24.04 server; not yet run on a desktop; programs' writes are limited by folder, not pattern |
-| Windows  | refuses to open pages                                                                                                                                             |
+| Windows  | refuses to open pages; `docs/windows.md` has the plan (Microsoft's MXC) and why it waits for a Windows 11 machine to test on                                      |
 
 ### TypeScript without a build
 
@@ -124,10 +127,10 @@ That dialog means the offline check worked. Find out why the process is not in t
 
 **The fence**
 
-- Keep it strict. A change to any of these must keep `pnpm test` green and add no way to skip the offline check: `sandbox/macos.sb`, `seatbeltProfile`, `bwrapArgs`, `canBindLoopback`, `inEmptyNetwork`, `startProxy`, `relay`, `declaredPermissions`, `patternSource`, `PAGE_SOURCE`, `changeableSources`, `pageAccess`, `pageApi`.
+- Keep it strict. A change to any of these must keep `pnpm test` green and add no way to skip the offline check: `sandbox/macos.sb`, `seatbeltProfile`, `bwrapArgs`, `canBindLoopback`, `inEmptyNetwork`, `startProxy`, `relay`, `declaredPermissions`, `patternSource`, `PAGE_SOURCE`, `changeableSources`, `pageAccess`, `pageApi`, `SECRETS`, `PROGRAM_ENV`.
 - `patternSource` and `PAGE_SOURCE` are the one pattern source for Seatbelt and for resworb's checks. Do not write a second matcher.
 - The window loads only `file:` URLs. A link to a declared host does not navigate, and no new windows open.
-- The app makes no network calls of its own: no update check, crash reporter or telemetry.
+- The app's one network call of its own is the update check, from the trampoline, never from the page process. No crash reporter or telemetry.
 
 **The popup**
 
@@ -145,6 +148,7 @@ That dialog means the offline check worked. Find out why the process is not in t
 | `resworb-net`                   | `host:port`; `*` only as the whole host, a leading `*.`, or the port; `*` alone means `*:*`; no schemes, no host without a port; on Linux, no `localhost:*` |
 | `resworb-read`, `resworb-write` | `*` within a name; `*` alone is refused                                                                                                                     |
 | `resworb-run`, `resworb-node`   | no wildcards                                                                                                                                                |
+| `resworb-env`                   | one variable name, no wildcards; only with `resworb-run`                                                                                                    |
 
 **Code**
 

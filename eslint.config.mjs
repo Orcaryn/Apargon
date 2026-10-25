@@ -5,7 +5,6 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 import noLongDashes from './eslint-rules/no-long-dashes.js';
 import requireElseIf from './eslint-rules/require-else-if.js';
-import requireIntentionalComments from './eslint-rules/require-intentional-comments.js';
 
 const constFunctionDeclaration = {
   selector: "VariableDeclaration[kind='const']:has(VariableDeclarator[init.type=/^(ArrowFunctionExpression|FunctionExpression)$/][init.body.type='BlockStatement'])",
@@ -27,10 +26,7 @@ export default defineConfig([
   {
     name: 'workspace/prose',
     files: ['**/*.{js,mjs,cjs,ts}'],
-    plugins: {
-      dashes: { rules: { 'no-long-dashes': noLongDashes } },
-      personal: { rules: { 'require-else-if': requireElseIf, 'require-intentional-comments': requireIntentionalComments } },
-    },
+    plugins: { dashes: { rules: { 'no-long-dashes': noLongDashes } }, personal: { rules: { 'require-else-if': requireElseIf } } },
     rules: { 'dashes/no-long-dashes': 'error' },
   },
   {

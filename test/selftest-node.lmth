@@ -58,6 +58,9 @@
     const wayland = process.env.WAYLAND_DISPLAY && path.resolve(runtime, process.env.WAYLAND_DISPLAY);
     const sockets = fs.existsSync(runtime) ? fs.readdirSync(runtime, { recursive: true, withFileTypes: true }).filter((entry) => entry.isSocket()) : [];
     result.runtime_dir_hidden = sockets.every((entry) => path.join(entry.parentPath, entry.name) === wayland);
+    // tmux and screen type into a shell outside, Docker acts as root: each folder is empty, the socket a plain file, or not there.
+    const covered = [path.join(process.env.TMUX_TMPDIR ?? '/tmp', `tmux-${process.getuid()}`), '/run/screen', '/run/docker.sock'].filter(fs.existsSync);
+    result.shell_and_docker_sockets_hidden = covered.every((file) => (fs.statSync(file).isDirectory() ? fs.readdirSync(file).length === 0 : !fs.statSync(file).isSocket()));
   }
 
   // If this ever resolves, keep the evidence: what answered, from where.

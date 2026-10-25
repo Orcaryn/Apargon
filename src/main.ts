@@ -16,6 +16,7 @@ import path from 'path';
 import { showPage } from './page/start.ts';
 import { PAGE_DATA, PAGE_FILE, type ChildConfig, type ChildMessage } from './shared.ts';
 import { openPage } from './trampoline/start.ts';
+import { checkForUpdates } from './trampoline/update.ts';
 
 // RESWORB marks the child. It is not a key: the child checks it is offline before it opens anything.
 const childConfig: ChildConfig | null = process.env.RESWORB ? JSON.parse(process.env.RESWORB) : null;
@@ -58,6 +59,7 @@ app.whenReady().then(async () => {
     app.quit();
   } else {
     pages.forEach(openPage);
+    checkForUpdates();
   }
 });
 

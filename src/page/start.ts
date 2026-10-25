@@ -59,10 +59,14 @@ export async function showPage({ page, permissions, bridges }: ChildConfig) {
 
   if (access) {
     // A watch can fire after the window closed, before the app quits.
-    const api = pageApi(dir, permissions.run, access, (id, file) => !win.isDestroyed() && win.webContents.send('resworb-change', id, file)) as Record<string, (...args: unknown[]) => unknown>;
+    const api = pageApi(dir, permissions, access, (id, file) => !win.isDestroyed() && win.webContents.send('resworb-change', id, file)) as Record<string, (...args: unknown[]) => unknown>;
     ipcMain.on('resworb-dir', event => (event.returnValue = dir));
     ipcMain.handle('resworb', async (_event, call: string, ...args: unknown[]) => {
       try {
+        if (!Object.hasOwn(api, call)) {
+          throw new Error(`resworb: no such call ${call}.`);
+        }
+
         return { value: await api[call](...args) };
       } catch (err) {
         return { error: (err as Error).message, code: (err as NodeJS.ErrnoException).code };

@@ -8,7 +8,7 @@ import path from 'path';
 import readline from 'readline';
 import type { Readable } from 'stream';
 import { localPorts, type Permissions } from '../permissions/tags.ts';
-import { APP_ROOT, DATA, EGRESS_LOG, GRANTS_FILE, relay, type Bridge, type ChildConfig, type ChildMessage, type Grants } from '../shared.ts';
+import { APP_ROOT, DATA, EGRESS_LOG, GRANTS_FILE, relay, UPDATE_FILE, type Bridge, type ChildConfig, type ChildMessage, type Grants, type UpdateState } from '../shared.ts';
 import { approve } from './approve.ts';
 import { bwrapArgs } from './bwrap.ts';
 import { startProxy } from './proxy.ts';
@@ -45,11 +45,12 @@ async function startChild(page: string, permissions: Permissions) {
   // computer wait on socket files in resworb's data, which the page can see but not change,
   // and the child relays the same ports on its own loopback to them.
   const sockets = linux && permissions.net.length ? fs.mkdtempSync(path.join(DATA, 'net-')) : null;
-  const proxy = permissions.net.length ? await startProxy(permissions.net, sockets && path.join(sockets, 'proxy.sock')) : null;
-  const localBridges = sockets ? localPorts(permissions).map(port => ({ port: +port, socket: path.join(sockets, `${port}.sock`) })) : [];
+  const proxySocket = sockets && path.join(sockets, 'proxy.sock');
+  const proxy = permissions.net.length ? await startProxy(permissions.net, proxySocket) : null;
+  const localBridges = sockets ? localPorts(permissions).map(port => ({ port, socket: path.join(sockets, `${port}.sock`) })) : [];
   const localRelays = await Promise.all(localBridges.map(({ port, socket }) => relay({ path: socket }, { host: '127.0.0.1', port })));
-  const proxyPort = !proxy ? null : sockets ? unusedPort(localBridges) : (proxy.address() as AddressInfo).port;
-  const bridges = sockets && proxyPort ? [{ port: proxyPort, socket: path.join(sockets, 'proxy.sock') }, ...localBridges] : [];
+  const proxyPort = !proxy ? null : proxySocket ? unusedPort(localBridges) : (proxy.address() as AddressInfo).port;
+  const bridges = proxySocket && proxyPort ? [{ port: proxyPort, socket: proxySocket }, ...localBridges] : [];
   const env: NodeJS.ProcessEnv = { ...process.env, RESWORB: JSON.stringify({ page, permissions, proxy: proxy && `127.0.0.1:${proxyPort}`, bridges } satisfies ChildConfig) };
 
   if (proxy) {
@@ -100,6 +101,9 @@ function handleChildMessage(message: ChildMessage) {
     const grants: Grants = JSON.parse(fs.readFileSync(GRANTS_FILE, 'utf8'));
     const kept = Object.entries(grants).filter(([page]) => !message.revoke.includes(page));
     fs.writeFileSync(GRANTS_FILE, JSON.stringify(Object.fromEntries(kept), null, 2) + '\n');
+  } else if ('automaticUpdates' in message) {
+    const state: UpdateState = fs.existsSync(UPDATE_FILE) ? JSON.parse(fs.readFileSync(UPDATE_FILE, 'utf8')) : {};
+    fs.writeFileSync(UPDATE_FILE, JSON.stringify({ ...state, automatic: message.automaticUpdates }, null, 2) + '\n');
   } else {
     shell.openPath(EGRESS_LOG);
   }

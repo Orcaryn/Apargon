@@ -4,12 +4,15 @@
 import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import { HOME } from '../permissions/tags.ts';
+import { HOME, PROGRAM_ENV, type Permissions } from '../permissions/tags.ts';
 import { realPath, type pageAccess } from './access.ts';
 
 // notify(id, file) tells the page that a file it watches changed.
-export function pageApi(dir: string, programs: Record<string, string>, { canSee, canList, canChange }: ReturnType<typeof pageAccess>, notify: (id: string, file: string) => void) {
+export function pageApi(dir: string, permissions: Permissions, { canSee, canList, canChange }: ReturnType<typeof pageAccess>, notify: (id: string, file: string) => void) {
   const watchers = new Map<string, fs.FSWatcher>();
+  const programs = permissions.run;
+  // Not resworb's whole environment, which from a terminal holds the shell's tokens.
+  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => PROGRAM_ENV.includes(name) || permissions.env.includes(name)));
   const where = (file: string) => realPath(path.resolve(dir, file === '~' ? HOME : file.replace(/^~\//, HOME + '/')));
 
   const need = (allowed: boolean, file: string, verb: 'see' | 'change') => {
@@ -99,7 +102,7 @@ export function pageApi(dir: string, programs: Record<string, string>, { canSee,
 
       const cwd = where(options.cwd ?? '.');
       need(canList(cwd), cwd, 'see');
-      const child = spawn(programs[name], args, { cwd });
+      const child = spawn(programs[name], args, { cwd, env });
       let stdout = '';
       let stderr = '';
       child.stdout.setEncoding('utf8').on('data', text => (stdout += text));

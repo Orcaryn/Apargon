@@ -19,6 +19,9 @@ pnpm test
 | any                                   | process handed `RESWORB` by hand, no sandbox      | refuses to open |
 | popup (`popup.ts`, macOS)             | `~/LIBRARY`, `~/DOCUMENTS` typed in another case  | red             |
 | popup                                 | a line break or right-to-left mark in a value     | refused         |
+| popup                                 | `resworb-env` without `resworb-run`, or with `*`  | refused         |
+| popup                                 | `resworb-env` named like a secret (`*_API_KEY`)   | red             |
+| popup                                 | `resworb-read` of `~/.netrc`                      | red, says what  |
 | writes only (`selftest.lmth`)         | no `require`, no `process`                        | absent          |
 | writes only                           | read, list in its own folder and a subfolder      | works           |
 | writes only                           | write in its own folder or a subfolder, unnamed   | refused         |
@@ -41,6 +44,7 @@ pnpm test
 | `resworb-node`, Linux                 | see processes outside the sandbox                 | blocked         |
 | `resworb-node`, Linux                 | share the session of the terminal it started from | blocked         |
 | `resworb-node`, Linux                 | see the runtime folder (D-Bus, sound server)      | blocked         |
+| `resworb-node`, Linux                 | tmux's, screen's and Docker's sockets             | blocked         |
 | net and run (`selftest-net.lmth`)     | declared host by `curl`, by `fetch` (https, http) | works           |
 | net and run                           | `*.example.org` reaches `www.example.org`         | works           |
 | net and run                           | `*.example.org` reaches `example.org`             | refused (403)   |
@@ -51,6 +55,9 @@ pnpm test
 | net and run                           | `resworb-read` folder: read / write               | works / refused |
 | net and run                           | program writes a `resworb-write` match            | works           |
 | net and run                           | program reads `input` on stdin                    | works           |
+| net and run                           | program gets a `resworb-env` variable, `HOME`     | works           |
+| net and run                           | program gets an unnamed variable, `RESWORB`       | left out        |
+| net and run                           | program lists `~/.ssh`                            | blocked         |
 | net and run                           | program writes outside it                         | blocked         |
 | net and run, macOS                    | program writes a hidden file                      | blocked         |
 | net and run, macOS                    | program writes its own folder, unnamed            | blocked         |
@@ -68,13 +75,13 @@ The raw results are in `test/result.json`, `test/result-node.json` and `test/res
 
 ## Linux
 
-Last run 2026-10-25 on a headless Ubuntu 24.04 server (x86_64, kernel 6.8, `apparmor_restrict_unprivileged_userns = 1`), as an ordinary user. Every check not marked macOS passed: 22 writing only its results, 9 with full Node, 16 with servers and programs, and the refusal with its control.
+Last run 2026-10-25 on a headless Ubuntu 24.04 server (x86_64, kernel 6.8, `apparmor_restrict_unprivileged_userns = 1`), as an ordinary user. Every check not marked macOS passed: 22 writing only its results, 10 with full Node, 19 with servers and programs, and the refusal with its control. The server has a Docker socket, `/run/screen` and tmux, so the socket check covered real ones.
 
 The installed app ignores `RESWORB_TEST_ALLOW`, so the run tests it as a user runs it:
 
 1. Build: `pnpm dist:linux`. Install: `sudo apt install ./dist/resworb_0.1.0_amd64.deb xvfb xauth`.
 2. Approve the three pages once, at a real display. All have tags: `selftest.lmth` asks to write its results. Without a display, write their approvals to `~/.config/resworb/grants.json`: each page's real path, mapped to the sorted `id`s of `describe(declaredPermissions(page))`.
-3. Delete any `test/result*.json`, so each page must create its own.
+3. Delete any `test/result*.json`, so each page must create its own. `~/.ssh` must exist: `program_ssh_hidden` lists it.
 4. Run them: `xvfb-run -a resworb test/selftest.lmth`, then `test/selftest-node.lmth` and `test/selftest-net.lmth`.
 5. Check: `node test/check.ts`.
 6. Refusal, with a control: run `resworb test/selftest.lmth` with `RESWORB` set by hand to a `ChildConfig` for it. No `test/result.json` may appear. Then run it normally: now one must.

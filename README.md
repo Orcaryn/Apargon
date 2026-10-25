@@ -34,10 +34,13 @@ To save, a page asks for `resworb-write`, such as `./*` for its own folder.
 | `resworb-write` | see, change and delete them              | the same                           |
 | `resworb-net`   | send and receive data with one server    | `*.example.com:443`, `*`, `host:*` |
 | `resworb-run`   | run one program                          | none                               |
+| `resworb-env`   | give its programs one variable           | none                               |
 | `resworb-node`  | full Node: any file, any program         | none                               |
 
 - `resworb-node` already covers every folder and program, so it goes only with `resworb-net`.
 - Hidden files (names that start with a dot) stay out unless a tag names them.
+- Keys and logins (`~/.ssh`, `~/.aws`, browser profiles) stay out unless a tag names them, for programs too.
+- A program gets `PATH`, `HOME` and a few other variables, not your tokens. `resworb-env` passes one more.
 - Pages (`.lmth`) stay out of `resworb-write` unless the pattern ends in `.lmth`, which shows red: a page that may rewrite another could give itself what that page was approved for.
 
 ## The popup
@@ -120,9 +123,9 @@ There are no releases yet, so build resworb yourself (see [Develop](#develop)).
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | macOS    | `pnpm dist`, then drag resworb from the `.dmg` to Applications. `.lmth` files open on double-click.                                                                           |
 | Linux    | `pnpm dist:linux`, then `sudo apt install ./dist/resworb_0.1.0_amd64.deb`. Tested on a headless Ubuntu 24.04 server, not yet on a desktop. Skip the AppImage: it is untested. |
-| Windows  | not supported yet                                                                                                                                                             |
+| Windows  | not supported yet; the plan is in [docs/windows.md](docs/windows.md)                                                                                                          |
 
-resworb never checks for updates, so release notes are the only way you will hear about security fixes. To get them, watch this repository: **Watch → Custom → Releases**.
+Once a day, when you open a page, resworb checks GitHub for a new version. On macOS it downloads it and installs it the next time it starts; on Linux it tells you and links to the release. Permissions → Check for Updates Automatically turns this off. Then release notes are the only way you will hear about security fixes, so watch this repository: **Watch → Custom → Releases**.
 
 A page is code, and double-clicking it runs it. A page with no tags can only look, so it opens without a popup, even if downloaded.
 
@@ -203,7 +206,7 @@ pnpm dist:linux  # AppImage and .deb
 
 **Notarization** runs when these are set: `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID`, or `APPLE_KEYCHAIN_PROFILE`. Without them, macOS blocks the first launch until you allow it in System Settings → Privacy & Security.
 
-**Releases** come from `./release.sh --major`, `--minor` or `--patch`, on macOS. It refuses unless `main` is clean and up to date and `release-notes/<version>.md` is committed. Then it runs `format:check`, `lint` and `test`, bumps the version, builds a notarized `.dmg` for each Mac architecture and a `.deb`, commits and tags the version, pushes, and publishes a GitHub release with a `SHA256SUMS` file. It needs the Developer ID in the keychain, the `notarize` keychain profile for `notarytool`, and a `gh` account that can push to the repository. It does not run the Linux checks: do that first with [docs/verification.md](docs/verification.md#linux). Write the notes for users. They never get an update prompt, so put security fixes first.
+**Releases** come from `./release.sh --major`, `--minor` or `--patch`, on macOS. It refuses unless `main` is clean and up to date and `release-notes/<version>.md` is committed. Then it runs `format:check`, `lint` and `test`, bumps the version, builds a notarized `.dmg` and `.zip` for each Mac architecture and a `.deb`, commits and tags the version, pushes, and publishes a GitHub release with a `SHA256SUMS` file and the update feeds installed copies read. It needs the Developer ID in the keychain, the `notarize` keychain profile for `notarytool`, and a `gh` account that can push to the repository. It does not run the Linux checks: do that first with [docs/verification.md](docs/verification.md#linux). Write the notes for users, security fixes first: Linux users get a link to them, and users who turned the update check off get nothing else.
 
 **Icons** are SVGs in `assets/`. `assets/make-icons.sh` renders them and needs `rsvg-convert`.
 
@@ -212,5 +215,5 @@ pnpm dist:linux  # AppImage and .deb
 - Run resworb on a Linux desktop.
 - Make `test/refuse.ts` fail when Electron cannot start: today a missing library reads as a refusal.
 - Close the Unix sockets the sandbox still shows on Linux: X11, the system D-Bus, Docker.
-- An offline mode for Windows (AppContainer).
+- An offline mode for Windows, on Microsoft's MXC; the plan and why it waits are in [docs/windows.md](docs/windows.md).
 - A VM backend, for a guarantee that covers full Node.

@@ -5,9 +5,9 @@ description: Never run without a direct command! Use when releasing a new reswor
 
 # Releasing resworb
 
-`./release.sh --patch|--minor|--major` runs every check, bumps the version, builds two notarized `.dmg` files and a `.deb`, commits, tags, pushes and publishes a GitHub release. `release.sh` is the source of truth for the steps.
+`./release.sh --patch|--minor|--major` runs every check, bumps the version, builds a notarized `.dmg` and `.zip` for each Mac architecture and a `.deb`, commits, tags, pushes and publishes a GitHub release with the update feeds. `release.sh` is the source of truth for the steps.
 
-Publishing is public and cannot be taken back. The app never checks for updates, so the release notes are the only notice users get. Get the user's approval on the version and the notes before running it.
+Publishing is public and cannot be taken back. Installed copies read the feeds of the latest release: macOS installs it on its own, Linux shows a notice with a link to the notes. Users who turned the check off get nothing. Get the user's approval on the version and the notes before running it.
 
 ## Order
 
@@ -42,8 +42,8 @@ The new version is `version` in `package.json`, bumped. Before 1.0: `--minor` fo
 
 - **The script refuses before the bump:** nothing changed. Relay the whole list, fix what you can, rerun once.
 - **It fails before `Release <version>` is committed:** the trap puts `package.json` back. Fix the cause and rerun.
-- **It fails after the tag:** never rerun `release.sh`; it would bump again. Run the rest of `publish` by hand, with `VERSION`, `DMGS` and `DEB` set as in `main`. The built files are in `dist/`.
-- **The release is broken:** ship a newer version. Don't delete a published release or tag.
+- **It fails after the tag:** never rerun `release.sh`; it would bump again. Run the rest of `publish` by hand, with `VERSION`, `DMGS`, `ZIPS` and `DEB` set as in `main`. The built files are in `dist/`. A release without its `update-*.json` feeds reaches no one.
+- **The release is broken:** macOS copies install it on their own, so ship a newer version soon. Don't delete a published release or tag.
 
 ## Never
 

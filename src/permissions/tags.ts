@@ -11,16 +11,42 @@ export type Permissions = {
   write: string[];
   net: string[];
   run: Record<string, string>; // name → file
+  env: string[]; // variables its programs get beyond PROGRAM_ENV
+  hidden: string[]; // the SECRETS no tag names, as real paths; the OS hides them from the page and its programs
   node: boolean;
 };
 
 export const HOME = fs.realpathSync(os.homedir());
 export const BIG_FOLDERS = ['Desktop', 'Documents', 'Downloads'].map(name => path.join(HOME, name));
 export const LOCAL_HOSTS = ['localhost', '127.0.0.1'];
+// What a program gets of resworb's environment without asking: enough to run, no tokens. The proxy
+// settings are resworb's own. Any other variable needs resworb-env.
+export const PROGRAM_ENV = ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'TERM', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TZ', 'http_proxy', 'https_proxy', 'no_proxy'];
+// Keys and logins, and what each holds for the popup. Hidden unless a tag names one or starts inside
+// it: ~/.ssh or ~/.ssh/config opens ~/.ssh, ~ does not. Browsers keep logins and cookies in their profiles.
+const MAC_BROWSERS = ['Google/Chrome', 'Chromium', 'BraveSoftware', 'Microsoft Edge', 'Arc', 'Firefox'].map(name => `Library/Application Support/${name}`);
+const LINUX_BROWSERS = ['.config/google-chrome', '.config/chromium', '.config/BraveSoftware', '.config/microsoft-edge', '.mozilla', 'snap/firefox'];
+export const SECRETS = Object.entries({
+  '.ssh': 'SSH keys',
+  '.gnupg': 'GPG keys',
+  '.aws': 'AWS keys',
+  '.azure': 'Azure logins',
+  '.config/gcloud': 'Google Cloud logins',
+  '.kube': 'Kubernetes logins',
+  '.docker': 'Docker logins',
+  '.config/gh': 'GitHub CLI logins',
+  '.netrc': 'saved server passwords',
+  '.git-credentials': 'saved git passwords',
+  '.npmrc': 'npm tokens',
+  '.pypirc': 'PyPI tokens',
+  '.password-store': 'pass passwords',
+  '.local/share/keyrings': 'keyrings',
+  ...Object.fromEntries([...MAC_BROWSERS, ...LINUX_BROWSERS].map(name => [name, 'browser logins and cookies'])),
+}).map(([name, holds]) => ({ path: path.join(HOME, name), holds }));
 
 export function declaredPermissions(page: string) {
   const dir = path.dirname(page);
-  const permissions: Permissions = { own: null, read: [], write: [], net: [], run: {}, node: false };
+  const permissions: Permissions = { own: null, read: [], write: [], net: [], run: {}, env: [], hidden: [], node: false };
 
   for (const [, attrs] of fs.readFileSync(page, 'utf8').matchAll(/<meta\s+([^>]*)>/gi)) {
     const name = /\bname=["']resworb-([^"']*)["']/i.exec(attrs)?.[1].toLowerCase();
@@ -34,20 +60,22 @@ export function declaredPermissions(page: string) {
       permissions.net.push(hostPattern(value));
     } else if (name === 'run') {
       permissions.run[path.basename(value)] = findProgram(value);
+    } else if (name === 'env') {
+      permissions.env.push(envName(value));
     } else if (name === 'node' && value === 'full') {
       permissions.node = true;
     } else if (name === 'node') {
       throw new Error(`Bad resworb-node value "${value}". The only value is "full".`);
     } else {
-      throw new Error(`Unknown tag resworb-${name}. The tags are resworb-read, resworb-write, resworb-net, resworb-run and resworb-node.`);
+      throw new Error(`Unknown tag resworb-${name}. The tags are resworb-read, resworb-write, resworb-net, resworb-run, resworb-env and resworb-node.`);
     }
   }
 
-  if (permissions.node && (permissions.read.length || permissions.write.length || Object.keys(permissions.run).length)) {
-    throw new Error('resworb-node already allows every folder and program. Keep resworb-node and resworb-net only.');
+  if (permissions.node && (permissions.read.length || permissions.write.length || Object.keys(permissions.run).length || permissions.env.length)) {
+    throw new Error('resworb-node already allows every folder, program and variable. Keep resworb-node and resworb-net only.');
+  } else if (permissions.env.length && !Object.keys(permissions.run).length) {
+    throw new Error('resworb-env passes a variable to the programs a page runs, and this page runs none. Add resworb-run, or remove resworb-env.');
   }
-
-  permissions.own = permissions.node || ['/', HOME, ...BIG_FOLDERS].includes(dir) ? null : dir;
 
   // The sandbox profile quotes the folders a page may change: a " in one would end the quote.
   const quoted = permissions.write.find(folder => folder.includes('"'));
@@ -63,6 +91,13 @@ export function declaredPermissions(page: string) {
   if (invisible) {
     throw new Error(`${JSON.stringify(invisible)} has a line break or another invisible character, which the popup cannot show. Write the value on one line, or rename the file.`);
   }
+
+  permissions.own = permissions.node || ['/', HOME, ...BIG_FOLDERS].includes(dir) ? null : dir;
+  // Real paths, as the OS checks them; one not made yet as written, so it is hidden if made later.
+  // Resolved here: inside the sandbox the child could not.
+  const named = [...permissions.read, ...permissions.write].map(literalBase);
+  const secrets = SECRETS.map(secret => (fs.existsSync(secret.path) ? fs.realpathSync.native(secret.path) : secret.path));
+  permissions.hidden = permissions.node ? [] : secrets.filter(secret => !named.some(base => base === secret || base.startsWith(secret + '/')));
 
   return permissions;
 }
@@ -118,12 +153,23 @@ function findProgram(value: string) {
   return found;
 }
 
+// One environment variable, named exactly: no wildcards, so the popup shows each one.
+function envName(value: string) {
+  if (!/^[A-Za-z_]\w*$/.test(value)) {
+    throw new Error(`Bad resworb-env value "${value}". Name one environment variable, such as AWS_PROFILE.`);
+  } else if (PROGRAM_ENV.includes(value)) {
+    throw new Error(`Programs get ${value} already. Remove its resworb-env.`);
+  }
+
+  return value;
+}
+
 // The declared ports on this computer, which the page reaches without the proxy.
 export function localPorts({ net }: Permissions) {
   return net
     .map(pattern => pattern.split(':'))
     .filter(([host]) => LOCAL_HOSTS.includes(host))
-    .map(([, port]) => port);
+    .map(([, port]) => +port);
 }
 
 // What a page may change, as pattern sources for resworb's checks and for Seatbelt: its

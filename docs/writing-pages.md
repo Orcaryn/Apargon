@@ -8,7 +8,7 @@ A page is one HTML file with a `.lmth` extension. It is a view over files: the f
 - **The files are the truth.** Write back in each file's own format: Markdown stays Markdown, JSON stays JSON. Never keep the only copy of anything in the page.
 - **Keep everything on disk.** No CDN, no web fonts. Copy libraries next to the page and load them with `<script src>`.
 - **Ask for as little as you can.** Every tag is a line in the popup, and broad ones are red. A page with no tags opens without asking.
-- **Prefer JavaScript to a program.** Parsing a file in the page is safer than `resworb-run`, whose program can read every file.
+- **Prefer JavaScript to a program.** Parsing a file in the page is safer than `resworb-run`, whose program can read every file but keys and logins.
 - **Use git for undo.** A page changes real files.
 
 ## Choose the tags

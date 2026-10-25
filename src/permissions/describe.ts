@@ -4,7 +4,7 @@
 import fs from 'fs';
 import path from 'path';
 import { literalBase, PAGE_SOURCE, patternSource, writableFolder } from './patterns.ts';
-import { BIG_FOLDERS, HOME, LOCAL_HOSTS, type Permissions } from './tags.ts';
+import { BIG_FOLDERS, HOME, LOCAL_HOSTS, SECRETS, type Permissions } from './tags.ts';
 
 export type Line = { id: string; level: 'red' | 'yellow' | 'plain'; text: string };
 
@@ -20,10 +20,10 @@ export function describe(permissions: Permissions) {
   const linuxWrites = process.platform === 'linux' && writable.length ? ` It can also change any file in ${writable.join(', ')}, hidden ones and pages included.` : '';
 
   for (const [program, file] of Object.entries(permissions.run)) {
-    lines.push({ id: `run:${file}`, level: 'red', text: `Run ${program} (${file}), which can see all your files.${linuxWrites}` });
+    lines.push({ id: `run:${file}`, level: 'red', text: `Run ${program} (${file}), which can see all your files, and keys and logins only if named below.${linuxWrites}` });
   }
 
-  lines.push(...permissions.write.map(pattern => folderLine('write', pattern)), ...permissions.read.map(pattern => folderLine('read', pattern)), ...permissions.net.map(hostLine));
+  lines.push(...permissions.env.map(envLine), ...permissions.write.map(pattern => folderLine('write', pattern)), ...permissions.read.map(pattern => folderLine('read', pattern)), ...permissions.net.map(hostLine));
 
   if (permissions.own) {
     lines.push({ id: `own:${permissions.own}`, level: 'plain', text: `See files in its own folder and its subfolders, ${permissions.own}.` });
@@ -50,13 +50,27 @@ export function worstCase({ node, run, net, own, read, write }: Permissions) {
   return null;
 }
 
+// The name is all there is to go on: one that reads like a secret is red.
+function envLine(name: string): Line {
+  const id = `env:${name}`;
+
+  if (/key|secret|token|pass|auth|cred|session|cookie/i.test(name)) {
+    return { id, level: 'red', text: `Give the programs it runs your ${name} environment variable, which by its name holds a secret.` };
+  }
+
+  return { id, level: 'plain', text: `Give the programs it runs your ${name} environment variable.` };
+}
+
 function folderLine(kind: 'read' | 'write', pattern: string): Line {
   const id = `${kind}:${pattern}`;
   const verb = kind === 'read' ? 'See' : 'See, change and delete';
   const base = literalBase(pattern);
   const library = path.join(HOME, 'Library');
+  const secret = SECRETS.find(secret => base === secret.path || base.startsWith(secret.path + '/'));
 
-  if (kind === 'write' && new RegExp(PAGE_SOURCE).test(pattern)) {
+  if (secret) {
+    return { id, level: 'red', text: `${verb} files in ${pattern}, where your ${secret.holds} are kept.` };
+  } else if (kind === 'write' && new RegExp(PAGE_SOURCE).test(pattern)) {
     return { id, level: 'red', text: `${verb} pages matching ${pattern}. A page you approved could be rewritten to do anything it was allowed.` };
   } else if (pattern === '/') {
     return { id, level: 'red', text: `${verb} all your files.` };

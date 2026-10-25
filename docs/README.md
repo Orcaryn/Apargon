@@ -2,15 +2,16 @@
 
 resworb opens an HTML file from disk. The page may read and write your files, but it cannot reach the network. A page is a `.lmth` file. It lists what it needs in `<meta>` tags, and you approve the list once.
 
-| Read                                  | To learn                                             |
-| ------------------------------------- | ---------------------------------------------------- |
-| [Using resworb](using.md)             | install, open a page, the popup, approvals, the menu |
-| [Permissions](permissions.md)         | each tag, how to write it, and its popup colour      |
-| [The page API](api.md)                | `window.resworb`, call by call; full-Node pages      |
-| [Writing a page](writing-pages.md)    | how to build a page, with recipes                    |
-| [Troubleshooting](troubleshooting.md) | every message resworb shows, and the fix             |
-| [Verification](verification.md)       | what `pnpm test` proves; checks you run by hand      |
-| [Security model](../SECURITY.md)      | what is enforced and what is not                     |
+| Read                                  | To learn                                               |
+| ------------------------------------- | ------------------------------------------------------ |
+| [Using resworb](using.md)             | install, open a page, the popup, approvals, the menu   |
+| [Permissions](permissions.md)         | each tag, how to write it, and its popup colour        |
+| [The page API](api.md)                | `window.resworb`, call by call; full-Node pages        |
+| [Writing a page](writing-pages.md)    | how to build a page, with recipes                      |
+| [Troubleshooting](troubleshooting.md) | every message resworb shows, and the fix               |
+| [Verification](verification.md)       | what `pnpm test` proves; checks you run by hand        |
+| [Windows](windows.md)                 | the plan (Microsoft's MXC) and why it is not built yet |
+| [Security model](../SECURITY.md)      | what is enforced and what is not                       |
 
 ## In one minute
 

@@ -25,6 +25,7 @@ A page **with** `resworb-node` runs with your permissions, like a script. Open i
 - The sandboxed process checks that it is offline before it opens a page, and refuses if it cannot tell. No flag skips this check; `test/refuse.ts` tests it.
   - macOS: it must fail to bind a loopback port.
   - Linux: its network must hold only `lo`, plus the tunnel stubs the kernel adds to every network, and must not be the trampoline's.
+- Linux: tmux's and screen's socket folders (`/tmp/tmux-<uid>` or `$TMUX_TMPDIR`, `/run/screen` or `$SCREENDIR`) and Docker's socket (`/run/docker.sock`) are covered by empty ones. Through tmux or screen a program could type a command into a shell that has network; through Docker it could act as root. resworb makes tmux's folder before the page opens, so a tmux started later is covered too. `selftest-node` checks that none of them holds a socket.
 - Linux: the session's runtime folder (`/run/user/<uid>`) is replaced by an empty one, but for the Wayland socket. It holds the session D-Bus, through which `systemd-run --user` runs a command and the portal opens a link outside the sandbox, and the sound server, which can load a module that streams to a server. `selftest-node` checks that the folder is empty, that the process sees only its own processes, and that its session started inside the sandbox.
 
 ### Tags
@@ -42,6 +43,22 @@ A page **with** `resworb-node` runs with your permissions, like a script. Open i
 - The own folder is to see only, with its subfolders. A page changes only what `resworb-write` lists.
 - A page (`.lmth`) can be changed only through a `resworb-write` pattern that ends in `.lmth`, such as `./*.lmth`, which the popup marks red. Any other pattern skips pages, so a page cannot rewrite another page that was approved for more.
 - Deleting or moving a folder needs every file in it to be changeable, hidden files and pages included.
+
+### Keys and logins
+
+- For a page without full Node, the OS hides a fixed list of folders and files that hold keys and logins from the page and from every program it runs: `~/.ssh`, `~/.gnupg`, `~/.aws`, cloud and GitHub CLI logins, saved passwords, browser profiles. `SECRETS` in `src/permissions/tags.ts` is the list, and [docs/permissions.md](docs/permissions.md#keys-and-logins) repeats it.
+  - macOS: Seatbelt denies reading and writing them, at their real paths.
+  - Linux: `bwrap` lays an empty folder, or an empty file, over each.
+- resworb's own checks refuse them too, so `~/Library` does not reach a browser profile.
+- A `resworb-read` or `resworb-write` that starts inside one opens it. The line shows red and says what it holds. A tag above one, such as `~` or `~/Library`, does not open it.
+- `selftest-net` checks that a program cannot list `~/.ssh`.
+
+### Programs' environment
+
+- A program gets `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TMPDIR`, `TERM`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TZ`, resworb's proxy settings, and the variables `resworb-env` names (`PROGRAM_ENV` in `src/permissions/tags.ts`). Nothing else of the environment resworb was started with.
+- A `resworb-env` name that reads like a secret (`KEY`, `TOKEN` and the like) shows red.
+- A full-Node page sees the whole environment, and so do the programs it starts.
+- `selftest-net` checks that a named variable arrives and an unnamed one does not.
 
 ### Writes
 
@@ -100,7 +117,8 @@ Declared `localhost` and `127.0.0.1` ports bypass the proxy, so they are not log
 - It cannot run as plain Node (`ELECTRON_RUN_AS_NODE`).
 - It ignores `NODE_OPTIONS` and the inspector flags.
 - It loads code only from `app.asar`, and refuses to start if `app.asar` does not match the hash recorded at build time (Electron fuses).
-- It makes no network calls of its own: no telemetry, crash reports or auto-update.
+- Its one network call of its own is the update check: once a day at most, when a page opens, the trampoline fetches one file from GitHub. On macOS it then downloads the new version and installs it on the next start; macOS takes only a build signed with the same Developer ID. On Linux it shows a notice with a link. Permissions → Check for Updates Automatically turns it off. The page process never has network, update or not.
+- No telemetry and no crash reports.
 - It installs no background service and does not start at login.
 
 ## Not enforced
@@ -110,12 +128,13 @@ Declared `localhost` and `127.0.0.1` ports bypass the proxy, so they are not log
 **Reading**
 
 - resworb enforces read grants, not the OS. Chromium's own sandbox cannot start inside `sandbox-exec` or `bwrap`, so the page's renderer runs without it.
-- A page that exploits a Chromium bug could read any file. It would still have no sockets beyond its declared hosts, and the same write limits.
+- A page that exploits a Chromium bug could read any file but keys and logins. It would still have no sockets beyond its declared hosts, and the same write limits.
 - Listing a folder above a wildcard (`~/git` for `~/git/*/docs`) shows every name in it, not only the names that lead to a match. The page sees the names, not the files.
 
 **Programs**
 
-- A program allowed by `resworb-run` can read every file and takes any arguments.
+- A program allowed by `resworb-run` can read every file but keys and logins, and takes any arguments.
+- A variable `resworb-env` names reaches the program, and through it the page and any declared host.
 - Some programs run others (`git -c core.sshCommand=…`).
 - Its network and its writes are limited like the page's, more loosely on Linux. That is why the popup marks it red.
 
@@ -125,6 +144,13 @@ Declared `localhost` and `127.0.0.1` ports bypass the proxy, so they are not log
 - A writable folder can hold files other tools later run without asking: `package.json` scripts, a `Makefile`. Hidden ones (`.git/hooks`, `.envrc`, `.vscode`) are excluded unless named. On Linux that holds for the page only, not for the programs it runs.
 - If iCloud Drive, Dropbox, OneDrive or a git auto-push syncs a writable folder, what the page writes there leaves the machine.
 - The temp folder is writable, because Electron needs it.
+
+**Keys and logins**
+
+- The list is fixed. A key kept elsewhere, such as `~/keys/id_rsa` or a project's `.env`, is not hidden.
+- Naming part of one, such as `~/.ssh/config`, opens all of it to the programs the page runs. The OS hides whole folders; resworb holds the page itself to the pattern.
+- Linux: only those that exist when the page opens are hidden. macOS hides one made later too.
+- macOS: the Keychain is reached through a system service, not its files. The list does not cover it; macOS asks before it hands out another app's password.
 
 **Network**
 
@@ -143,10 +169,9 @@ Declared `localhost` and `127.0.0.1` ports bypass the proxy, so they are not log
 - The OS limits a program's writes by folder, not by pattern. A program the page runs may change any file in the page's writable folders: for `~/notes/*.md` or `~/notes/todo.md`, all of `~/notes`, hidden files (`.git/hooks`, `.envrc`) and pages too. The popup's `resworb-run` line names those folders. resworb's own checks still hold the page itself to the patterns.
 - `--unshare-net` isolates IP networking only. Unix sockets outside the runtime folder remain, and each can be a way out for a program the page runs, or for a page that exploits Chromium:
   - on X11, the display, which the window needs: a program can type into another window, such as a terminal;
-  - tmux and GNU screen (`/tmp/tmux-<uid>`, `/run/screen`): a program can type a command into your shell, which has network;
+  - tmux, screen or Docker at a place other than their usual one, such as `tmux -S /some/socket` or Docker started with `-H`;
   - a session D-Bus started outside the runtime folder (`dbus-launch` puts it in `/tmp`);
-  - the system D-Bus, where most actions ask for a password first;
-  - Docker's socket, for a user in the `docker` group.
+  - the system D-Bus, where most actions ask for a password first.
 - A declared `localhost` port must be a number. resworb relays each port on its own, so it refuses `localhost:*`.
 
 **Everywhere**
@@ -180,6 +205,12 @@ So:
 - keep approved pages where only you can write;
 - keep a page that asks for servers or programs in a folder of its own.
 
+### The update check
+
+- Once a day, GitHub learns your IP address and that resworb ran. Turning the check off stops that.
+- Whoever controls the GitHub repository can tell Linux users a new version is out. They cannot ship one to macOS users without resworb's Developer ID: Squirrel refuses a build signed by anyone else.
+- On macOS the downloaded update waits in resworb's cache folder under `~/Library/Caches`, which a full-Node page could change. A changed build fails the signature check and is not installed.
+
 ### No hard guarantee
 
 A firm "nothing leaves" guarantee needs a VM with no network card, no shared folders and no shared clipboard. This version has none.
@@ -205,11 +236,11 @@ A firm "nothing leaves" guarantee needs a VM with no network card, no shared fol
 
 `pnpm test` runs every check in the real app and fails if one fails. [docs/verification.md](docs/verification.md) lists the checks, the egress matrix, and manual canaries for channels the suite cannot cover.
 
-| Platform      | Last verified                                                                                                                                                                    |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| macOS         | 2026-10-25, `pnpm test`: every check                                                                                                                                             |
-| Linux         | 2026-10-25, the installed `.deb` on a headless Ubuntu 24.04 server with the AppArmor limit on: every Linux check, with the own folder read-only and pages out of `resworb-write` |
-| Linux desktop | not yet: no run with a real display and a double-click                                                                                                                           |
+| Platform      | Last verified                                                                                                                                                                                                    |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS         | 2026-10-25, `pnpm test`: every check                                                                                                                                                                             |
+| Linux         | 2026-10-25, the installed `.deb` on a headless Ubuntu 24.04 server with the AppArmor limit on: every Linux check, hidden keys and logins, `resworb-env` and the covered tmux, screen and Docker sockets included |
+| Linux desktop | not yet: no run with a real display and a double-click                                                                                                                                                           |
 
 ## Reporting
 

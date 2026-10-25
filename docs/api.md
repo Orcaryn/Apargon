@@ -95,9 +95,10 @@ const { status, stdout, stderr } = await resworb.run('git', ['log', '--oneline',
 - `input` is a string sent to the program's standard input.
 - `status` is the exit code, or `null` if a signal stopped the program.
 - `stdout` and `stderr` are UTF-8 strings, returned when the program exits.
-- There is no timeout and no way to set environment variables. If the program never exits, the promise never settles.
+- There is no timeout. If the program never exits, the promise never settles.
+- The program gets a short environment, and the variables `resworb-env` names. See [Environment variables](permissions.md#environment-variables-resworb-env).
 
-For a page with `resworb-net`, the program gets `http_proxy`, `https_proxy` and `no_proxy`.
+For a page with `resworb-net`, the program also gets `http_proxy`, `https_proxy` and `no_proxy`.
 
 ## Watching
 

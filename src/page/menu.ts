@@ -1,14 +1,15 @@
-// The Permissions menu. The child cannot write approvals or open the log itself: it asks
-// the trampoline on fd 3.
+// The Permissions menu. The child cannot write approvals, open the log or change the update
+// setting itself: it asks the trampoline on fd 3.
 
 import { dialog, Menu, type MenuItemConstructorOptions } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import type { Line } from '../permissions/describe.ts';
-import { EGRESS_LOG, type ChildMessage } from '../shared.ts';
+import { EGRESS_LOG, UPDATE_FILE, type ChildMessage, type UpdateState } from '../shared.ts';
 
 export function installMenu(page: string, lines: Line[], approved: string[]) {
   const appMenu: MenuItemConstructorOptions[] = process.platform === 'darwin' ? [{ role: 'appMenu' }] : [];
+  const updates: UpdateState = fs.existsSync(UPDATE_FILE) ? JSON.parse(fs.readFileSync(UPDATE_FILE, 'utf8')) : {};
 
   const revoke = (pages: string[]) => {
     fs.writeSync(3, JSON.stringify({ revoke: pages } satisfies ChildMessage) + '\n');
@@ -46,6 +47,13 @@ export function installMenu(page: string, lines: Line[], approved: string[]) {
               fs.existsSync(EGRESS_LOG)
                 ? fs.writeSync(3, JSON.stringify({ showEgressLog: true } satisfies ChildMessage) + '\n')
                 : dialog.showMessageBox({ type: 'info', message: 'No egress recorded yet.', detail: EGRESS_LOG }),
+          },
+          { type: 'separator' },
+          {
+            label: 'Check for Updates Automatically',
+            type: 'checkbox',
+            checked: updates.automatic !== false,
+            click: item => fs.writeSync(3, JSON.stringify({ automaticUpdates: item.checked } satisfies ChildMessage) + '\n'),
           },
         ],
       },

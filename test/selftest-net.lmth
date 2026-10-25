@@ -7,6 +7,9 @@
 <meta name="resworb-run" content="curl">
 <meta name="resworb-run" content="touch">
 <meta name="resworb-run" content="cat">
+<meta name="resworb-run" content="env">
+<meta name="resworb-run" content="sh">
+<meta name="resworb-env" content="RESWORB_TEST_ENV">
 <meta name="resworb-run" content="/usr/bin/open">
 <meta name="resworb-run" content="/usr/sbin/ipconfig">
 <meta name="resworb-run" content="/usr/bin/defaults">
@@ -19,7 +22,8 @@
 <script type="module">
   // Declared hosts are reachable by fetch and by curl; a wildcard covers subdomains, not
   // the domain itself, and no wildcard covers this computer. Every other route out fails. A read folder is not writable, and
-  // programs the page runs are held to the same folders and cannot open other apps.
+  // programs the page runs are held to the same folders and cannot open other apps. Programs get
+  // a short environment and the variables resworb-env names, and cannot see ~/.ssh: the test needs one.
   // The three programs given by full path exist on macOS only; resworb does not look for
   // them, so the page opens on Linux too. There a program may write hidden files and pages in
   // the page's writable folders, and open other apps (SECURITY.md), so those checks are macOS only.
@@ -58,6 +62,14 @@
     }
 
     result.program_input = (await resworb.run('cat', [], { input: 'piped' })).stdout === 'piped';
+
+    // pnpm test sets RESWORB_TEST_ALLOW and RESWORB_TEST_ENV; resworb sets RESWORB for its own process.
+    const env = (await resworb.run('env')).stdout;
+    result.program_env_named = env.includes('RESWORB_TEST_ENV=passed') && /^HOME=/m.test(env);
+    result.program_env_unnamed_left_out = !env.includes('RESWORB_TEST_ALLOW=') && !env.includes('RESWORB=');
+    // macOS refuses the folder; Linux lays an empty one over it.
+    const ssh = await resworb.run('sh', ['-c', 'ls -A "$HOME/.ssh"']);
+    result.program_ssh_hidden = mac ? ssh.stderr.includes('Operation not permitted') : ssh.status === 0 && ssh.stdout === '';
     result.undeclared_program_refused = await refused(() => resworb.run('ls'));
     result.options_as_args_refused = await refused(() => resworb.run('touch', { cwd: '/' }));
 

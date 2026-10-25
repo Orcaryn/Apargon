@@ -13,8 +13,9 @@ main() {
     cat >&2 <<EOF
 Usage: ./release.sh --major | --minor | --patch
 
-Runs the checks, bumps the version, builds a notarized .dmg for Apple silicon and Intel
-and a .deb for Linux, commits and tags the version, pushes, then publishes a GitHub release.
+Runs the checks, bumps the version, builds a notarized .dmg and .zip for Apple silicon and
+Intel and a .deb for Linux, commits and tags the version, pushes, then publishes a GitHub
+release with the update feeds installed copies read.
 Requires main up to date with its remote, a clean working tree, and committed release notes
 at release-notes/<version>.md.
 EOF
@@ -31,7 +32,9 @@ EOF
     --patch) VERSION="$major.$minor.$((patch + 1))" ;;
   esac
 
-  DMGS=("dist/resworb-$VERSION.dmg" "dist/resworb-$VERSION-arm64.dmg")
+  DMGS=("dist/resworb-$VERSION-x64.dmg" "dist/resworb-$VERSION-arm64.dmg")
+  # Squirrel, the macOS updater built into Electron, installs from the .zip.
+  ZIPS=("dist/resworb-$VERSION-x64.zip" "dist/resworb-$VERSION-arm64.zip")
   # The AppImage is built but not published: it brings neither bwrap nor the AppArmor profile, and is untested.
   DEB="dist/resworb_${VERSION}_amd64.deb"
 
@@ -102,17 +105,44 @@ build() {
 }
 
 publish() {
-  (cd dist && shasum -a 256 "${DMGS[@]#dist/}" "${DEB#dist/}") > dist/SHA256SUMS
+  local arch
+  local -a feeds=()
+
+  (cd dist && shasum -a 256 "${DMGS[@]#dist/}" "${ZIPS[@]#dist/}" "${DEB#dist/}") > dist/SHA256SUMS
+
+  # Installed copies fetch update-<platform>-<arch>.json from the latest release (src/trampoline/update.ts).
+  for arch in x64 arm64; do
+    feeds+=("$(write_feed darwin "$arch" "resworb-$VERSION-$arch.zip")")
+  done
+
+  feeds+=("$(write_feed linux x64 "${DEB#dist/}")")
 
   {
     cat "release-notes/$VERSION.md"
-    printf '\n---\n\nresworb never checks for updates, so release notes are the only way you will hear about security fixes. To get them, watch this repository: **Watch → Custom → Releases**.\n'
+    printf '\n---\n\nresworb checks for a new version once a day when a page opens, unless you turned that off under Permissions. If you did, watch this repository to hear about security fixes: **Watch → Custom → Releases**.\n'
   } > dist/release-notes.md
 
   git push --follow-tags
-  gh release create "v$VERSION" --repo "$REPO" --verify-tag --title "resworb $VERSION" --notes-file dist/release-notes.md "${DMGS[@]}" "$DEB" dist/SHA256SUMS
+  gh release create "v$VERSION" --repo "$REPO" --verify-tag --title "resworb $VERSION" --notes-file dist/release-notes.md "${DMGS[@]}" "${ZIPS[@]}" "$DEB" dist/SHA256SUMS "${feeds[@]}"
 
   echo "==> https://github.com/$REPO/releases/tag/v$VERSION"
+}
+
+# Squirrel's JSON feed for one build, pointing at its asset in this release. Prints the file's path.
+write_feed() {
+  local platform="$1" arch="$2" asset="$3"
+  local feed="dist/update-$platform-$arch.json"
+
+  node - "$REPO" "$VERSION" "$asset" "release-notes/$VERSION.md" > "$feed" <<'JS'
+const [repo, version, asset, notesFile] = process.argv.slice(2);
+const notes = require('fs').readFileSync(notesFile, 'utf8');
+const url = `https://github.com/${repo}/releases/download/v${version}/${asset}`;
+const pubDate = new Date().toISOString().replace(/\.\d+Z$/, '+00:00'); // Squirrel's ISO 8601: whole seconds, offset with a colon
+const updateTo = { version, name: `resworb ${version}`, pub_date: pubDate, notes, url };
+console.log(JSON.stringify({ currentRelease: version, releases: [{ version, updateTo }] }, null, 2));
+JS
+
+  echo "$feed"
 }
 
 main "$@"

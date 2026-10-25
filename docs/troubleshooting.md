@@ -39,11 +39,11 @@ No flag skips this check.
 
 ## Dialogs that ask
 
-| You see                                 | Meaning                                                                |
-| --------------------------------------- | ---------------------------------------------------------------------- |
-| page.lmth will: / page.lmth came from … | The permission popup. See [Using resworb](using.md#the-popup).         |
-| "Allow and open" does nothing           | A downloaded page needs the "I trust" box ticked.                      |
-| The popup comes back                    | The page moved, its tags changed, or a program now resolves elsewhere. |
+| You see                           | Meaning                                                                |
+| --------------------------------- | ---------------------------------------------------------------------- |
+| "If you allow it, this page can:" | The permission popup. See [Using resworb](using.md#the-popup).         |
+| "Allow and open" does nothing     | A downloaded page needs the "I trust" box ticked.                      |
+| The popup comes back              | The page moved, its tags changed, or a program now resolves elsewhere. |
 
 ## While the page runs
 

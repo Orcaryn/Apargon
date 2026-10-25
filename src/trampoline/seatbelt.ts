@@ -22,7 +22,9 @@ export function seatbeltProfile(permissions: Permissions, proxyPort: number | nu
       `(allow file-write* (subpath "/dev") (subpath "${fs.realpathSync(app.getPath('temp'))}"))`,
       ...files.map(source => `(allow file-write* (regex #"${source}"))`),
       `(deny file-write* (regex #"${PAGE_SOURCE}"))`,
-      ...pages.map(source => `(allow file-write* (regex #"${source}"))`)
+      ...pages.map(source => `(allow file-write* (regex #"${source}"))`),
+      ';; Keys and logins no tag names.',
+      ...permissions.hidden.map(secret => `(deny file-read* file-write* (subpath "${secret}"))`)
     );
   }
 

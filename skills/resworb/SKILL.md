@@ -86,6 +86,7 @@ One value per tag. Ask for as little as the page needs: every tag adds a line to
 <meta name="resworb-write" content="./reports/*.md">      <!-- see, change, delete -->
 <meta name="resworb-net"   content="api.example.com:443"> <!-- one server, one port -->
 <meta name="resworb-run"   content="git">                 <!-- one program -->
+<meta name="resworb-env"   content="AWS_PROFILE">         <!-- one variable for programs -->
 <meta name="resworb-node"  content="full">                <!-- full Node, red -->
 ```
 
@@ -106,7 +107,13 @@ One value per tag. Ask for as little as the page needs: every tag adds a line to
 **Programs** (`resworb-run`)
 
 - A program name or full path.
-- The program shares the page's network and write limits, but it can read every file. On Linux it may also write hidden files in the page's folders.
+- The program shares the page's network and write limits, but it can read every file but keys and logins (`~/.ssh`, `~/.aws`, browser profiles). On Linux it may also write hidden files in the page's folders.
+- It gets `PATH`, `HOME`, `USER`, `LANG` and a few others. For one more, add `resworb-env` with its name. A name like `*_TOKEN` or `*_KEY` shows red.
+
+**Keys and logins**
+
+- Hidden from the page and its programs unless a `resworb-read` or `resworb-write` names one, such as `~/.ssh`. That line shows red.
+- Name one only if the page truly needs it.
 - Prefer a page that does the work itself.
 
 **Full Node** (`resworb-node`)
@@ -119,6 +126,8 @@ One value per tag. Ask for as little as the page needs: every tag adds a line to
 
 - folders: `/`, `~`, folders right under `/`, Desktop, Documents, Downloads, `~/Library`, hidden paths, wildcards right under `/` or `~`;
 - servers: `*` hosts, `*.com`, any-port hosts;
+- folders of keys and logins;
+- variables named like a secret;
 - every `resworb-run`, and `resworb-node`.
 
 Other wildcards show yellow.

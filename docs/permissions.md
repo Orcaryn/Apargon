@@ -1,6 +1,6 @@
 # Permissions
 
-A page asks for permissions with five `<meta>` tags:
+A page asks for permissions with six `<meta>` tags:
 
 | Tag             | Allows                                             | Popup colour       |
 | --------------- | -------------------------------------------------- | ------------------ |
@@ -8,6 +8,7 @@ A page asks for permissions with five `<meta>` tags:
 | `resworb-write` | see, change and delete them                        | plain, yellow, red |
 | `resworb-net`   | send and receive data with one server, on one port | plain, yellow, red |
 | `resworb-run`   | run one program                                    | red                |
+| `resworb-env`   | give its programs one environment variable         | plain, red         |
 | `resworb-node`  | full Node: any file, any program                   | red                |
 
 Ask for as little as the page needs. Every tag adds a line to the popup.
@@ -50,6 +51,21 @@ A hidden name starts with a dot: `.git`, `.env`, `.DS_Store`. No grant covers on
 - `~/project` covers `~/project/src/app.js`, not `~/project/.git/config`.
 - `~/project/.git` covers `~/project/.git/config`, and shows red.
 - A `*` never matches the start of a hidden name: `~/notes/*` does not cover `~/notes/.x`.
+
+## Keys and logins
+
+Some files let anyone who has them act as you: SSH and GPG keys, cloud logins, saved passwords, browser cookies. For a page without `resworb-node`, the OS hides them from the page and from every program it runs:
+
+- `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.azure`, `~/.config/gcloud`, `~/.kube`, `~/.docker`, `~/.config/gh`, `~/.password-store`, `~/.local/share/keyrings`;
+- `~/.netrc`, `~/.git-credentials`, `~/.npmrc`, `~/.pypirc`;
+- the profiles of Chrome, Chromium, Brave, Edge, Arc and Firefox: in `~/Library/Application Support` on macOS; in `~/.config`, `~/.mozilla` and `~/snap/firefox` on Linux.
+
+To use one, name it, or something inside it, in `resworb-read` or `resworb-write`: `~/.ssh`, `~/.aws/config`. The line shows red and says what the folder holds.
+
+- A tag above one does not open it: `~`, `~/.config` and `~/Library` still leave these out.
+- Naming part of one opens all of it to the programs the page runs: the OS hides whole folders. The page itself gets only what the pattern names.
+- On macOS one made after the page opens is hidden too. On Linux only those that exist when the page opens are.
+- A full-Node page reaches them all, as it reaches every file.
 
 ## Pages
 
@@ -171,17 +187,34 @@ The value is a program name or an absolute path.
 
 The program runs inside the page's sandbox:
 
-| The program                              | Can?                      |
-| ---------------------------------------- | ------------------------- |
-| reach the page's declared hosts          | yes                       |
-| reach any other host                     | no                        |
-| write outside the page's folders         | no                        |
-| write hidden files in the page's folders | no on macOS; yes on Linux |
-| open other apps or change app settings   | no on macOS; yes on Linux |
-| **read every file you can**              | **yes**                   |
-| take any arguments                       | yes                       |
+| The program                              | Can?                                             |
+| ---------------------------------------- | ------------------------------------------------ |
+| reach the page's declared hosts          | yes                                              |
+| reach any other host                     | no                                               |
+| write outside the page's folders         | no                                               |
+| write hidden files in the page's folders | no on macOS; yes on Linux                        |
+| open other apps or change app settings   | no on macOS; yes on Linux                        |
+| **read every file you can**              | **yes, but [keys and logins](#keys-and-logins)** |
+| see your environment variables           | a few; see below                                 |
+| take any arguments                       | yes                                              |
 
 Some programs run others (`git -c core.sshCommand=…`). That is why `resworb-run` is always red. Prefer a page that does the work itself.
+
+## Environment variables: `resworb-env`
+
+```html
+<meta name="resworb-env" content="AWS_PROFILE">
+```
+
+A program gets only a few of the variables resworb was started with: `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TMPDIR`, `TERM`, `LANG`, `LC_ALL`, `LC_CTYPE` and `TZ`. With `resworb-net` it also gets `http_proxy`, `https_proxy` and `no_proxy`. Started from a terminal, resworb has the shell's variables, tokens included; the rest stay out.
+
+`resworb-env` passes one more, by name.
+
+- A name uses letters, digits and `_`, and does not start with a digit. No wildcards.
+- The page must also have `resworb-run`. With `resworb-node` it is refused: full Node sees every variable.
+- A name with `KEY`, `SECRET`, `TOKEN`, `PASS`, `AUTH`, `CRED`, `SESSION` or `COOKIE` in it, in any case, shows red. Others show plain.
+- The value is resworb's own, set when it started. Opened from Finder, resworb has a short environment, and the variable may not be set.
+- The page itself never sees the value. A program could print it, and the page reads what the program prints.
 
 ## Full Node: `resworb-node`
 
@@ -214,11 +247,13 @@ The colour depends on how a value is written, not on where it leads.
 | folder  | exactly `~/Desktop`, `~/Documents` or `~/Downloads`         |
 | folder  | `~/Library` or anything in it                               |
 | folder  | any hidden part: `~/.ssh`, `./.git`                         |
+| folder  | in [keys and logins](#keys-and-logins): `~/.aws/config`     |
 | folder  | a wildcard right under `/` or `~`: `~/*.txt`, `/*/logs`     |
 | server  | `*` as the host                                             |
 | server  | a top-level wildcard: `*.com:443`, `*.io:443`               |
 | server  | any port: `api.example.com:*`, `localhost:*`                |
 | program | always                                                      |
+| env     | a name with `KEY`, `SECRET`, `TOKEN` and the like           |
 | node    | always                                                      |
 
 ### Yellow
@@ -228,4 +263,4 @@ The colour depends on how a value is written, not on where it leads.
 
 ### Plain
 
-Everything else: a folder such as `~/logs` or `~/Documents/taxes`, a host with a fixed port, `localhost:11434`, and the own folder.
+Everything else: a folder such as `~/logs` or `~/Documents/taxes`, a host with a fixed port, `localhost:11434`, a variable such as `AWS_PROFILE`, and the own folder.

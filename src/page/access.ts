@@ -21,11 +21,14 @@ export function pageAccess(permissions: Permissions) {
     return firstWild === -1 ? [] : names.slice(firstWild).map((_, i) => new RegExp(patternSource('/' + names.slice(0, firstWild + i).join('/'), false)));
   });
   const resworbFolders = [DATA, APP_BUNDLE ?? []].flat();
+  // Keys and logins the OS hides too; refusing here says why. ~/Library would otherwise reach browser profiles.
+  const hidden = (file: string) => permissions.hidden.some(secret => file === secret || file.startsWith(secret + '/'));
+  const canSee = (file: string) => see.some(pattern => pattern.test(file)) && !hidden(file);
 
   return {
-    canSee: (file: string) => see.some(pattern => pattern.test(file)),
-    canList: (file: string) => see.some(pattern => pattern.test(file)) || list.some(pattern => pattern.test(file)),
-    canChange: (file: string) => (isPage.test(file) ? changePages : change).some(pattern => pattern.test(file)) && !resworbFolders.some(dir => file === dir || file.startsWith(dir + '/')),
+    canSee,
+    canList: (file: string) => canSee(file) || list.some(pattern => pattern.test(file)),
+    canChange: (file: string) => (isPage.test(file) ? changePages : change).some(pattern => pattern.test(file)) && !hidden(file) && !resworbFolders.some(dir => file === dir || file.startsWith(dir + '/')),
   };
 }
 

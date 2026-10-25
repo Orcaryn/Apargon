@@ -3,10 +3,8 @@
 <plist version="1.0">
 <dict>
   <!-- Electron/Chromium needs JIT and unsigned executable memory under the hardened
-       runtime. disable-library-validation is kept pending a signed-build test; there are
-       no app-level native modules. Remove it only if a signed build still launches. -->
+       runtime. Library validation stays on: there are no app-level native modules. -->
   <key>com.apple.security.cs.allow-jit</key><true/>
   <key>com.apple.security.cs.allow-unsigned-executable-memory</key><true/>
-  <key>com.apple.security.cs.disable-library-validation</key><true/>
 </dict>
 </plist>

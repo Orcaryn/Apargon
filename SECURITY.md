@@ -193,7 +193,6 @@ A firm "nothing leaves" guarantee needs a VM with no network card, no shared fol
 - `sandbox-exec` is deprecated, but it is still the way to apply a profile to a process tree.
 - The `app.asar` hash lives in the app's `Info.plist`, which only the code signature protects. Without a Developer ID signature, anyone can edit the app and update the hash.
 - `sandbox/macos.sb` sits outside `app.asar` and is not hash-checked. Pages cannot write it, as they cannot write the app.
-- The entitlements keep `com.apple.security.cs.disable-library-validation` until a signed build is tested without it. The app has no native modules.
 
 **Linux**
 

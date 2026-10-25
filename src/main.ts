@@ -61,7 +61,12 @@ app.whenReady().then(async () => {
   }
 });
 
-app.on('window-all-closed', () => app.quit());
+// The trampoline quits when its last page closes (trampoline/start.ts), not when a popup does.
+app.on('window-all-closed', () => {
+  if (childConfig) {
+    app.quit();
+  }
+});
 
 // bwrap gives the child a network of its own, with a loopback it may bind, so on Linux the
 // kernel is asked instead. The child's network must list no interface but lo (and the

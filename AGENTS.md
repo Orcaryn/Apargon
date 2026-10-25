@@ -124,6 +124,7 @@ That dialog means the offline check worked. Find out why the process is not in t
 
 **The popup**
 
+- It is `src/trampoline/popup.html` in a window of its own: static, no network (its CSP), and fed only text, never HTML.
 - It says in plain words what each tag allows.
 - Red marks broad requests; yellow marks other wildcards.
 - The colour depends on how a value is written, not on guesses about where it leads.

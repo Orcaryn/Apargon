@@ -80,6 +80,7 @@ Declared `localhost` and `127.0.0.1` ports bypass the proxy, so they are not log
 
 ### Approvals
 
+- The popup is resworb's own static page, in a window of its own, before the page runs. Its policy allows no network, and it shows every value as text, never as HTML.
 - An approval covers one file path and one exact list of permissions.
 - If the list changes, resworb asks again and marks what is new.
 - **Permissions → Approved Pages** revokes one page; **Revoke All Approvals** revokes them all.

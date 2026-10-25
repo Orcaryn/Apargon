@@ -1,6 +1,7 @@
 ;; resworb no-network profile for macOS (Seatbelt).
-;; Everything allowed except sockets. Children inherit it, so `curl` from
-;; child_process fails too. DNS fails as well (mDNSResponder is a socket).
+;; Everything allowed except sockets and the two services below. Children inherit
+;; it, so `curl` from child_process fails too. DNS fails as well (mDNSResponder is a
+;; socket).
 (version 1)
 (allow default)
 (deny network*)

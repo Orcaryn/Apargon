@@ -6,13 +6,19 @@
 pnpm test
 ```
 
-`test/check.ts` prints
-every result and fails the run if one is not `true`.
+- `test/daemons.ts` runs first, on macOS only. It checks that the two macOS services that fetch for a process answer outside the sandbox. Otherwise the `test/leak` row below would prove nothing.
+- `test/check.ts` runs last. It prints every result and fails the run if one is not `true`.
+
+| Word    | Means                                   |
+| ------- | --------------------------------------- |
+| refused | resworb or its proxy stopped the action |
+| blocked | the kernel stopped it                   |
 
 | Page                                  | Check                                             | Expected        |
 | ------------------------------------- | ------------------------------------------------- | --------------- |
 | any                                   | process handed `RESWORB` by hand, no sandbox      | refuses to open |
 | popup (`popup.ts`, macOS)             | `~/LIBRARY`, `~/DOCUMENTS` typed in another case  | red             |
+| popup                                 | a line break or right-to-left mark in a value     | refused         |
 | no tags (`selftest.lmth`)             | no `require`, no `process`                        | absent          |
 | no tags                               | read, write, list, delete in its own folder       | works           |
 | no tags                               | read or write outside it, list `~`                | refused         |
@@ -22,66 +28,90 @@ every result and fails the run if one is not `true`.
 | no tags                               | `watch` outside its folder, a hidden file         | refused         |
 | no tags                               | `readFile` with options `{ flag: 'w' }`           | refused         |
 | no tags                               | `<script src>` outside its folder                 | refused         |
-| no tags                               | `run`, `fetch`                                    | refused         |
+| no tags                               | `run`                                             | refused         |
+| no tags                               | `fetch`                                           | blocked         |
 | no tags                               | notifications, clipboard read, camera, microphone | denied          |
 | `resworb-node` (`selftest-node.lmth`) | `fs` anywhere, `child_process`                    | works           |
 | `resworb-node`                        | write resworb's `grants.json`                     | blocked         |
 | `resworb-node`                        | `curl`, `fetch`, DNS                              | blocked         |
-| `resworb-node`                        | background download, `WKWebView` (`test/leak`)    | blocked         |
+| `resworb-node`, macOS                 | background download, `WKWebView` (`test/leak`)    | blocked         |
+| `resworb-node`, Linux                 | see processes outside the sandbox                 | blocked         |
+| `resworb-node`, Linux                 | share the session of the terminal it started from | blocked         |
+| `resworb-node`, Linux                 | see the runtime folder (D-Bus, sound server)      | blocked         |
 | net and run (`selftest-net.lmth`)     | declared host by `curl`, by `fetch` (https, http) | works           |
 | net and run                           | `*.example.org` reaches `www.example.org`         | works           |
-| net and run                           | `*.example.org` reaches `example.org`             | blocked         |
-| net and run                           | undeclared host by `curl`, by `fetch`             | blocked         |
+| net and run                           | `*.example.org` reaches `example.org`             | refused (403)   |
+| net and run                           | undeclared host by `curl`, by `fetch`             | refused (403)   |
 | net and run                           | `curl --noproxy '*'` to a declared host           | blocked         |
-| net and run                           | `*:9` to `0.0.0.1` or this computer's LAN address | refused (403)   |
+| net and run                           | `*:9` to `0.0.0.1`                                | refused (403)   |
+| net and run, macOS                    | `*:9` to this computer's LAN address              | refused (403)   |
 | net and run                           | `resworb-read` folder: read / write               | works / refused |
 | net and run                           | program writes its own folder                     | works           |
 | net and run                           | program reads `input` on stdin                    | works           |
-| net and run                           | program writes outside it, or a hidden file       | blocked         |
-| net and run                           | program opens another app (`open -a Finder`)      | blocked         |
-| net and run                           | program writes preferences (`defaults write`)     | blocked         |
+| net and run                           | program writes outside it                         | blocked         |
+| net and run, macOS                    | program writes a hidden file                      | blocked         |
+| net and run, macOS                    | program opens another app (`open -a Finder`)      | blocked         |
+| net and run, macOS                    | program writes preferences (`defaults write`)     | blocked         |
 | net and run                           | undeclared program                                | refused         |
 | net and run                           | `run` with options in place of its arguments      | refused         |
 
-"Refused" is resworb's check; "blocked" is the kernel. `test/result.json`,
-`test/result-node.json` and `test/result-net.json` hold the raw results.
+Rows marked macOS run only there. On Linux the sandbox does not stop hidden writes or opening apps (see SECURITY.md), `defaults` and `test/leak` do not exist, and a program inside the sandbox cannot see the LAN address.
+
+`test/refuse.ts` cannot tell a refusal from an app that never started: neither leaves a result. Check its output, or run the control in [Linux](#linux).
+
+The raw results are in `test/result.json`, `test/result-node.json` and `test/result-net.json`.
+
+## Linux
+
+Last run 2026-10-25 on a headless Ubuntu 24.04 server (x86_64, kernel 6.8, `apparmor_restrict_unprivileged_userns = 1`), as an ordinary user. Every check not marked macOS passed: 16 without tags, 6 with full Node, 16 with servers and programs.
+
+The installed app ignores `RESWORB_TEST_ALLOW`, so the run tests it as a user runs it:
+
+1. Build: `pnpm dist:linux`. Install: `sudo apt install ./dist/resworb_0.1.0_amd64.deb xvfb xauth`.
+2. Run the page without tags: `xvfb-run -a resworb test/selftest.lmth`.
+3. Approve the two pages with tags once, at a real display. Without one, write their approvals to `~/.config/resworb/grants.json`: each page's real path, mapped to the sorted `id`s of `describe(declaredPermissions(page))`.
+4. Run them: `xvfb-run -a resworb test/selftest-node.lmth`, then `test/selftest-net.lmth`.
+5. Check: `node test/check.ts`.
+6. Refusal, with a control: run `resworb test/selftest.lmth` with `RESWORB` set by hand to a `ChildConfig` for it. No `test/result.json` may appear. Then run it normally: now one must.
+
+On 2026-10-25 the hidden runtime folder, own process list and own session were also checked with `pnpm test` from source, in Docker on Ubuntu 24.04 with a setuid `bwrap`, a session D-Bus at `/run/user/1000/bus` and a terminal. Without them a full-Node page reached the bus, saw every process and could open the terminal; with them it could do none of these, and every Linux check passed. The container needed `SYS_ADMIN`, `NET_ADMIN` and `SYS_PTRACE` and no seccomp, AppArmor or `/proc` masking for `bwrap`, and `ELECTRON_DISABLE_SANDBOX=1` for the trampoline's Chromium.
+
+The run found three packaging bugs, now fixed in `package.json`: the `.deb` lacked `bubblewrap` and `libasound2t64`, and it could not be built without a maintainer and a homepage.
 
 ## Egress matrix
 
-"Blocked" means the kernel returns an error to the page and its children. "Out of scope"
-means the sandbox does not see the channel.
+"Stopped" means the page and its children cannot use the channel. "Out of scope" means the sandbox does not see it.
 
 | Channel                                              | Without full Node | With full Node   |
 | ---------------------------------------------------- | ----------------- | ---------------- |
-| TCP/UDP sockets, raw sockets, DNS                    | blocked           | blocked          |
-| `fetch` / `curl` outside the declared hosts          | blocked           | blocked          |
-| Launch another app (`open`)                          | blocked on macOS  | **out of scope** |
+| TCP/UDP sockets, raw sockets, DNS                    | stopped           | stopped          |
+| `fetch` / `curl` outside the declared hosts          | stopped           | stopped          |
+| Launch another app (`open`)                          | stopped on macOS  | **out of scope** |
 | Apple Events (`osascript`) from a declared program   | **out of scope**  | **out of scope** |
-| Linux `xdg-open` / D-Bus from a declared program     | **out of scope**  | **out of scope** |
+| Linux session D-Bus (`systemd-run --user`, portal)   | stopped           | stopped          |
+| Linux X11, other Unix sockets (system D-Bus, Docker) | **out of scope**  | **out of scope** |
 | Write to a synced folder (iCloud, Dropbox, OneDrive) | only if granted   | **out of scope** |
 | Write to a git repo that auto-pushes                 | only if granted   | **out of scope** |
-| Clipboard, print, screen capture                     | **out of scope**  | **out of scope** |
+| Clipboard write, print                               | **out of scope**  | **out of scope** |
 
 ## Manual canary: app launch
 
-Shows that `open` bypasses the socket fence for a full-Node page. It launches a browser;
-run it on a machine you control.
+This shows that `open` gets around the socket block for a full-Node page. It launches a browser, so run it on a machine you control.
 
 1. Start a listener: `python3 -m http.server 8000`
-2. In a page with `resworb-node`:
-   `require('child_process').execSync('open http://127.0.0.1:8000/canary')`
-3. If the listener logs `/canary`, another application made the request on the page's
-   behalf.
+2. In a page with `resworb-node`, run `require('child_process').execSync('open http://127.0.0.1:8000/canary')`
+3. If the listener logs `/canary`, another app made the request for the page.
 
-The same page without `resworb-node`, with `<meta name="resworb-run" content="open">` and
-`resworb.run('open', ['http://127.0.0.1:8000/canary'])`, must fail on macOS. With
-`osascript -e 'tell application "Safari" to open location "..."'` as the declared program,
-it gets through: Apple Events are out of scope.
+Then repeat it in a page without `resworb-node`:
+
+| Declared program and call                                                                    | Expected on macOS                           |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `resworb-run` `open`; `resworb.run('open', ['http://127.0.0.1:8000/canary'])`                | fails                                       |
+| `resworb-run` `osascript`; `osascript -e 'tell application "Safari" to open location "..."'` | gets through: Apple Events are out of scope |
 
 ## Manual canary: file sync
 
-1. From a page, write a file into a granted folder synced by iCloud Drive, Dropbox or
-   OneDrive.
+1. From a page, write a file into a granted folder that iCloud Drive, Dropbox or OneDrive syncs.
 2. If the sync client uploads it, the bytes left the machine without a socket.
 
-This is why the README does not say "cannot send anything anywhere".
+That is why the README never says a page "cannot send anything anywhere".

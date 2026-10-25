@@ -70,7 +70,7 @@ refuse_unless_ready() {
   [[ -z "$(git rev-list "HEAD..@{u}")" ]] || problems+=("main is behind its remote. Pull first.")
   [[ -z "$(git tag --list "v$VERSION")" ]] || problems+=("Tag v$VERSION already exists.")
   [[ -f "release-notes/$VERSION.md" ]] || problems+=("release-notes/$VERSION.md is missing.")
-  security find-identity -v -p codesigning | grep -q "\"$SIGNING_IDENTITY: .*($TEAM_ID)\"" || problems+=("Signing identity '$SIGNING_IDENTITY' for team $TEAM_ID is missing.")
+  security find-identity -v -p codesigning | grep "\"$SIGNING_IDENTITY: .*($TEAM_ID)\"" >/dev/null || problems+=("Signing identity '$SIGNING_IDENTITY' for team $TEAM_ID is missing.")
   xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 || problems+=("Keychain profile '$NOTARY_PROFILE' for notarytool is missing or invalid.")
   [[ "$(gh api "repos/$REPO" --jq .permissions.push)" == true ]] || problems+=("The gh account cannot publish to $REPO. Run: gh auth switch")
 
@@ -90,7 +90,7 @@ build() {
 
   # electron-builder signs and notarizes the apps.
   for app in dist/mac/resworb.app dist/mac-arm64/resworb.app; do
-    codesign -dv "$app" 2>&1 | grep -q "TeamIdentifier=$TEAM_ID" || { echo "Not signed by team $TEAM_ID: $app" >&2; exit 1; }
+    codesign -dv "$app" 2>&1 | grep "TeamIdentifier=$TEAM_ID" >/dev/null || { echo "Not signed by team $TEAM_ID: $app" >&2; exit 1; }
     xcrun stapler validate "$app"
     spctl --assess --type execute --verbose=2 "$app"
   done

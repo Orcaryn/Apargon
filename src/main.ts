@@ -1,4 +1,4 @@
-// resworb: a browser turned inside out. A page is HTML from disk. It asks in <meta> tags
+// papp: a browser turned inside out. A page is HTML from disk. It asks in <meta> tags
 // for what it needs: folders to see or change, servers to reach, programs to run, or full
 // Node. With no tags it may see its own folder and nothing else, and opens without asking.
 // With tags, a popup lists them in plain words and the user approves the list once.
@@ -6,7 +6,7 @@
 // This app is two processes. Launched normally it is the trampoline (trampoline/): it reads
 // the tags, asks, and spawns itself inside an OS sandbox with no network and writes
 // limited to the granted folders. That child (page/) opens the page, with Node only
-// if it asked for full Node; otherwise the page talks to `window.resworb`. The rules both
+// if it asked for full Node; otherwise the page talks to `window.papp`. The rules both
 // follow are in permissions/. See SECURITY.md.
 
 import { app, dialog } from 'electron';
@@ -18,8 +18,8 @@ import { PAGE_DATA, PAGE_FILE, type ChildConfig, type ChildMessage } from './sha
 import { openPage } from './trampoline/start.ts';
 import { checkForUpdates } from './trampoline/update.ts';
 
-// RESWORB marks the child. It is not a key: the child checks it is offline before it opens anything.
-const childConfig: ChildConfig | null = process.env.RESWORB ? JSON.parse(process.env.RESWORB) : null;
+// PAPP marks the child. It is not a key: the child checks it is offline before it opens anything.
+const childConfig: ChildConfig | null = process.env.PAPP ? JSON.parse(process.env.PAPP) : null;
 
 if (childConfig) {
   app.setPath('userData', PAGE_DATA);
@@ -47,15 +47,15 @@ app.on('open-file', (event, file) => {
 
 app.whenReady().then(async () => {
   if (!pages.length) {
-    dialog.showErrorBox('resworb', 'Open a .lmth page.');
+    dialog.showErrorBox('papp', 'Open a .papp page.');
     app.quit();
   } else if (childConfig && (process.platform === 'linux' ? !inEmptyNetwork() : await canBindLoopback())) {
-    dialog.showErrorBox('resworb', 'This process can still open sockets. Refusing to open the page.');
+    dialog.showErrorBox('papp', 'This process can still open sockets. Refusing to open the page.');
     app.quit();
   } else if (childConfig) {
     await showPage(childConfig);
   } else if (!['darwin', 'linux'].includes(process.platform)) {
-    dialog.showErrorBox('resworb', `No offline mode for ${process.platform} yet.`);
+    dialog.showErrorBox('papp', `No offline mode for ${process.platform} yet.`);
     app.quit();
   } else {
     pages.forEach(openPage);
@@ -74,7 +74,7 @@ app.on('window-all-closed', () => {
 // kernel is asked instead. The child's network must list no interface but lo (and the
 // tunnel stubs the kernel adds to every network), and must not be the trampoline's, open
 // on fd 4. A real machine lists its Wi-Fi or Ethernet even when it is off; one with none
-// still fails the second test. Neither reads RESWORB, so one typed by hand still refuses.
+// still fails the second test. Neither reads PAPP, so one typed by hand still refuses.
 function inEmptyNetwork() {
   const stubs = ['lo', 'sit0', 'tunl0', 'gre0', 'gretap0', 'erspan0', 'ip_vti0', 'ip6_vti0', 'ip6tnl0', 'ip6gre0'];
   const interfaces = fs.readFileSync('/proc/self/net/dev', 'utf8').split('\n').slice(2).filter(Boolean).map(line => line.split(':')[0].trim());
@@ -85,7 +85,7 @@ function inEmptyNetwork() {
 
 // Inside Seatbelt even a loopback bind is EPERM (a child may connect to its declared
 // ports, never bind). Outside it succeeds with or without internet. So this tells
-// sandbox from no sandbox, and a RESWORB typed by hand still refuses.
+// sandbox from no sandbox, and a PAPP typed by hand still refuses.
 function canBindLoopback(): Promise<boolean> {
   return new Promise(resolve => {
     const server = net.createServer();

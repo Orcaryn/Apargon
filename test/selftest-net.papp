@@ -1,0 +1,94 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="papp-net" content="example.com:443">
+<meta name="papp-net" content="example.com:80">
+<meta name="papp-net" content="*.example.org:443">
+<meta name="papp-net" content="*:9">
+<meta name="papp-run" content="curl">
+<meta name="papp-run" content="touch">
+<meta name="papp-run" content="cat">
+<meta name="papp-run" content="env">
+<meta name="papp-run" content="sh">
+<meta name="papp-env" content="PAPP_TEST_ENV">
+<meta name="papp-run" content="/usr/bin/open">
+<meta name="papp-run" content="/usr/sbin/ipconfig">
+<meta name="papp-run" content="/usr/bin/defaults">
+<meta name="papp-read" content="../examples">
+<meta name="papp-write" content="./result-net.json">
+<meta name="papp-write" content="./touched*">
+<title>papp selftest (net and programs)</title>
+<body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
+
+<script type="module">
+  // Declared hosts are reachable by fetch and by curl; a wildcard covers subdomains, not
+  // the domain itself, and no wildcard covers this computer. Every other route out fails. A read folder is not writable, and
+  // programs the page runs are held to the same folders and cannot open other apps. Programs get
+  // a short environment and the variables papp-env names, and cannot see ~/.ssh: the test needs one.
+  // The three programs given by full path exist on macOS only; papp does not look for
+  // them, so the page opens on Linux too. There a program may write hidden files and pages in
+  // the page's writable folders, and open other apps (SECURITY.md), so those checks are macOS only.
+  // Writes test/result-net.json and closes the window, which quits the app.
+  const result = {};
+  const refused = async (call) => {
+    try { await call(); return false; } catch { return true; }
+  };
+  const curl = async (...args) => (await papp.run('curl', ['-s', '-o', '/dev/null', '-m', '5', '-w', '%{http_code}', ...args])).stdout;
+  const mac = navigator.userAgent.includes('Macintosh');
+  const fetchOk = (url) => fetch(url, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok, () => false);
+
+  try {
+    result.curl_declared = await curl('https://example.com/') === '200';
+    result.curl_undeclared_blocked = await curl('https://example.net/') !== '200';
+    result.curl_direct_blocked = await curl('--noproxy', '*', 'https://example.com/') !== '200';
+    // *:9 allows any host, but never this computer: the proxy answers 403, not 502 for a closed port.
+    // Inside the Linux sandbox a program sees only the sandbox's own network, so the LAN address is checked on macOS only.
+    const lan = mac ? (await papp.run('ipconfig', ['getifaddr', 'en0'])).stdout.trim() : '';
+    result.proxy_refuses_this_computer = await curl('http://0.0.0.1:9/') === '403' && (lan === '' || await curl(`http://${lan}:9/`) === '403');
+
+    result.read_granted = (await papp.readFile('../examples/hello.papp')).includes('papp');
+    result.read_only = await refused(() => papp.writeFile('../examples/x.txt', 'x'));
+
+    result.program_writes_granted = (await papp.run('touch', ['touched.tmp'])).status === 0;
+    await papp.rm('touched.tmp');
+    result.program_outside_write_blocked = (await papp.run('touch', ['../touched-outside.tmp'])).status !== 0;
+
+    if (mac) {
+      result.program_hidden_write_blocked = (await papp.run('touch', ['.touched.tmp'])).status !== 0;
+      result.program_own_folder_write_blocked = (await papp.run('touch', ['own.tmp'])).status !== 0;
+      result.program_page_write_blocked = (await papp.run('touch', ['touched.papp'])).status !== 0;
+      result.program_open_app_blocked = (await papp.run('open', ['-g', '-a', 'Finder'])).status !== 0;
+      // cfprefsd writes ~/Library/Preferences for a program, from outside the sandbox.
+      result.program_preference_write_blocked = (await papp.run('defaults', ['write', 'com.papp.selftest', 'leaked', '-bool', 'true'])).status !== 0;
+    }
+
+    result.program_input = (await papp.run('cat', [], { input: 'piped' })).stdout === 'piped';
+
+    // pnpm test sets PAPP_TEST_ALLOW and PAPP_TEST_ENV; papp sets PAPP for its own process.
+    const env = (await papp.run('env')).stdout;
+    result.program_env_named = env.includes('PAPP_TEST_ENV=passed') && /^HOME=/m.test(env);
+    result.program_env_unnamed_left_out = !env.includes('PAPP_TEST_ALLOW=') && !env.includes('PAPP=');
+    // macOS refuses the folder; Linux lays an empty one over it.
+    const ssh = await papp.run('sh', ['-c', 'ls -A "$HOME/.ssh"']);
+    result.program_ssh_hidden = mac ? ssh.stderr.includes('Operation not permitted') : ssh.status === 0 && ssh.stdout === '';
+    result.undeclared_program_refused = await refused(() => papp.run('ls'));
+
+    // Linux: of the socket folders that carry the network to pages with servers, this page sees its own and no other's.
+    if (!mac) {
+      const folders = (await papp.run('sh', ['-c', 'ls -A "$HOME/.config/papp/net"'])).stdout.trim().split('\n');
+      result.own_sockets_only = folders.length === 1 && folders[0].startsWith('page-');
+    }
+    result.options_as_args_refused = await refused(() => papp.run('touch', { cwd: '/' }));
+
+    result.fetch_declared = await fetchOk('https://example.com/');
+    result.fetch_declared_http = await fetchOk('http://example.com/');
+    result.fetch_wildcard_subdomain = await fetchOk('https://www.example.org/');
+    result.fetch_wildcard_apex_blocked = !(await fetchOk('https://example.org/'));
+    result.fetch_undeclared_blocked = !(await fetchOk('https://example.net/'));
+  } catch (err) {
+    result.error = err.message; // check.ts fails on it, and the window still closes
+  }
+
+  document.body.textContent = JSON.stringify(result);
+  await papp.writeFile('result-net.json', JSON.stringify(result, null, 2) + '\n');
+  setTimeout(() => window.close(), 200);
+</script>

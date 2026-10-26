@@ -1,37 +1,37 @@
 # The page API
 
-A page without `resworb-node` has no Node. It reaches files and programs only through `window.resworb`, which exists as the global `resworb` before the page's first script runs.
+A page without `papp-node` has no Node. It reaches files and programs only through `window.papp`, which exists as the global `papp` before the page's first script runs.
 
 ## Rules for every call
 
 - Every call except `dir` returns a promise.
 - Paths are relative to the page's folder. `~` and `~/…` mean your home folder. Absolute paths work too.
-- resworb checks every path against the page's grants, on its real path. A path out of reach rejects with a message such as:
+- papp checks every path against the page's grants, on its real path. A path out of reach rejects with a message such as:
 
   ```
-  resworb: this page may not see /Users/you/secret.txt. Ask for it with <meta name="resworb-read" content="...">.
+  papp: this page may not see /Users/you/secret.txt. Ask for it with <meta name="papp-read" content="...">.
   ```
 
-  A write out of reach says `change` and `resworb-write` instead.
+  A write out of reach says `change` and `papp-write` instead.
 
 - File system errors keep Node's `code`: `err.code === 'ENOENT'` for a missing file. Permission errors have no `code`.
 - Top-level `await` needs `<script type="module">`. In a classic `<script>`, use `.then`.
 
-| Call                                | Needs         | Returns                                  |
-| ----------------------------------- | ------------- | ---------------------------------------- |
-| `readFile(path, encoding = 'utf8')` | see           | a string, or a `Uint8Array` for `null`   |
-| `writeFile(path, data)`             | change        | nothing                                  |
-| `readdir(path)`                     | list          | the names the page may list              |
-| `stat(path)`                        | list          | `{ isFile, isDirectory, size, mtimeMs }` |
-| `exists(path)`                      | list          | `true` or `false`                        |
-| `mkdir(path)`                       | change        | nothing                                  |
-| `rm(path)`                          | change        | nothing                                  |
-| `rename(from, to)`                  | change, both  | nothing                                  |
-| `run(program, args, options)`       | `resworb-run` | `{ status, stdout, stderr }`             |
-| `watch(path, callback)`             | list          | a function that stops the watch          |
-| `dir`                               | nothing       | the page's folder, as a string           |
+| Call                                | Needs        | Returns                                  |
+| ----------------------------------- | ------------ | ---------------------------------------- |
+| `readFile(path, encoding = 'utf8')` | see          | a string, or a `Uint8Array` for `null`   |
+| `writeFile(path, data)`             | change       | nothing                                  |
+| `readdir(path)`                     | list         | the names the page may list              |
+| `stat(path)`                        | list         | `{ isFile, isDirectory, size, mtimeMs }` |
+| `exists(path)`                      | list         | `true` or `false`                        |
+| `mkdir(path)`                       | change       | nothing                                  |
+| `rm(path)`                          | change       | nothing                                  |
+| `rename(from, to)`                  | change, both | nothing                                  |
+| `run(program, args, options)`       | `papp-run`   | `{ status, stdout, stderr }`             |
+| `watch(path, callback)`             | list         | a function that stops the watch          |
+| `dir`                               | nothing      | the page's folder, as a string           |
 
-"See" means the page may read the file. "List" adds the folders on the way to a wildcard match. "Change" means a `resworb-write` folder, pages left out unless the value ends in `.lmth`.
+"See" means the page may read the file. "List" adds the folders on the way to a wildcard match. "Change" means a `papp-write` folder, pages left out unless the value ends in `.papp`.
 
 ## Files
 
@@ -40,8 +40,8 @@ A page without `resworb-node` has no Node. It reaches files and programs only th
 Reads a file. Pass any encoding Node knows (`'utf8'`, `'latin1'`, `'base64'`), or `null` for the bytes as a `Uint8Array`. Anything else, such as an options object, is refused.
 
 ```js
-const text = await resworb.readFile('notes.txt');
-const png = await resworb.readFile('logo.png', null);
+const text = await papp.readFile('notes.txt');
+const png = await papp.readFile('logo.png', null);
 ```
 
 ### `writeFile(path, data)`
@@ -49,7 +49,7 @@ const png = await resworb.readFile('logo.png', null);
 Writes a string or a `Uint8Array`, replacing the file. The folder must exist.
 
 ```js
-await resworb.writeFile('data.json', JSON.stringify(data, null, 2) + '\n');
+await papp.writeFile('data.json', JSON.stringify(data, null, 2) + '\n');
 ```
 
 ### `readdir(path)`
@@ -61,7 +61,7 @@ Lists a folder. Returns only the names the page may list, so never a hidden name
 Returns plain values, not methods: `isFile` and `isDirectory` are booleans.
 
 ```js
-const { isDirectory, size, mtimeMs } = await resworb.stat('data');
+const { isDirectory, size, mtimeMs } = await papp.stat('data');
 ```
 
 ### `exists(path)`
@@ -84,10 +84,10 @@ Moves or renames. Both paths must be changeable.
 
 ### `run(program, args = [], { cwd, input } = {})`
 
-Runs a program declared with `resworb-run`, called by its file name.
+Runs a program declared with `papp-run`, called by its file name.
 
 ```js
-const { status, stdout, stderr } = await resworb.run('git', ['log', '--oneline', '-20']);
+const { status, stdout, stderr } = await papp.run('git', ['log', '--oneline', '-20']);
 ```
 
 - `args` must be an array.
@@ -96,9 +96,9 @@ const { status, stdout, stderr } = await resworb.run('git', ['log', '--oneline',
 - `status` is the exit code, or `null` if a signal stopped the program.
 - `stdout` and `stderr` are UTF-8 strings, returned when the program exits.
 - There is no timeout. If the program never exits, the promise never settles.
-- The program gets a short environment, and the variables `resworb-env` names. See [Environment variables](permissions.md#environment-variables-resworb-env).
+- The program gets a short environment, and the variables `papp-env` names. See [Environment variables](permissions.md#environment-variables-papp-env).
 
-For a page with `resworb-net`, the program also gets `http_proxy`, `https_proxy` and `no_proxy`.
+For a page with `papp-net`, the program also gets `http_proxy`, `https_proxy` and `no_proxy`.
 
 ## Watching
 
@@ -107,7 +107,7 @@ For a page with `resworb-net`, the program also gets `http_proxy`, `https_proxy`
 Calls `callback(file)` when something changes; `file` is relative to the page's folder. Returns a promise of a function that stops the watch.
 
 ```js
-const stop = await resworb.watch('notes.txt', () => load());
+const stop = await papp.watch('notes.txt', () => load());
 await stop(); // later
 ```
 
@@ -122,12 +122,12 @@ await stop(); // later
 The page's folder as an absolute path, available at once:
 
 ```js
-document.title = resworb.dir;
+document.title = papp.dir;
 ```
 
 ## Files loaded by HTML
 
-`<script src>`, `<link href>` and `<img src>` get the same check as `readFile`. A file out of reach returns a 403: `resworb: this page may not see …`.
+`<script src>`, `<link href>` and `<img src>` get the same check as `readFile`. A file out of reach returns a 403: `papp: this page may not see …`.
 
 - Read data with `readFile`, not `fetch`.
 - Load libraries with a classic `<script src="lib.js">`.
@@ -135,11 +135,11 @@ document.title = resworb.dir;
 
 ## Browser storage
 
-All pages share one browser data folder, resworb's `pages/`. Treat `localStorage` and IndexedDB as shared between pages and easy to lose. Keep data in files.
+All pages share one browser data folder, papp's `pages/`. Treat `localStorage` and IndexedDB as shared between pages and easy to lose. Keep data in files.
 
 ## Full-Node pages
 
-A page with `<meta name="resworb-node" content="full">` has Node instead of `window.resworb`. Use a classic `<script>`:
+A page with `<meta name="papp-node" content="full">` has Node instead of `window.papp`. Use a classic `<script>`:
 
 ```html
 <script>
@@ -153,4 +153,4 @@ A page with `<meta name="resworb-node" content="full">` has Node instead of `win
 </script>
 ```
 
-Sockets and DNS still fail, except for declared `resworb-net` hosts. Writes to resworb's own data fail.
+Sockets and DNS still fail, except for declared `papp-net` hosts. Writes to papp's own data fail.

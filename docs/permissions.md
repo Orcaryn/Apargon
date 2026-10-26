@@ -1,31 +1,32 @@
 # Permissions
 
-A page asks for permissions with six `<meta>` tags:
+A page asks for permissions with seven `<meta>` tags:
 
-| Tag             | Allows                                             | Popup colour       |
-| --------------- | -------------------------------------------------- | ------------------ |
-| `resworb-read`  | see files in a folder and everything below it      | plain, yellow, red |
-| `resworb-write` | see, change and delete them                        | plain, yellow, red |
-| `resworb-net`   | send and receive data with one server, on one port | plain, yellow, red |
-| `resworb-run`   | run one program                                    | red                |
-| `resworb-env`   | give its programs one environment variable         | plain, red         |
-| `resworb-node`  | full Node: any file, any program                   | red                |
+| Tag           | Allows                                                      | Popup colour       |
+| ------------- | ----------------------------------------------------------- | ------------------ |
+| `papp-read`   | see files in a folder and everything below it               | plain, yellow, red |
+| `papp-write`  | see, change and delete them                                 | plain, yellow, red |
+| `papp-net`    | send and receive data with one server, on one port          | plain, yellow, red |
+| `papp-run`    | run one program                                             | red                |
+| `papp-env`    | give its programs one environment variable                  | plain, red         |
+| `papp-socket` | talk to the program behind one socket file on this computer | red                |
+| `papp-node`   | full Node: any file, any program                            | red                |
 
 Ask for as little as the page needs. Every tag adds a line to the popup.
 
-## How resworb reads tags
+## How papp reads tags
 
-resworb reads the tags from the file on disk before the page runs. A running page cannot change them.
+papp reads the tags from the file on disk before the page runs. A running page cannot change them.
 
 - One value per `<meta>`. Repeat the tag for more values.
-- Attributes may come in any order, in single or double quotes. The tag name ignores case.
+- Tags go in `<head>`, before any `<script>`. papp stops reading at the first `<script`, `<body` or `</head`, and skips HTML comments: a tag commented out is not asked for, and a page that edits pages may hold tags in its strings.
+- Attributes may come in any order, in single or double quotes, and must be quoted. A value in double quotes may hold a `'`. The tag name ignores case.
 - Spaces around a value are ignored.
-- resworb finds every `<meta>` in the file, even inside an HTML comment or a `<script>` string. Do not leave example tags in comments.
 - A value may not contain `>`.
 - A value, the page's path and every folder or program it names may not contain a line break or another invisible character, such as a right-to-left mark. The popup could not show it honestly.
-- An unknown `resworb-*` name or a bad value stops the page from opening. The message names the problem; see [Troubleshooting](troubleshooting.md).
+- An unknown `papp-*` name or a bad value stops the page from opening. The message names the problem; see [Troubleshooting](troubleshooting.md).
 
-New tags take effect when you reopen the page, and the popup asks again.
+New tags take effect when you reopen the page, and the popup asks again. Below its lines, folded away, the popup shows the tags as written, so you can check that the lines match them.
 
 ## The own folder
 
@@ -35,9 +36,9 @@ A page's own folder is the folder it sits in:
 | -------------------------------------------- | ---------------------------------- |
 | any other                                    | the folder and everything below it |
 | in `/`, `~`, Desktop, Documents or Downloads | none                               |
-| with `resworb-node`                          | none; full Node reaches everything |
+| with `papp-node`                             | none; full Node reaches everything |
 
-The page may see the files in its own folder, not change them. To change some, it asks for `resworb-write`: `./*` for everything in its folder, `./data` for one subfolder.
+The page may see the files in its own folder, not change them. To change some, it asks for `papp-write`: `./*` for everything in its folder, `./data` for one subfolder.
 
 - With no tags, it opens without a popup, wherever it came from.
 - With tags, the popup lists the own folder as a plain line.
@@ -54,13 +55,13 @@ A hidden name starts with a dot: `.git`, `.env`, `.DS_Store`. No grant covers on
 
 ## Keys and logins
 
-Some files let anyone who has them act as you: SSH and GPG keys, cloud logins, saved passwords, browser cookies. For a page without `resworb-node`, the OS hides them from the page and from every program it runs:
+Some files let anyone who has them act as you: SSH and GPG keys, cloud logins, saved passwords, browser cookies. For a page without `papp-node`, the OS hides them from the page and from every program it runs:
 
 - `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.azure`, `~/.config/gcloud`, `~/.kube`, `~/.docker`, `~/.config/gh`, `~/.password-store`, `~/.local/share/keyrings`;
 - `~/.netrc`, `~/.git-credentials`, `~/.npmrc`, `~/.pypirc`;
 - the profiles of Chrome, Chromium, Brave, Edge, Arc and Firefox: in `~/Library/Application Support` on macOS; in `~/.config`, `~/.mozilla` and `~/snap/firefox` on Linux.
 
-To use one, name it, or something inside it, in `resworb-read` or `resworb-write`: `~/.ssh`, `~/.aws/config`. The line shows red and says what the folder holds.
+To use one, name it, or something inside it, in `papp-read` or `papp-write`: `~/.ssh`, `~/.aws/config`. The line shows red and says what the folder holds.
 
 - A tag above one does not open it: `~`, `~/.config` and `~/Library` still leave these out.
 - Naming part of one opens all of it to the programs the page runs: the OS hides whole folders. The page itself gets only what the pattern names.
@@ -69,22 +70,22 @@ To use one, name it, or something inside it, in `resworb-read` or `resworb-write
 
 ## Pages
 
-A page (`.lmth`) can be seen like any file, but `resworb-write` reaches one only if the pattern ends in `.lmth`: `./*.lmth` or `./tool.lmth`. That line shows red.
+A page (`.papp`) can be seen like any file, but `papp-write` reaches one only if the pattern ends in `.papp`: `./*.papp` or `./tool.papp`. That line shows red.
 
 - `./*` and `./data` skip pages, at any depth.
 - A page that may change another could rewrite one you approved for more, and the new code would run with that page's approval.
 - Deleting or moving a folder needs every file in it to be changeable, so a page cannot move a folder of pages either.
 
-## Folders: `resworb-read` and `resworb-write`
+## Folders: `papp-read` and `papp-write`
 
 ```html
-<meta name="resworb-read"  content="~/logs">
-<meta name="resworb-write" content="./data">
-<meta name="resworb-write" content="~/notes/*.md">
-<meta name="resworb-read"  content="~/git/*/docs">
+<meta name="papp-read"  content="~/logs">
+<meta name="papp-write" content="./data">
+<meta name="papp-write" content="~/notes/*.md">
+<meta name="papp-read"  content="~/git/*/docs">
 ```
 
-`resworb-read` lets the page read, list, check and watch files. `resworb-write` adds create, change, rename and delete.
+`papp-read` lets the page read, list, check and watch files. `papp-write` adds create, change, rename and delete.
 
 ### Writing the value
 
@@ -97,7 +98,7 @@ A page (`.lmth`) can be seen like any file, but `resworb-write` reaches one only
 | `/var/log`       | an absolute path                         |
 | `~/notes/*.md`   | each match, and everything below a match |
 
-- The part before the first `*` must exist when the page opens. resworb resolves it to its real path. A value without `*` may name a file that does not exist yet, if its folder does: `./notes.txt`.
+- The part before the first `*` must exist when the page opens. papp resolves it to its real path. A value without `*` may name a file that does not exist yet, if its folder does: `./notes.txt`.
 - `*` stands for part of one name. It never crosses a `/`.
 - `*` alone is refused. Write `/` for the whole disk or `~` for your home folder.
 - A value may not be empty or contain `"` or `\`.
@@ -108,7 +109,7 @@ A page (`.lmth`) can be seen like any file, but `resworb-write` reaches one only
 
 - A folder covers itself and everything below it, except hidden names.
 - A wildcard covers each match, and everything below a match that is a folder.
-- resworb checks the real path of every file. A symlink in a granted folder that points outside it is refused.
+- papp checks the real path of every file. A symlink in a granted folder that points outside it is refused.
 - On macOS, case does not matter in the folder part: `~/LIBRARY` is `~/Library`, and shows red.
 
 With a wildcard, the page may also list the folders on the way to a match. With `~/git/*/docs`, it may list `~/git` and each `~/git/<name>`: the names, not the files.
@@ -117,19 +118,19 @@ With a wildcard, the page may also list the folders on the way to a match. With 
 
 The OS also limits writes, for the page and every program it runs, to:
 
-- the `resworb-write` folders, pages left out on macOS;
+- the `papp-write` folders, pages left out on macOS;
 - the temp folder, `$TMPDIR` (not `/tmp`, which is a different folder);
 - `/dev`;
 - the page's browser data.
 
-On macOS the OS uses resworb's patterns. On Linux it works by whole folder: a program the page runs may change any file in those folders, hidden ones too, so `~/notes/*.md` gives it all of `~/notes`. The popup's `resworb-run` line names the folders. resworb still holds the page itself to the patterns.
+On macOS the OS uses papp's patterns. On Linux it works by whole folder: a program the page runs may change any file in those folders, hidden ones too, so `~/notes/*.md` gives it all of `~/notes`. The popup's `papp-run` line names the folders. papp still holds the page itself to the patterns.
 
-## Servers: `resworb-net`
+## Servers: `papp-net`
 
 ```html
-<meta name="resworb-net" content="api.github.com:443">
-<meta name="resworb-net" content="*.example.com:443">
-<meta name="resworb-net" content="localhost:11434">
+<meta name="papp-net" content="api.github.com:443">
+<meta name="papp-net" content="*.example.com:443">
+<meta name="papp-net" content="localhost:11434">
 ```
 
 On Linux, a port on this computer must be a number: `localhost:*` is refused.
@@ -154,7 +155,7 @@ The value is always `host:port`.
 
 ### How a request leaves
 
-The page's process has no network. For a page with `resworb-net`, resworb runs a proxy outside the sandbox.
+The page's process has no network. For a page with `papp-net`, papp runs a proxy outside the sandbox.
 
 - Everything the page loads from the web goes through the proxy: `fetch`, images, scripts.
 - A program the page runs gets `http_proxy` and `https_proxy`. `curl` uses them; a program that ignores them cannot connect.
@@ -165,24 +166,24 @@ The page's process has no network. For a page with `resworb-net`, resworb runs a
 
 `localhost` and `127.0.0.1` ports skip the proxy. The sandbox allows them directly, and the log does not show them.
 
-With any `resworb-net` tag, the browser's cross-origin rule (CORS) is off; the host list is the boundary. The window title lists the hosts.
+With any `papp-net` tag, the browser's cross-origin rule (CORS) is off; the host list is the boundary. The window title lists the hosts.
 
 If a downloaded page may also see files, its popup says so first: "It can send the files it sees to api.example.com."
 
-## Programs: `resworb-run`
+## Programs: `papp-run`
 
 ```html
-<meta name="resworb-run" content="git">
-<meta name="resworb-run" content="/opt/tools/bin/convert">
+<meta name="papp-run" content="git">
+<meta name="papp-run" content="/opt/tools/bin/convert">
 ```
 
 The value is a program name or an absolute path.
 
-- A name uses letters, digits, `_`, `.`, `+` and `-`. resworb looks it up when the page opens: in `PATH`, then `/opt/homebrew/bin` and `/usr/local/bin`.
+- A name uses letters, digits, `_`, `.`, `+` and `-`. papp looks it up when the page opens: in `PATH`, then `/opt/homebrew/bin` and `/usr/local/bin`.
 - Opened from Finder, the app has a short `PATH`. Give the full path to programs in other places, such as `~/.cargo/bin` or `~/.local/bin`.
-- resworb uses an absolute path as written, without checking that it exists.
+- papp uses an absolute path as written, without checking that it exists.
 - No wildcards, arguments or relative paths (`./tool`).
-- The page calls the program by its file name: `resworb.run('convert', [...])` for `/opt/tools/bin/convert`.
+- The page calls the program by its file name: `papp.run('convert', [...])` for `/opt/tools/bin/convert`.
 - The popup shows the file that will run. If a later lookup finds another file, it asks again.
 
 The program runs inside the page's sandbox:
@@ -193,43 +194,62 @@ The program runs inside the page's sandbox:
 | reach any other host                     | no                                               |
 | write outside the page's folders         | no                                               |
 | write hidden files in the page's folders | no on macOS; yes on Linux                        |
-| open other apps or change app settings   | no on macOS; yes on Linux                        |
+| open other apps or change app settings   | no on macOS; on Linux only through X11           |
+| talk to other programs through sockets   | only those `papp-socket` names                   |
 | **read every file you can**              | **yes, but [keys and logins](#keys-and-logins)** |
 | see your environment variables           | a few; see below                                 |
 | take any arguments                       | yes                                              |
 
-Some programs run others (`git -c core.sshCommand=…`). That is why `resworb-run` is always red. Prefer a page that does the work itself.
+Some programs run others (`git -c core.sshCommand=…`). That is why `papp-run` is always red. Prefer a page that does the work itself.
 
-## Environment variables: `resworb-env`
+## Environment variables: `papp-env`
 
 ```html
-<meta name="resworb-env" content="AWS_PROFILE">
+<meta name="papp-env" content="AWS_PROFILE">
 ```
 
-A program gets only a few of the variables resworb was started with: `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TMPDIR`, `TERM`, `LANG`, `LC_ALL`, `LC_CTYPE` and `TZ`. With `resworb-net` it also gets `http_proxy`, `https_proxy` and `no_proxy`. Started from a terminal, resworb has the shell's variables, tokens included; the rest stay out.
+A program gets only a few of the variables papp was started with: `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TMPDIR`, `TERM`, `LANG`, `LC_ALL`, `LC_CTYPE` and `TZ`. With `papp-net` it also gets `http_proxy`, `https_proxy` and `no_proxy`. Started from a terminal, papp has the shell's variables, tokens included; the rest stay out.
 
-`resworb-env` passes one more, by name.
+`papp-env` passes one more, by name.
 
 - A name uses letters, digits and `_`, and does not start with a digit. No wildcards.
-- The page must also have `resworb-run`. With `resworb-node` it is refused: full Node sees every variable.
+- The page must also have `papp-run`. With `papp-node` it is refused: full Node sees every variable.
 - A name with `KEY`, `SECRET`, `TOKEN`, `PASS`, `AUTH`, `CRED`, `SESSION` or `COOKIE` in it, in any case, shows red. Others show plain.
-- The value is resworb's own, set when it started. Opened from Finder, resworb has a short environment, and the variable may not be set.
+- The value is papp's own, set when it started. Opened from Finder, papp has a short environment, and the variable may not be set.
 - The page itself never sees the value. A program could print it, and the page reads what the program prints.
 
-## Full Node: `resworb-node`
+## Sockets: `papp-socket`
 
 ```html
-<meta name="resworb-node" content="full">
+<meta name="papp-socket" content="/var/run/docker.sock">
+<meta name="papp-socket" content="~/.gnupg">
 ```
 
-The only value is `full`. It combines with `resworb-net` only, because it already covers every folder and program.
+Programs on one computer talk through socket files: Docker, D-Bus, the SSH and GPG agents, tmux. Each one leads to a program outside the sandbox, which may have network or act as you. So the sandbox hides them all: on macOS by denying every socket, on Linux by emptying the folders where they live (`/run`, `/tmp` and `/var/tmp`), but for the display's socket and the folders the tags name.
+
+`papp-socket` lets one back in, for the page and the programs it runs.
+
+- The value is a socket file or a folder of them: relative to the page, `~/…`, or absolute. No wildcards.
+- It must exist when the page opens. Start the program that makes it first.
+- The line is always red. papp cannot tell what answers at a socket, so it says only that the program there can have network and act as you.
+- One inside [keys and logins](#keys-and-logins), such as `~/.gnupg`, opens that folder too, and the line says what it holds.
+- A program finds the socket by its usual path, or through a variable: pass `SSH_AUTH_SOCK` or `DOCKER_HOST` with `papp-env`.
+- It combines with every tag, `papp-node` included: full Node does not open sockets by itself.
+
+## Full Node: `papp-node`
+
+```html
+<meta name="papp-node" content="full">
+```
+
+The only value is `full`. It combines with `papp-net` and `papp-socket` only, because it already covers every folder and program.
 
 A full-Node page:
 
 - has `require` and `process`, and can read, write and run anything you can;
-- has no `window.resworb` and no own folder;
-- has no network beyond its `resworb-net` hosts;
-- cannot write resworb's approvals, and on macOS cannot write the app;
+- has no `window.papp` and no own folder;
+- has no network beyond its `papp-net` hosts, and no sockets beyond its `papp-socket` files;
+- cannot write papp's approvals, and on macOS cannot write the app;
 - **can** launch other apps, and they have network. See [SECURITY.md](../SECURITY.md).
 
 Use it only when the page truly needs Node, and open such a page only if you trust it. See [The page API](api.md#full-node-pages).
@@ -254,6 +274,7 @@ The colour depends on how a value is written, not on where it leads.
 | server  | any port: `api.example.com:*`, `localhost:*`                |
 | program | always                                                      |
 | env     | a name with `KEY`, `SECRET`, `TOKEN` and the like           |
+| socket  | always                                                      |
 | node    | always                                                      |
 
 ### Yellow

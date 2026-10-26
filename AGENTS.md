@@ -1,11 +1,11 @@
 # AGENTS.md
 
-resworb is an Electron app that opens an HTML file from disk.
+papp is an Electron app that opens an HTML file from disk.
 
 - A browser gives a page the network and no files.
-- resworb gives a page files and no network.
+- papp gives a page files and no network.
 
-The point: a single HTML file is the quickest viewer or editor for files on your machine, and in resworb it can also save.
+The point: a single HTML file is the quickest viewer or editor for files on your machine, and in papp it can also save.
 
 ## How a page gets access
 
@@ -18,38 +18,38 @@ A page asks in `<meta>` tags for what it needs: folders to see or change, server
 
 The OS denies sockets and DNS to the page's process and every process it starts.
 
-A page is code the user chose to run, by double-click or from the command line. resworb never fetches a page or runs one on its own.
+A page is code the user chose to run, by double-click or from the command line. papp never fetches a page or runs one on its own.
 
 ## Vocabulary
 
-**`.lmth`.** A page (`html` backwards).
+**`.papp`.** A page: a personal app.
 
-**Tags.** `resworb-read`, `resworb-write`, `resworb-net`, `resworb-run`, `resworb-env`, `resworb-node`. One value per `<meta>`, read from disk before the page runs.
+**Tags.** `papp-read`, `papp-write`, `papp-net`, `papp-run`, `papp-env`, `papp-socket`, `papp-node`. One value per `<meta>`, read from disk before the page runs: from `<head>` up to the first `<script`, `<body` or `</head`, comments skipped.
 
-**`window.resworb`.** The only way out for a page without full Node. `src/page/preload.cjs` forwards each call; `pageApi` in `src/page/api.ts` checks it.
+**`window.papp`.** The only way out for a page without full Node. `src/page/preload.cjs` forwards each call; `pageApi` in `src/page/api.ts` checks it.
 
 **Fence.** The block on sockets and DNS. A page without full Node also writes only to its granted folders: on macOS by pattern, on Linux by folder. On macOS it also:
 
 - cannot open other apps;
 - cannot write app settings.
 
-On Linux it also hides the session's runtime folder (D-Bus, the sound server) but for the Wayland socket, covers tmux's, screen's and Docker's sockets, and gives the page its own process list and session.
+On Linux it also empties the folders where socket files live (`/run`, `/tmp`, `/var/tmp`: D-Bus, the name lookup service, the sound server, tmux, screen, Docker) but for the display's socket and what the tags name, shows a page only its own relay sockets, and gives the page its own process list and session.
 
-Both hide keys and logins (`SECRETS`) from the page and its programs unless a tag names one, and give a program a short environment plus the `resworb-env` names.
+Both hide keys and logins (`SECRETS`) from the page and its programs unless a tag names one, and give a program a short environment plus the `papp-env` names.
 
 **Own folder.** The page's folder, unless that is `/`, `~`, Desktop, Documents or Downloads, or the page has full Node.
 
-- To see only, with its subfolders, hidden files left out. Writes need `resworb-write`.
+- To see only, with its subfolders, hidden files left out. Writes need `papp-write`.
 - With no tags: granted without asking, wherever the page came from.
 - With tags: listed in the popup.
 
-**Pages are not writable by default.** A `resworb-write` pattern reaches a `.lmth` only if it ends in `.lmth`, which the popup marks red. Otherwise a page could rewrite another approved for more. `PAGE_SOURCE` in `src/permissions/patterns.ts` is the rule for both Seatbelt and resworb's checks.
+**Pages are not writable by default.** A `papp-write` pattern reaches a `.papp` only if it ends in `.papp`, which the popup marks red. Otherwise a page could rewrite another approved for more. `PAGE_SOURCE` in `src/permissions/patterns.ts` is the rule for both Seatbelt and papp's checks.
 
 **Trampoline.** The first process, with network. It:
 
 1. reads the tags and shows the popup;
 2. relaunches itself in the OS sandbox (`sandbox-exec` on macOS, `bwrap --unshare-net` on Linux);
-3. for `resworb-net`, runs the proxy that forwards only to declared hosts: on a loopback port on macOS, on a socket file on Linux;
+3. for `papp-net`, runs the proxy that forwards only to declared hosts: on a loopback port on macOS, on a socket file on Linux;
 4. once a day at most, asks GitHub for a new version (`src/trampoline/update.ts`). macOS installs it on the next start; Linux shows a notice.
 
 Declared `localhost` and `127.0.0.1` ports skip the proxy. On macOS the sandbox profile lets them through; on Linux the trampoline relays each from a socket file. Only the trampoline writes `grants.json`.
@@ -63,10 +63,10 @@ On Linux it then relays its own loopback ports to the trampoline's socket files.
 
 ## What the fence does not cover
 
-- resworb enforces read grants, not the OS.
+- papp enforces read grants, not the OS.
 - A declared program can read every file but keys and logins (`SECRETS` in `src/permissions/tags.ts`).
 - A full-Node page can launch another app that has network, write into a synced folder, or use the clipboard.
-- An approval is remembered by file path and permission list, not content.
+- An approval is remembered by file path and permission list, not content, unless the page is marked as downloaded.
 
 `SECURITY.md` has the full list.
 
@@ -79,14 +79,14 @@ On Linux it then relays its own loopback ports to the trampoline's socket files.
 1. `popup.ts`: popup colours, and values the popup cannot show.
 2. `refuse.ts`: the offline check.
 3. `daemons.ts` (macOS only): builds `test/leak` with `swiftc` and checks that system services fetch for it outside the sandbox.
-4. `selftest.lmth` (only writes, for its results), `selftest-node.lmth`, `selftest-net.lmth`.
+4. `selftest.papp` (only writes, for its results), `selftest-node.papp`, `selftest-net.papp`.
 5. `check.ts`: fails if any result is not `true`.
 
 On Linux, `daemons.ts` and the checks marked macOS skip. From source on Ubuntu 23.10 and later, the sandbox needs the setup in the README's Develop section. `docs/verification.md` tests the installed `.deb` instead.
 
 `pnpm lint` runs `tsc` (types only), then ESLint.
 
-In dev builds only, `RESWORB_TEST_ALLOW=1` answers the popup and prints what it would have listed.
+In dev builds only, `PAPP_TEST_ALLOW=1` answers the popup and prints what it would have listed.
 
 ### Releases
 
@@ -127,28 +127,29 @@ That dialog means the offline check worked. Find out why the process is not in t
 
 **The fence**
 
-- Keep it strict. A change to any of these must keep `pnpm test` green and add no way to skip the offline check: `sandbox/macos.sb`, `seatbeltProfile`, `bwrapArgs`, `canBindLoopback`, `inEmptyNetwork`, `startProxy`, `relay`, `declaredPermissions`, `patternSource`, `PAGE_SOURCE`, `changeableSources`, `pageAccess`, `pageApi`, `SECRETS`, `PROGRAM_ENV`.
-- `patternSource` and `PAGE_SOURCE` are the one pattern source for Seatbelt and for resworb's checks. Do not write a second matcher.
-- The window loads only `file:` URLs. A link to a declared host does not navigate, and no new windows open.
+- Keep it strict. A change to any of these must keep `pnpm test` green and add no way to skip the offline check: `sandbox/macos.sb`, `seatbeltProfile`, `bwrapArgs`, `PRIVATE`, `canBindLoopback`, `inEmptyNetwork`, `startProxy`, `relay`, `declaredPermissions`, `socketPath`, `patternSource`, `PAGE_SOURCE`, `changeableSources`, `pageAccess`, `pageApi`, `SECRETS`, `PROGRAM_ENV`.
+- `patternSource` and `PAGE_SOURCE` are the one pattern source for Seatbelt and for papp's checks. Do not write a second matcher.
+- The window shows only the page. A link to another file or to a declared host does not navigate, a frame does not load another file, and no new windows open: another file would run with the page's permissions.
 - The app's one network call of its own is the update check, from the trampoline, never from the page process. No crash reporter or telemetry.
 
 **The popup**
 
 - It is `src/trampoline/popup.html` in a window of its own: static, no network (its CSP), and fed only text, never HTML.
-- It says in plain words what each tag allows.
+- It says in plain words what each tag allows. The tags as written sit folded below the lines, for checking them.
 - Red marks broad requests; yellow marks other wildcards.
 - The colour depends on how a value is written, not on guesses about where it leads.
 - A page marked as downloaded leads with its site and with what its lines allow together (`worstCase`), and must be trusted with a checkbox. A page made here is the user's code: no checkbox.
 
 **Tag values**
 
-| Tag                             | Rule                                                                                                                                                        |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| all                             | one value per `<meta>`                                                                                                                                      |
-| `resworb-net`                   | `host:port`; `*` only as the whole host, a leading `*.`, or the port; `*` alone means `*:*`; no schemes, no host without a port; on Linux, no `localhost:*` |
-| `resworb-read`, `resworb-write` | `*` within a name; `*` alone is refused                                                                                                                     |
-| `resworb-run`, `resworb-node`   | no wildcards                                                                                                                                                |
-| `resworb-env`                   | one variable name, no wildcards; only with `resworb-run`                                                                                                    |
+| Tag                       | Rule                                                                                                                                                        |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| all                       | one value per `<meta>`                                                                                                                                      |
+| `papp-net`                | `host:port`; `*` only as the whole host, a leading `*.`, or the port; `*` alone means `*:*`; no schemes, no host without a port; on Linux, no `localhost:*` |
+| `papp-read`, `papp-write` | `*` within a name; `*` alone is refused                                                                                                                     |
+| `papp-run`, `papp-node`   | no wildcards                                                                                                                                                |
+| `papp-env`                | one variable name, no wildcards; only with `papp-run`                                                                                                       |
+| `papp-socket`             | one socket file or folder of them that exists now; no wildcards; always red                                                                                 |
 
 **Code**
 
@@ -158,8 +159,8 @@ That dialog means the offline check worked. Find out why the process is not in t
 
 **Pages**
 
-- Pages follow `skills/resworb/SKILL.md`.
-- Ask for as little as the page needs. Use `resworb-node` only when the page truly needs Node.
+- Pages follow `skills/papp/SKILL.md`.
+- Ask for as little as the page needs. Use `papp-node` only when the page truly needs Node.
 
 **Claims**
 

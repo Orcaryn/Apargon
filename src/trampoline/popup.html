@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
-<title>resworb</title>
+<title>papp</title>
 <style>
   :root {
     --surface: #ffffff;
@@ -9,7 +9,6 @@
     --ink: #1d1d1f;
     --muted: #6e6e73;
     --rule: #e5e5ea;
-    --plain: #c7c7cc;
     --red: #d70015;
     --yellow: #e8a300;
     --button: #ebebef;
@@ -22,7 +21,6 @@
       --ink: #f5f5f7;
       --muted: #98989d;
       --rule: #38383b;
-      --plain: #545458;
       --red: #ff453a;
       --yellow: #ffb340;
       --button: #3a3a3d;
@@ -44,20 +42,10 @@
     user-select: none;
   }
   main {
-    padding: 24px 24px 20px;
-  }
-  .origin {
-    display: inline-block;
-    padding: 2px 9px;
-    border-radius: 999px;
-    background: var(--well);
-    color: var(--muted);
-    font-size: 11.5px;
-    font-weight: 500;
+    padding: 20px 22px 14px;
   }
   h1 {
-    margin-top: 10px;
-    font-size: 20px;
+    font-size: 17px;
     font-weight: 650;
     line-height: 1.25;
     letter-spacing: -0.015em;
@@ -70,50 +58,35 @@
     overflow-wrap: anywhere;
   }
   .worst {
-    margin-top: 16px;
-    padding: 10px 12px;
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--red) 9%, var(--surface));
+    margin-top: 6px;
     color: var(--red);
     font-weight: 600;
-    line-height: 1.4;
-  }
-  h2 {
-    margin-top: 20px;
-    color: var(--muted);
-    font-size: 11.5px;
-    font-weight: 500;
   }
   ol {
-    margin-top: 6px;
+    margin-top: 12px;
     padding: 0;
     list-style: none;
-    border: 1px solid var(--rule);
-    border-radius: 10px;
   }
   li {
-    position: relative;
-    padding: 10px 14px 10px 27px;
+    display: flex;
+    gap: 10px;
+    padding: 5px 0;
     overflow-wrap: anywhere;
   }
-  li + li {
-    border-top: 1px solid var(--rule);
+  li svg {
+    flex: none;
+    margin-top: 1px;
+    fill: none;
+    stroke: var(--muted);
+    stroke-width: 1.3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
-  li::before {
-    content: '';
-    position: absolute;
-    left: 13px;
-    top: 12px;
-    bottom: 12px;
-    width: 3px;
-    border-radius: 2px;
-    background: var(--plain);
+  li.red svg {
+    stroke: var(--red);
   }
-  li.red::before {
-    background: var(--red);
-  }
-  li.yellow::before {
-    background: repeating-linear-gradient(var(--yellow) 0 4px, transparent 4px 7px);
+  li.yellow svg {
+    stroke: var(--yellow);
   }
   .new {
     display: inline-block;
@@ -132,16 +105,45 @@
     color: var(--muted);
     font-size: 11.5px;
   }
+  details {
+    margin-top: 10px;
+    -webkit-app-region: no-drag;
+  }
+  summary {
+    width: fit-content;
+    color: var(--muted);
+    font-size: 11.5px;
+    cursor: default;
+  }
+  summary:focus-visible {
+    outline: 3px solid -webkit-focus-ring-color;
+    outline-offset: 1px;
+    border-radius: 3px;
+  }
+  pre {
+    margin-top: 6px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--well);
+    font: 11px/1.5 ui-monospace, monospace;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    user-select: text;
+  }
+  .trust {
+    margin-top: 14px;
+  }
   label {
     display: flex;
     gap: 9px;
     align-items: center;
-    margin-top: 16px;
-    padding: 10px 12px;
-    border: 1px solid var(--rule);
-    border-radius: 8px;
-    font-weight: 600;
+    font-weight: 500;
     -webkit-app-region: no-drag;
+  }
+  .hint {
+    margin: 2px 0 0 24px;
+    color: var(--muted);
+    font-size: 11.5px;
   }
   input {
     margin: 0;
@@ -151,11 +153,21 @@
   }
   footer {
     display: flex;
-    justify-content: flex-end;
+    align-items: center;
     gap: 8px;
-    padding: 14px 24px;
+    padding: 12px 22px;
     border-top: 1px solid var(--rule);
     background: var(--well);
+  }
+  .source {
+    flex: 1;
+    color: var(--muted);
+    font-size: 11.5px;
+    overflow-wrap: anywhere;
+  }
+  .source.downloaded {
+    color: var(--red);
+    font-weight: 600;
   }
   button {
     min-width: 96px;
@@ -187,51 +199,75 @@
 </style>
 
 <main>
-  <p class="origin" id="source"></p>
   <h1 id="pageName"></h1>
   <p class="folder" id="folder"></p>
+  <p class="worst" id="changed" hidden></p>
   <p class="worst" id="worst" hidden></p>
-  <h2>If you allow it, this page can:</h2>
-  <ol id="lines"></ol>
+  <ol id="lines" aria-label="If you allow it, this page can:"></ol>
   <p class="note" id="note" hidden></p>
-  <label id="trust" hidden><input type="checkbox" id="trusted" /> I trust where this page came from.</label>
+  <details id="tags">
+    <summary>The tags as written</summary>
+    <pre id="tagList"></pre>
+  </details>
+  <div class="trust" id="trust" hidden>
+    <label><input type="checkbox" id="trusted" /> I trust where this page came from.</label>
+    <p class="hint">Not sure? Ask an AI to check the file before you allow it.</p>
+  </div>
 </main>
 <footer>
+  <p class="source" id="source"></p>
   <button id="deny">Don't open</button>
   <button id="allow">Allow and open</button>
 </footer>
 
 <script>
-  // approve.ts calls render once, then reads the answer from the hash. Every string is text, never HTML.
+  // approve.ts calls render once, fits the window, then reads the answer from the hash. Every string is text, never HTML.
   function render(popup) {
     source.textContent = popup.source;
+    source.classList.toggle('downloaded', popup.downloaded);
     pageName.textContent = popup.name;
+    changed.textContent = popup.changed;
+    changed.hidden = popup.changed === null;
     worst.textContent = popup.worst;
     worst.hidden = popup.worst === null;
     note.textContent = popup.note;
     note.hidden = popup.note === null;
     folder.textContent = popup.folder;
+    tagList.textContent = popup.tags.join('\n');
     trust.hidden = !popup.trust;
     allow.disabled = popup.trust;
 
     for (const line of popup.lines) {
       const item = document.createElement('li');
       item.className = line.level;
+      item.innerHTML = `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">${ICONS[line.kind]}</svg><span></span>`;
+      const text = item.lastChild;
 
       if (line.isNew) {
-        item.append(Object.assign(document.createElement('span'), { className: 'new', textContent: 'New' }));
+        text.append(Object.assign(document.createElement('span'), { className: 'new', textContent: 'New' }));
       }
 
-      item.append(line.text);
+      text.append(line.text);
       lines.append(item);
     }
 
     deny.focus();
-
-    return document.body.offsetHeight;
   }
 
+  // An icon for each kind of line, named by the start of its id. Static shapes: the page never supplies them.
+  const ICONS = {
+    node: '<rect x="3" y="7" width="10" height="7" rx="1.2"/><path d="M5.5 7V5a2.5 2.5 0 0 1 4.9-.7"/>',
+    run: '<rect x="1.8" y="2.8" width="12.4" height="10.4" rx="1.5"/><path d="M4.5 6.3l2 1.7-2 1.7M8 10h3"/>',
+    socket: '<path d="M6 1.8v3M10 1.8v3M4 4.8h8v3a4 4 0 0 1-8 0zM8 11.8v2.4"/>',
+    env: '<circle cx="5" cy="8" r="2.8"/><path d="M7.8 8h6.4M12 8v2.2M14.2 8v1.6"/>',
+    write: '<path d="M10.8 2.4l2.8 2.8-7.9 7.9-3.4.6.6-3.4z"/>',
+    read: '<path d="M1.5 4.2c0-.7.5-1.2 1.2-1.2h3.4l1.4 1.5h5.8c.7 0 1.2.5 1.2 1.2v6.4c0 .7-.5 1.2-1.2 1.2H2.7c-.7 0-1.2-.5-1.2-1.2z"/>',
+    net: '<circle cx="8" cy="8" r="6.2"/><path d="M1.8 8h12.4M8 1.8c1.8 1.9 2.6 4 2.6 6.2S9.8 12.3 8 14.2C6.2 12.3 5.4 10.2 5.4 8S6.2 3.7 8 1.8"/>',
+  };
+  ICONS.own = ICONS.read;
+
   trusted.onchange = () => (allow.disabled = !trusted.checked);
+  tags.ontoggle = () => (location.hash = tags.open ? 'tags-open' : 'tags-closed'); // approve.ts refits the window
   deny.onclick = () => (location.hash = 'deny');
   allow.onclick = () => (location.hash = 'allow');
   onkeydown = event => event.key === 'Escape' && (location.hash = 'deny');

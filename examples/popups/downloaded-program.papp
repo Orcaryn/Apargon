@@ -1,5 +1,5 @@
 <!doctype html>
 <meta charset="utf-8">
-<meta name="resworb-run" content="/bin/ls">
+<meta name="papp-run" content="/bin/ls">
 <title>Downloaded: a program</title>
 <p>Downloaded, asks to run <code>ls</code>. The popup said programs may send your files anywhere, and asked you to trust the site.</p>

@@ -45,7 +45,7 @@ export async function startProxy(patterns: string[], socket: string | null) {
     if (!url || !address) {
       response.writeHead(403);
 
-      return response.end('resworb: host not declared\n');
+      return response.end('papp: host not declared\n');
     }
 
     // Host is the declared name: a server that hosts many sites must not be asked for another.

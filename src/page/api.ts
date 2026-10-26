@@ -1,4 +1,4 @@
-// window.resworb: Node's fs names, paths relative to the page's folder, each returning a
+// window.papp: Node's fs names, paths relative to the page's folder, each returning a
 // promise. preload.cjs forwards each call here; nothing passes without a check.
 
 import { spawn } from 'child_process';
@@ -10,16 +10,15 @@ import { realPath, type pageAccess } from './access.ts';
 // notify(id, file) tells the page that a file it watches changed.
 export function pageApi(dir: string, permissions: Permissions, { canSee, canList, canChange }: ReturnType<typeof pageAccess>, notify: (id: string, file: string) => void) {
   const watchers = new Map<string, fs.FSWatcher>();
-  const programs = permissions.run;
-  // Not resworb's whole environment, which from a terminal holds the shell's tokens.
+  // Not papp's whole environment, which from a terminal holds the shell's tokens.
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => PROGRAM_ENV.includes(name) || permissions.env.includes(name)));
   const where = (file: string) => realPath(path.resolve(dir, file === '~' ? HOME : file.replace(/^~\//, HOME + '/')));
 
   const need = (allowed: boolean, file: string, verb: 'see' | 'change') => {
     if (!allowed) {
-      const tag = verb === 'see' ? 'resworb-read' : 'resworb-write';
+      const tag = verb === 'see' ? 'papp-read' : 'papp-write';
 
-      throw new Error(`resworb: this page may not ${verb} ${file}. Ask for it with <meta name="${tag}" content="...">.`);
+      throw new Error(`papp: this page may not ${verb} ${file}. Ask for it with <meta name="${tag}" content="...">.`);
     }
   };
 
@@ -37,7 +36,7 @@ export function pageApi(dir: string, permissions: Permissions, { canSee, canList
     readFile(file: string, encoding: BufferEncoding | null) {
       // Node would read an object here as options: { flag: 'w' } empties a file the page may only see.
       if (encoding !== null && !Buffer.isEncoding(encoding)) {
-        throw new Error('resworb: readFile takes an encoding name, or null for bytes.');
+        throw new Error('papp: readFile takes an encoding name, or null for bytes.');
       }
 
       const target = where(file);
@@ -93,16 +92,16 @@ export function pageApi(dir: string, permissions: Permissions, { canSee, canList
       fs.renameSync(source, destination);
     },
     run(name: string, args: string[] = [], options: { cwd?: string; input?: string } = {}) {
-      if (!Object.hasOwn(programs, name)) {
-        throw new Error(`resworb: this page may not run ${name}. Ask for it with <meta name="resworb-run" content="${name}">.`);
+      if (!Object.hasOwn(permissions.run, name)) {
+        throw new Error(`papp: this page may not run ${name}. Ask for it with <meta name="papp-run" content="${name}">.`);
       } else if (!Array.isArray(args)) {
         // Node would read an object here as the options, an unchecked cwd included.
-        throw new Error('resworb: run takes its arguments as an array.');
+        throw new Error('papp: run takes its arguments as an array.');
       }
 
       const cwd = where(options.cwd ?? '.');
       need(canList(cwd), cwd, 'see');
-      const child = spawn(programs[name], args, { cwd, env });
+      const child = spawn(permissions.run[name], args, { cwd, env });
       let stdout = '';
       let stderr = '';
       child.stdout.setEncoding('utf8').on('data', text => (stdout += text));

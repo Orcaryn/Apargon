@@ -8,7 +8,7 @@ import { app, autoUpdater, dialog, net, shell } from 'electron';
 import fs from 'fs';
 import { UPDATE_FILE, type UpdateState } from '../shared.ts';
 
-const REPO = 'Orcaryn/resworb';
+const REPO = 'Orcaryn/papp';
 // release.sh uploads one feed per build with each release: Squirrel's JSON format, which Linux reads too.
 const FEED = `https://github.com/${REPO}/releases/latest/download/update-${process.platform}-${process.arch}.json`;
 const DAY = 24 * 60 * 60 * 1000;
@@ -26,11 +26,11 @@ export function checkForUpdates() {
   if (process.platform === 'darwin') {
     // Squirrel checks, downloads, verifies and installs on its own. A failure (an unsigned build, an app
     // folder it cannot write) is logged, not shown; without a listener it would throw.
-    autoUpdater.on('error', err => console.error(`resworb: update failed: ${err.message}`));
+    autoUpdater.on('error', err => console.error(`papp: update failed: ${err.message}`));
     autoUpdater.setFeedURL({ url: FEED, serverType: 'json' });
     autoUpdater.checkForUpdates();
   } else {
-    noticeNewVersion().catch((err: Error) => console.error(`resworb: update check failed: ${err.message}`));
+    noticeNewVersion().catch((err: Error) => console.error(`papp: update check failed: ${err.message}`));
   }
 }
 
@@ -47,7 +47,7 @@ async function noticeNewVersion() {
   fs.writeFileSync(UPDATE_FILE, JSON.stringify({ ...state, noticed: latest }, null, 2) + '\n');
   const { response } = await dialog.showMessageBox({
     type: 'info',
-    message: `resworb ${latest} is out.`,
+    message: `papp ${latest} is out.`,
     detail: `You have ${app.getVersion()}. The release notes say what changed, security fixes first.`,
     buttons: ['Open the Release', 'Later'],
   });

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="60 60 904 904">
+  <!-- papp's diamond on its tile, ringed in white so it stands off any favicon -->
+  <defs>
+    <linearGradient id="tile" x2="0" y2="1">
+      <stop stop-color="#1A1A22"/>
+      <stop offset="1" stop-color="#000"/>
+    </linearGradient>
+    <linearGradient id="silver" x2="0" y2="1">
+      <stop stop-color="#fff"/>
+      <stop offset="1" stop-color="#C7C9D6"/>
+    </linearGradient>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="188" fill="url(#tile)" stroke="#fff" stroke-width="64"/>
+  <g transform="rotate(45 512 512)">
+    <rect x="337" y="337" width="350" height="350" rx="80" fill="url(#silver)"/>
+    <rect x="435" y="435" width="154" height="154" rx="38" fill="#13131A"/>
+  </g>
+</svg>

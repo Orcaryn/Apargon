@@ -1,0 +1,36 @@
+<!doctype html>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; script-src 'unsafe-inline'" />
+<title>papp icon</title>
+<script>
+  // The favicon on a white tile, the shape macOS gives app icons, and papp's badge over its top right corner.
+  async function paint(faviconUrl, badgeUrl) {
+    const [favicon, badge] = await Promise.all([faviconUrl, badgeUrl].map(load));
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1024;
+    const g = canvas.getContext('2d');
+    g.imageSmoothingQuality = 'high';
+
+    g.beginPath();
+    g.roundRect(100, 100, 824, 824, 188);
+    g.fillStyle = '#fff';
+    g.fill();
+
+    // Fitted into 600 pixels, centred.
+    const scale = 600 / Math.max(favicon.naturalWidth, favicon.naturalHeight);
+    const [w, h] = [favicon.naturalWidth * scale, favicon.naturalHeight * scale];
+    g.drawImage(favicon, 512 - w / 2, 512 - h / 2, w, h);
+
+    g.drawImage(badge, 644, 40, 340, 340);
+
+    return canvas.toDataURL('image/png');
+  }
+
+  async function load(url) {
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+
+    return image;
+  }
+</script>

@@ -1,8 +1,8 @@
 <!doctype html>
 <meta charset="utf-8">
-<meta name="resworb-net" content="api.github.com:443">
-<meta name="resworb-write" content="./electron-latest.json">
-<title>resworb net</title>
+<meta name="papp-net" content="api.github.com:443">
+<meta name="papp-write" content="./electron-latest.json">
+<title>papp net</title>
 <style>
   body { font: 15px/1.5 system-ui; max-width: 720px; margin: 40px auto; padding: 0 20px; color: #222; }
   pre { background: #f4f4f4; padding: 12px; overflow: auto; }
@@ -19,7 +19,7 @@ writes it to <code>electron-latest.json</code>, next to this page.</p>
     .then((r) => r.json())
     .then(async (release) => {
       const latest = { tag: release.tag_name, published: release.published_at, url: release.html_url };
-      await resworb.writeFile('electron-latest.json', JSON.stringify(latest, null, 2) + '\n');
+      await papp.writeFile('electron-latest.json', JSON.stringify(latest, null, 2) + '\n');
       out.textContent = JSON.stringify(latest, null, 2) + '\n\nwritten to electron-latest.json';
     })
     .catch((err) => { out.textContent = 'failed: ' + err.message; });

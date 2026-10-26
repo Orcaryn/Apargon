@@ -1,6 +1,7 @@
-// Sandboxed child: no network. Opens the page and answers its window.resworb calls.
+// Sandboxed child: no network. Opens the page and answers its window.papp calls.
 
 import { app, BrowserWindow, ipcMain, net as electronNet, protocol, session } from 'electron';
+import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { describe } from '../permissions/describe.ts';
@@ -8,24 +9,33 @@ import { HOME } from '../permissions/tags.ts';
 import { APP_ROOT, GRANTS_FILE, PAGE_FILE, relay, type ChildConfig, type Grants } from '../shared.ts';
 import { pageAccess, realPath } from './access.ts';
 import { pageApi } from './api.ts';
+import { followFavicon } from './icon.ts';
 import { installMenu } from './menu.ts';
 
-export async function showPage({ page, permissions, bridges }: ChildConfig) {
+export async function showPage({ page, permissions, pageHash, bridges }: ChildConfig) {
   // Linux: the proxy and the declared ports on this computer, at their own numbers on this sandbox's loopback.
   await Promise.all(bridges.map(({ port, socket }) => relay({ port, host: '127.0.0.1' }, { path: socket })));
 
   const dir = path.dirname(page);
   const access = permissions.node ? null : pageAccess(permissions);
+  const canSee = (file: string) => access === null || file === page || access.canSee(file);
 
   // Every file: request, the page's own scripts and images included, comes through here.
   protocol.handle('file', request => {
     const file = realPath(decodeURIComponent(new URL(request.url).pathname));
 
-    if (access && file !== page && !access.canSee(file)) {
-      return new Response(`resworb: this page may not see ${file}\n`, { status: 403 });
+    if (!canSee(file)) {
+      return new Response(`papp: this page may not see ${file}\n`, { status: 403 });
     } else if (PAGE_FILE.test(file)) {
-      // Chromium does not know .lmth and would offer it as a download. Serve it as HTML.
-      return new Response(fs.readFileSync(file), { headers: { 'content-type': 'text/html; charset=utf-8' } });
+      const html = fs.readFileSync(file);
+
+      // A downloaded page runs only as allowed, reloads included.
+      if (file === page && pageHash && createHash('sha256').update(html).digest('hex') !== pageHash) {
+        return new Response('papp: this page changed since you allowed it. Reopen it to be asked again.\n', { status: 409 });
+      }
+
+      // Chromium does not know .papp and would offer it as a download. Serve it as HTML.
+      return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } });
     }
 
     return electronNet.fetch(request, { bypassCustomProtocolHandlers: true });
@@ -59,12 +69,12 @@ export async function showPage({ page, permissions, bridges }: ChildConfig) {
 
   if (access) {
     // A watch can fire after the window closed, before the app quits.
-    const api = pageApi(dir, permissions, access, (id, file) => !win.isDestroyed() && win.webContents.send('resworb-change', id, file)) as Record<string, (...args: unknown[]) => unknown>;
-    ipcMain.on('resworb-dir', event => (event.returnValue = dir));
-    ipcMain.handle('resworb', async (_event, call: string, ...args: unknown[]) => {
+    const api = pageApi(dir, permissions, access, (id, file) => !win.isDestroyed() && win.webContents.send('papp-change', id, file)) as Record<string, (...args: unknown[]) => unknown>;
+    ipcMain.on('papp-dir', event => (event.returnValue = dir));
+    ipcMain.handle('papp', async (_event, call: string, ...args: unknown[]) => {
       try {
         if (!Object.hasOwn(api, call)) {
-          throw new Error(`resworb: no such call ${call}.`);
+          throw new Error(`papp: no such call ${call}.`);
         }
 
         return { value: await api[call](...args) };
@@ -74,17 +84,22 @@ export async function showPage({ page, permissions, bridges }: ChildConfig) {
     });
   }
 
+  followFavicon(win, canSee);
   win.loadFile(page);
 
-  // A link to a declared host would otherwise load that site here.
-  const stayOnFiles = (event: Electron.Event, url: string) => {
-    if (!url.startsWith('file:')) {
+  // The window stays on the page: another file, in it or in a frame, would run with this page's
+  // permissions. A frame may still show a declared host, which cannot reach the page.
+  const stayOnPage = (event: Electron.Event<{ url: string; isMainFrame: boolean }>) => {
+    const url = new URL(event.url);
+    const isPage = url.protocol === 'file:' && decodeURIComponent(url.pathname) === page;
+
+    if (!isPage && (event.isMainFrame || url.protocol === 'file:')) {
       event.preventDefault();
     }
   };
 
-  win.webContents.on('will-navigate', stayOnFiles);
-  win.webContents.on('will-redirect', stayOnFiles);
+  win.webContents.on('will-frame-navigate', stayOnPage);
+  win.webContents.on('will-redirect', stayOnPage);
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
   if (permissions.net.length) {
@@ -99,7 +114,7 @@ export async function showPage({ page, permissions, bridges }: ChildConfig) {
   // or root folder gets its own folder only. Tags are not re-read; new ones need the page reopened.
   let pendingReload: NodeJS.Timeout | undefined = undefined;
   const watcher = fs.watch(dir, { recursive: dir !== HOME && dir !== '/' }, (_event, name) => {
-    if (!name || !/\.(lmth|css|js)$/.test(name) || /(^|\/)(\.[^/]*|node_modules)(\/|$)/.test(name)) {
+    if (!name || !/\.(papp|css|js)$/.test(name) || /(^|\/)(\.[^/]*|node_modules)(\/|$)/.test(name)) {
       return;
     }
 

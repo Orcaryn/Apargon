@@ -3,7 +3,7 @@ set -euo pipefail
 
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
 
-REPO="Orcaryn/resworb"
+REPO="Orcaryn/papp"
 TEAM_ID="PURHNJF27S"
 SIGNING_IDENTITY="Developer ID Application"
 NOTARY_PROFILE="notarize"
@@ -32,11 +32,11 @@ EOF
     --patch) VERSION="$major.$minor.$((patch + 1))" ;;
   esac
 
-  DMGS=("dist/resworb-$VERSION-x64.dmg" "dist/resworb-$VERSION-arm64.dmg")
+  DMGS=("dist/papp-$VERSION-x64.dmg" "dist/papp-$VERSION-arm64.dmg")
   # Squirrel, the macOS updater built into Electron, installs from the .zip.
-  ZIPS=("dist/resworb-$VERSION-x64.zip" "dist/resworb-$VERSION-arm64.zip")
+  ZIPS=("dist/papp-$VERSION-x64.zip" "dist/papp-$VERSION-arm64.zip")
   # The AppImage is built but not published: it brings neither bwrap nor the AppArmor profile, and is untested.
-  DEB="dist/resworb_${VERSION}_amd64.deb"
+  DEB="dist/papp_${VERSION}_amd64.deb"
 
   echo "==> Version: $current_version -> $VERSION"
   refuse_unless_ready
@@ -55,7 +55,7 @@ EOF
 
   git commit -m "Release $VERSION" -- package.json
   trap - EXIT
-  git tag -a "v$VERSION" -m "resworb $VERSION"
+  git tag -a "v$VERSION" -m "papp $VERSION"
 
   publish
 }
@@ -89,7 +89,7 @@ build() {
   pnpm dist:linux --publish never
 
   # electron-builder signs and notarizes the apps.
-  for app in dist/mac/resworb.app dist/mac-arm64/resworb.app; do
+  for app in dist/mac/papp.app dist/mac-arm64/papp.app; do
     codesign -dv "$app" 2>&1 | grep "TeamIdentifier=$TEAM_ID" >/dev/null || { echo "Not signed by team $TEAM_ID: $app" >&2; exit 1; }
     xcrun stapler validate "$app"
     spctl --assess --type execute --verbose=2 "$app"
@@ -112,18 +112,18 @@ publish() {
 
   # Installed copies fetch update-<platform>-<arch>.json from the latest release (src/trampoline/update.ts).
   for arch in x64 arm64; do
-    feeds+=("$(write_feed darwin "$arch" "resworb-$VERSION-$arch.zip")")
+    feeds+=("$(write_feed darwin "$arch" "papp-$VERSION-$arch.zip")")
   done
 
   feeds+=("$(write_feed linux x64 "${DEB#dist/}")")
 
   {
     cat "release-notes/$VERSION.md"
-    printf '\n---\n\nresworb checks for a new version once a day when a page opens, unless you turned that off under Permissions. If you did, watch this repository to hear about security fixes: **Watch → Custom → Releases**.\n'
+    printf '\n---\n\npapp checks for a new version once a day when a page opens, unless you turned that off under Permissions. If you did, watch this repository to hear about security fixes: **Watch → Custom → Releases**.\n'
   } > dist/release-notes.md
 
   git push --follow-tags
-  gh release create "v$VERSION" --repo "$REPO" --verify-tag --title "resworb $VERSION" --notes-file dist/release-notes.md "${DMGS[@]}" "${ZIPS[@]}" "$DEB" dist/SHA256SUMS "${feeds[@]}"
+  gh release create "v$VERSION" --repo "$REPO" --verify-tag --title "papp $VERSION" --notes-file dist/release-notes.md "${DMGS[@]}" "${ZIPS[@]}" "$DEB" dist/SHA256SUMS "${feeds[@]}"
 
   echo "==> https://github.com/$REPO/releases/tag/v$VERSION"
 }
@@ -138,7 +138,7 @@ const [repo, version, asset, notesFile] = process.argv.slice(2);
 const notes = require('fs').readFileSync(notesFile, 'utf8');
 const url = `https://github.com/${repo}/releases/download/v${version}/${asset}`;
 const pubDate = new Date().toISOString().replace(/\.\d+Z$/, '+00:00'); // Squirrel's ISO 8601: whole seconds, offset with a colon
-const updateTo = { version, name: `resworb ${version}`, pub_date: pubDate, notes, url };
+const updateTo = { version, name: `papp ${version}`, pub_date: pubDate, notes, url };
 console.log(JSON.stringify({ currentRelease: version, releases: [{ version, updateTo }] }, null, 2));
 JS
 

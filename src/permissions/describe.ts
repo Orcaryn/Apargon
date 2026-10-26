@@ -3,7 +3,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { literalBase, PAGE_SOURCE, patternSource, writableFolder } from './patterns.ts';
+import { literalBase, PAGE_SOURCE, patternFolder, patternSource } from './patterns.ts';
 import { BIG_FOLDERS, HOME, LOCAL_HOSTS, SECRETS, type Permissions } from './tags.ts';
 
 export type Line = { id: string; level: 'red' | 'yellow' | 'plain'; text: string };
@@ -16,14 +16,14 @@ export function describe(permissions: Permissions) {
   }
 
   // bwrap opens whole folders, not patterns: on Linux a program reaches more than the page does.
-  const writable = [...new Set(permissions.write.map(writableFolder))];
+  const writable = [...new Set(permissions.write.map(patternFolder))];
   const linuxWrites = process.platform === 'linux' && writable.length ? ` It can also change any file in ${writable.join(', ')}, hidden ones and pages included.` : '';
 
   for (const [program, file] of Object.entries(permissions.run)) {
     lines.push({ id: `run:${file}`, level: 'red', text: `Run ${program} (${file}), which can see all your files, and keys and logins only if named below.${linuxWrites}` });
   }
 
-  lines.push(...permissions.env.map(envLine), ...permissions.write.map(pattern => folderLine('write', pattern)), ...permissions.read.map(pattern => folderLine('read', pattern)), ...permissions.net.map(hostLine));
+  lines.push(...permissions.sockets.map(socketLine), ...permissions.env.map(envLine), ...permissions.write.map(pattern => folderLine('write', pattern)), ...permissions.read.map(pattern => folderLine('read', pattern)), ...permissions.net.map(hostLine));
 
   if (permissions.own) {
     lines.push({ id: `own:${permissions.own}`, level: 'plain', text: `See files in its own folder and its subfolders, ${permissions.own}.` });
@@ -36,18 +36,28 @@ export function describe(permissions: Permissions) {
 
 // What a page from another computer could do with the lines together, or null if each line says it
 // all. Programs and full Node reach the internet through other apps (SECURITY.md, "Not enforced").
-export function worstCase({ node, run, net, own, read, write }: Permissions) {
+export function worstCase({ node, run, sockets, net, own, read, write }: Permissions) {
   const hosts = [...new Set(net.map(pattern => pattern.split(':')[0]))];
 
   if (node) {
     return 'It can do anything you can, including sending your files anywhere.';
   } else if (Object.keys(run).length) {
     return 'It can run programs that see all your files. Through other apps, they may send them anywhere.';
+  } else if (sockets.length) {
+    return 'It can talk to other programs on this computer. Through them, it may send the files it sees anywhere.';
   } else if (hosts.length && (own || read.length || write.length)) {
     return `It can send the files it sees to ${hosts.includes('*') ? 'any server' : hosts.join(', ')}.`;
   }
 
   return null;
+}
+
+// What answers at a socket is not known from its path, only that it runs outside the fence.
+function socketLine(socket: string): Line {
+  const secret = SECRETS.find(secret => socket === secret.path || socket.startsWith(secret.path + '/'));
+  const where = secret ? `${socket}, where your ${secret.holds} are kept` : socket;
+
+  return { id: `socket:${socket}`, level: 'red', text: `Talk to the programs behind ${where}. They can have network and act as you.` };
 }
 
 // The name is all there is to go on: one that reads like a secret is red.
@@ -117,17 +127,15 @@ function hostLine(pattern: string): Line {
 function countMatches(pattern: string) {
   const names = pattern.split('/').filter(Boolean);
   const paths = names.map((_, level) => '/' + names.slice(0, level + 1).join('/'));
-  const wildPaths = paths.slice(names.findIndex(name => name.includes('*')));
+  let found = [literalBase(pattern)];
 
-  return wildPaths.reduce(
-    (found, wildPath) => {
-      const reached = new RegExp(patternSource(wildPath, false));
+  for (const wildPath of paths.slice(names.findIndex(name => name.includes('*')))) {
+    const reached = new RegExp(patternSource(wildPath, false));
+    found = found
+      .filter(dir => fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory())
+      .flatMap(dir => fs.readdirSync(dir).map(name => path.join(dir, name)))
+      .filter(file => reached.test(file));
+  }
 
-      return found
-        .filter(dir => fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory())
-        .flatMap(dir => fs.readdirSync(dir).map(name => path.join(dir, name)))
-        .filter(file => reached.test(file));
-    },
-    [literalBase(pattern)]
-  ).length;
+  return found.length;
 }

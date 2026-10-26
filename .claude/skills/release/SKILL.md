@@ -1,9 +1,9 @@
 ---
 name: release
-description: Never run without a direct command! Use when releasing a new resworb version, writing release notes, recovering from a failed release, or changing release.sh.
+description: Never run without a direct command! Use when releasing a new papp version, writing release notes, recovering from a failed release, or changing release.sh.
 ---
 
-# Releasing resworb
+# Releasing papp
 
 `./release.sh --patch|--minor|--major` runs every check, bumps the version, builds a notarized `.dmg` and `.zip` for each Mac architecture and a `.deb`, commits, tags, pushes and publishes a GitHub release with the update feeds. `release.sh` is the source of truth for the steps.
 
@@ -31,7 +31,7 @@ The new version is `version` in `package.json`, bumped. Before 1.0: `--minor` fo
   - `### New`
   - `### Changed`: anything that may break a page that worked before, such as a tag value now refused. Say what the user has to change.
   - `### Fixed`
-- Write for people who open pages and people who write them. Tag names and `window.resworb` methods are fine; internal names (trampoline, offline process, `bwrapArgs`, paths in `src/`) are not.
+- Write for people who open pages and people who write them. Tag names and `window.papp` methods are fine; internal names (trampoline, offline process, `bwrapArgs`, paths in `src/`) are not.
 - Claim exactly what the release does. Name the platform when a change is macOS or Linux only.
 - One line per bullet, short plain sentences. Run `pnpm exec prettier --write` on the file.
 - Leave out the "watch this repository" footer. `publish` appends it.

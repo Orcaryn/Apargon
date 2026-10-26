@@ -12,15 +12,17 @@ export type Permissions = {
   net: string[];
   run: Record<string, string>; // name → file
   env: string[]; // variables its programs get beyond PROGRAM_ENV
+  sockets: string[]; // socket files, or folders of them, the page and its programs may connect to, as real paths
   hidden: string[]; // the SECRETS no tag names, as real paths; the OS hides them from the page and its programs
   node: boolean;
+  tags: string[]; // the papp <meta> tags as written, for the popup
 };
 
 export const HOME = fs.realpathSync(os.homedir());
 export const BIG_FOLDERS = ['Desktop', 'Documents', 'Downloads'].map(name => path.join(HOME, name));
 export const LOCAL_HOSTS = ['localhost', '127.0.0.1'];
-// What a program gets of resworb's environment without asking: enough to run, no tokens. The proxy
-// settings are resworb's own. Any other variable needs resworb-env.
+// What a program gets of papp's environment without asking: enough to run, no tokens. The proxy
+// settings are papp's own. Any other variable needs papp-env.
 export const PROGRAM_ENV = ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'TERM', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TZ', 'http_proxy', 'https_proxy', 'no_proxy'];
 // Keys and logins, and what each holds for the popup. Hidden unless a tag names one or starts inside
 // it: ~/.ssh or ~/.ssh/config opens ~/.ssh, ~ does not. Browsers keep logins and cookies in their profiles.
@@ -44,17 +46,31 @@ export const SECRETS = Object.entries({
   ...Object.fromEntries([...MAC_BROWSERS, ...LINUX_BROWSERS].map(name => [name, 'browser logins and cookies'])),
 }).map(([name, holds]) => ({ path: path.join(HOME, name), holds }));
 
-export function declaredPermissions(page: string) {
+// html: the page as the caller read it, so its tags and its hash come from one read.
+export function declaredPermissions(page: string, html = fs.readFileSync(page, 'utf8')) {
   const dir = path.dirname(page);
-  const permissions: Permissions = { own: null, read: [], write: [], net: [], run: {}, env: [], hidden: [], node: false };
+  const permissions: Permissions = { own: null, read: [], write: [], net: [], run: {}, env: [], sockets: [], hidden: [], node: false, tags: [] };
+  // The tags come from the head before any script, comments left out: a tag commented out is not
+  // asked for, and a page that edits pages may hold tags in its strings.
+  const head = html.replace(/<!--[\s\S]*?-->/g, '').split(/<script\b|<body\b|<\/head\b/i)[0];
 
-  for (const [, attrs] of fs.readFileSync(page, 'utf8').matchAll(/<meta\s+([^>]*)>/gi)) {
-    const name = /\bname=["']resworb-([^"']*)["']/i.exec(attrs)?.[1].toLowerCase();
-    const value = (/\bcontent=["']([^"']*)["']/i.exec(attrs)?.[1] ?? '').trim();
-
-    if (name === undefined) {
+  for (const [, attrs] of head.matchAll(/<meta\s+([^>]*)>/gi)) {
+    if (!/\bname=["']?papp-/i.test(attrs)) {
       continue;
-    } else if (name === 'read' || name === 'write') {
+    }
+
+    const tag = `<meta ${attrs.replace(/\s+/g, ' ').trim()}>`;
+    // A value ends at the quote that opened it, so ~/Jon's notes is whole.
+    const name = /\bname=(["'])papp-(.*?)\1/is.exec(attrs)?.[2].toLowerCase();
+    const value = /\bcontent=(["'])(.*?)\1/is.exec(attrs)?.[2].trim();
+
+    if (name === undefined || value === undefined) {
+      throw new Error(`${tag} needs a quoted name and content, as in <meta name="papp-read" content="./data">.`);
+    }
+
+    permissions.tags.push(tag);
+
+    if (name === 'read' || name === 'write') {
       permissions[name].push(folderPattern(value, dir));
     } else if (name === 'net') {
       permissions.net.push(hostPattern(value));
@@ -62,31 +78,34 @@ export function declaredPermissions(page: string) {
       permissions.run[path.basename(value)] = findProgram(value);
     } else if (name === 'env') {
       permissions.env.push(envName(value));
+    } else if (name === 'socket') {
+      permissions.sockets.push(socketPath(value, dir));
     } else if (name === 'node' && value === 'full') {
       permissions.node = true;
     } else if (name === 'node') {
-      throw new Error(`Bad resworb-node value "${value}". The only value is "full".`);
+      throw new Error(`Bad papp-node value "${value}". The only value is "full".`);
     } else {
-      throw new Error(`Unknown tag resworb-${name}. The tags are resworb-read, resworb-write, resworb-net, resworb-run, resworb-env and resworb-node.`);
+      throw new Error(`Unknown tag papp-${name}. The tags are papp-read, papp-write, papp-net, papp-run, papp-env, papp-socket and papp-node.`);
     }
   }
 
   if (permissions.node && (permissions.read.length || permissions.write.length || Object.keys(permissions.run).length || permissions.env.length)) {
-    throw new Error('resworb-node already allows every folder, program and variable. Keep resworb-node and resworb-net only.');
+    throw new Error('papp-node already allows every folder, program and variable. Keep papp-node, papp-net and papp-socket only.');
   } else if (permissions.env.length && !Object.keys(permissions.run).length) {
-    throw new Error('resworb-env passes a variable to the programs a page runs, and this page runs none. Add resworb-run, or remove resworb-env.');
+    throw new Error('papp-env passes a variable to the programs a page runs, and this page runs none. Add papp-run, or remove papp-env.');
   }
 
-  // The sandbox profile quotes the folders a page may change: a " in one would end the quote.
-  const quoted = permissions.write.find(folder => folder.includes('"'));
+  // The sandbox profile quotes the folders a page may change and the sockets it may reach: a " in one would end the quote.
+  const quoted = [...permissions.write, ...permissions.sockets].find(folder => folder.includes('"'));
 
   if (quoted) {
-    throw new Error(`Folder ${quoted} has a " in its path, which the sandbox cannot take. Rename it.`);
+    throw new Error(`${quoted} has a " in its path, which the sandbox cannot take. Rename it.`);
   }
 
-  // The popup shows each path on a line of its own. A line break in one, typed in the tag or
-  // in a real folder name, would show as another permission; bidi and zero-width marks hide text.
-  const invisible = [page, ...permissions.read, ...permissions.write, ...Object.values(permissions.run)].find(text => /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(text));
+  // The popup shows each path on a line of its own, and the tags as written. A line break in one,
+  // typed in the tag or in a real folder name, would show as another permission; bidi and
+  // zero-width marks hide text.
+  const invisible = [page, ...permissions.read, ...permissions.write, ...Object.values(permissions.run), ...permissions.sockets, ...permissions.tags].find(text => /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(text));
 
   if (invisible) {
     throw new Error(`${JSON.stringify(invisible)} has a line break or another invisible character, which the popup cannot show. Write the value on one line, or rename the file.`);
@@ -95,7 +114,7 @@ export function declaredPermissions(page: string) {
   permissions.own = permissions.node || ['/', HOME, ...BIG_FOLDERS].includes(dir) ? null : dir;
   // Real paths, as the OS checks them; one not made yet as written, so it is hidden if made later.
   // Resolved here: inside the sandbox the child could not.
-  const named = [...permissions.read, ...permissions.write].map(literalBase);
+  const named = [...[...permissions.read, ...permissions.write].map(literalBase), ...permissions.sockets];
   const secrets = SECRETS.map(secret => (fs.existsSync(secret.path) ? fs.realpathSync.native(secret.path) : secret.path));
   permissions.hidden = permissions.node ? [] : secrets.filter(secret => !named.some(base => base === secret || base.startsWith(secret + '/')));
 
@@ -126,9 +145,9 @@ function hostPattern(value: string) {
   const [host, port] = pattern.split(':');
 
   if (!/^(\*|(\*\.)?[a-z0-9][a-z0-9.-]*):(\*|\d+)$/.test(pattern) || +port < 1 || +port > 65535) {
-    throw new Error(`Bad resworb-net value "${value}". One host:port per <meta>, such as api.example.com:443 or *.example.com:443.`);
+    throw new Error(`Bad papp-net value "${value}". One host:port per <meta>, such as api.example.com:443 or *.example.com:443.`);
   } else if (process.platform === 'linux' && LOCAL_HOSTS.includes(host) && port === '*') {
-    throw new Error('On Linux, a port on this computer must be a number, such as localhost:11434: resworb carries each declared port into the sandbox.');
+    throw new Error('On Linux, a port on this computer must be a number, such as localhost:11434: papp carries each declared port into the sandbox.');
   }
 
   return pattern;
@@ -137,17 +156,17 @@ function hostPattern(value: string) {
 // Found now, so the popup shows which file runs; if a later search finds another, the page asks again.
 function findProgram(value: string) {
   if (value.includes('*')) {
-    throw new Error('resworb-run takes one program, no wildcards. For any program, use resworb-node.');
+    throw new Error('papp-run takes one program, no wildcards. For any program, use papp-node.');
   } else if (path.isAbsolute(value)) {
     return value;
   } else if (!/^[\w.+-]+$/.test(value)) {
-    throw new Error(`Bad resworb-run value "${value}". Name one program, such as git, or give its full path.`);
+    throw new Error(`Bad papp-run value "${value}". Name one program, such as git, or give its full path.`);
   }
 
   const found = [...process.env.PATH!.split(':'), '/opt/homebrew/bin', '/usr/local/bin'].map(dir => path.join(dir, value)).find(file => fs.statSync(file, { throwIfNoEntry: false })?.isFile());
 
   if (!found) {
-    throw new Error(`Program ${value} was not found. Give its full path in resworb-run.`);
+    throw new Error(`Program ${value} was not found. Give its full path in papp-run.`);
   }
 
   return found;
@@ -156,12 +175,33 @@ function findProgram(value: string) {
 // One environment variable, named exactly: no wildcards, so the popup shows each one.
 function envName(value: string) {
   if (!/^[A-Za-z_]\w*$/.test(value)) {
-    throw new Error(`Bad resworb-env value "${value}". Name one environment variable, such as AWS_PROFILE.`);
+    throw new Error(`Bad papp-env value "${value}". Name one environment variable, such as AWS_PROFILE.`);
   } else if (PROGRAM_ENV.includes(value)) {
-    throw new Error(`Programs get ${value} already. Remove its resworb-env.`);
+    throw new Error(`Programs get ${value} already. Remove its papp-env.`);
   }
 
   return value;
+}
+
+// One socket file, or a folder of them, that exists now, as its real path: the sandbox opens what
+// it can name. Through a socket a program can have network or act as the user, so the line is red.
+function socketPath(value: string, dir: string) {
+  if (value.includes('*')) {
+    throw new Error('papp-socket takes one socket file or folder, no wildcards.');
+  } else if (!value || /["\\]/.test(value)) {
+    throw new Error(`Bad papp-socket value "${value}". Use a path such as /var/run/docker.sock or ~/.gnupg.`);
+  }
+
+  const absolute = path.resolve(dir, value === '~' ? HOME : value.replace(/^~\//, HOME + '/'));
+  const stats = fs.statSync(absolute, { throwIfNoEntry: false });
+
+  if (!stats) {
+    throw new Error(`Socket ${absolute} does not exist (from "${value}"). Start the program that makes it first.`);
+  } else if (!stats.isSocket() && !stats.isDirectory()) {
+    throw new Error(`${absolute} is not a socket or a folder (from "${value}").`);
+  }
+
+  return fs.realpathSync.native(absolute);
 }
 
 // The declared ports on this computer, which the page reaches without the proxy.
@@ -172,8 +212,8 @@ export function localPorts({ net }: Permissions) {
     .map(([, port]) => +port);
 }
 
-// What a page may change, as pattern sources for resworb's checks and for Seatbelt: its
-// resworb-write patterns, never its own folder. Only those in pages reach a page.
+// What a page may change, as pattern sources for papp's checks and for Seatbelt: its
+// papp-write patterns, never its own folder. Only those in pages reach a page.
 export function changeableSources({ write }: Permissions) {
   return {
     files: write.map(pattern => patternSource(pattern)),

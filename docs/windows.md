@@ -1,16 +1,16 @@
 # Windows
 
-resworb refuses to open pages on Windows. This page holds the plan, and why it is not built: there is no Windows 11 machine to test on yet.
+papp refuses to open pages on Windows. This page holds the plan, and why it is not built: there is no Windows 11 machine to test on yet.
 
 ## The plan: MXC
 
 [Microsoft eXecution Container](https://github.com/microsoft/mxc) (MXC) is Microsoft's open-source sandbox launcher, MIT licensed. The SDK is at v1.0.1 as of October 2026. Codex and GitHub Copilot CLI use it on Windows.
 
-For resworb, MXC would do what `sandbox-exec` does on macOS and `bwrap` on Linux: the trampoline starts `process.execPath --no-sandbox page.lmth` inside it.
+For papp, MXC would do what `sandbox-exec` does on macOS and `bwrap` on Linux: the trampoline starts `process.execPath --no-sandbox page.papp` inside it.
 
-Its Windows backend is called **ProcessContainer**. It is an AppContainer, a job object and Windows firewall rules. The trampoline would write each page's limits as JSON and start the page through `@microsoft/mxc-sdk/v1`. The SDK needs Node 24; resworb's Electron 45 has Node 24.22.
+Its Windows backend is called **ProcessContainer**. It is an AppContainer, a job object and Windows firewall rules. The trampoline would write each page's limits as JSON and start the page through `@microsoft/mxc-sdk/v1`. The SDK needs Node 24; papp's Electron 45 has Node 24.22.
 
-| resworb today                   | MXC on Windows                                                                          |
+| papp today                      | MXC on Windows                                                                          |
 | ------------------------------- | --------------------------------------------------------------------------------------- |
 | `seatbeltProfile` / `bwrapArgs` | a container request built from `Permissions`                                            |
 | `spawn('sandbox-exec' …)`       | `spawn()` from the SDK, with no timeout                                                 |
@@ -27,19 +27,19 @@ Read in the MXC source on 2026-10-25, not only in its docs:
 
 - **A window can open.** MXC blocks the GUI only when `ui.disable` is `true`. Microsoft's own test tool, `wxc_ui_probe`, opens a visible window inside the container.
 - **Nothing in it would break Electron.** It does not ban dynamic code, so V8's JIT runs. The job object only kills the processes when the container closes and applies the GUI limits. No cap on the number of processes or on memory.
-- **Child processes stay inside.** The process starts paused, joins the job, then runs. Everything it starts is inside too. That is what `resworb-run` needs.
+- **Child processes stay inside.** The process starts paused, joins the job, then runs. Everything it starts is inside too. That is what `papp-run` needs.
 - **Windows enforces the limits, not MXC.** MXC turns the JSON into a policy and calls `CreateProcessSecurityEnvironment` in `processmodel.dll`. The OS then limits files and network, as the OS does with `bwrap` and Seatbelt.
 
 ## What is not known
 
 - **Nobody has run Chromium inside ProcessContainer.** Not in MXC's repository, not anywhere found. The code shows no reason it would fail, but that is a guess until the first run.
 - **The offline check.** Inside the container, binding a loopback port may succeed, so `canBindLoopback` cannot tell sandbox from no sandbox there. The Windows check should ask the process token whether it is an AppContainer token, and refuse if not.
-- **`resworb-net`.** For the page to reach the proxy, the container needs the `networkLoopback` capability. Unless the proxy is a packaged AppContainer app, that capability also lets the page reach every other loopback port on the machine. So a first Windows release would offer read, write and run only, with `resworb-net` later and the gap listed in `SECURITY.md`.
+- **`papp-net`.** For the page to reach the proxy, the container needs the `networkLoopback` capability. Unless the proxy is a packaged AppContainer app, that capability also lets the page reach every other loopback port on the machine. So a first Windows release would offer read, write and run only, with `papp-net` later and the gap listed in `SECURITY.md`.
 - **Full Node pages.** On Windows, granting a drive root (`C:\`) does not grant its subfolders. "The whole disk" needs another shape.
 
 ## Windows versions
 
-Process isolation needs Windows 11 24H2 build 26100.9278 or 25H2 build 26200.9278 (KB5120998, August 2026). Builds 26100.9550 and 26200.9550 (KB5124010) are better. Older builds do not have it. The SDK's `getPlatformSupport()` says what the machine supports; resworb should refuse to open pages unless it says `processcontainer`.
+Process isolation needs Windows 11 24H2 build 26100.9278 or 25H2 build 26200.9278 (KB5120998, August 2026). Builds 26100.9550 and 26200.9550 (KB5124010) are better. Older builds do not have it. The SDK's `getPlatformSupport()` says what the machine supports; papp should refuse to open pages unless it says `processcontainer`.
 
 ## Why not yet
 
@@ -62,5 +62,5 @@ Each is a yes or no, in this order:
 1. `getPlatformSupport()` says `processcontainer`.
 2. A page with no tags opens and shows its window.
 3. In the page, `fetch('https://example.com')` fails, and a declared program such as `curl.exe example.com` fails.
-4. Electron started by hand with `RESWORB` set, outside MXC, refuses to open the page.
-5. A write outside `resworb-write` fails; one inside succeeds.
+4. Electron started by hand with `PAPP` set, outside MXC, refuses to open the page.
+5. A write outside `papp-write` fails; one inside succeeds.

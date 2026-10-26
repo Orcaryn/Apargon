@@ -9,7 +9,12 @@ import { APP_BUNDLE, APP_ROOT, DATA, PAGE_DATA } from '../shared.ts';
 
 export function seatbeltProfile(permissions: Permissions, proxyPort: number | null) {
   const ports = [proxyPort ?? [], localPorts(permissions)].flat();
-  const rules = [fs.readFileSync(path.join(APP_ROOT, 'sandbox/macos.sb'), 'utf8'), ...ports.map(port => `(allow network-outbound (remote ip "localhost:${port}"))`)];
+  const rules = [
+    fs.readFileSync(path.join(APP_ROOT, 'sandbox/macos.sb'), 'utf8'),
+    ...ports.map(port => `(allow network-outbound (remote ip "localhost:${port}"))`),
+    ';; Declared sockets: a file, or every socket in a folder.',
+    ...permissions.sockets.map(socket => `(allow network-outbound (${fs.statSync(socket).isDirectory() ? 'subpath' : 'literal'} "${socket}"))`),
+  ];
 
   if (!permissions.node) {
     const { files, pages } = changeableSources(permissions);
@@ -28,7 +33,7 @@ export function seatbeltProfile(permissions: Permissions, proxyPort: number | nu
     );
   }
 
-  rules.push(';; Never resworb itself: its approvals or the app.', `(deny file-write* (subpath "${DATA}"))`, `(allow file-write* (subpath "${PAGE_DATA}"))`);
+  rules.push(';; Never papp itself: its approvals or the app.', `(deny file-write* (subpath "${DATA}"))`, `(allow file-write* (subpath "${PAGE_DATA}"))`);
 
   if (APP_BUNDLE) {
     rules.push(`(deny file-write* (subpath "${APP_BUNDLE}"))`);

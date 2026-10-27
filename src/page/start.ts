@@ -1,4 +1,5 @@
 import { app, BrowserWindow, desktopCapturer, globalShortcut, ipcMain, net as electronNet, session } from 'electron';
+import remote from '@electron/remote/main/index.js';
 import { createHash } from 'crypto';
 import fs from 'fs';
 import net from 'net';
@@ -65,7 +66,7 @@ export async function showPage({ page, permissions, pageHash, bridges }: ChildCo
   const webSecurity = !permissions.net.length;
   const webPreferences: Electron.WebPreferences = access
     ? { session: pageSession, nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity, preload: path.join(import.meta.dirname, 'preload.cjs') }
-    : { session: pageSession, nodeIntegration: true, contextIsolation: false, sandbox: false, webSecurity };
+    : { session: pageSession, nodeIntegration: true, contextIsolation: false, sandbox: false, webSecurity, preload: path.join(import.meta.dirname, 'node-preload.cjs') };
   const win = new BrowserWindow({ width: 1200, height: 800, icon, webPreferences });
   const pageWindows = () => BrowserWindow.getAllWindows().filter(other => other.webContents.session === pageSession);
 
@@ -92,6 +93,8 @@ export async function showPage({ page, permissions, pageHash, bridges }: ChildCo
         return { error: (err as Error).message, code: (err as NodeJS.ErrnoException).code };
       }
     });
+  } else {
+    remote.initialize();
   }
 
   const isPage = (href: string) => {
@@ -128,6 +131,8 @@ export async function showPage({ page, permissions, pageHash, bridges }: ChildCo
         api.reset();
         apiBySender.delete(id);
       });
+    } else {
+      remote.enable(opened.webContents);
     }
   };
 

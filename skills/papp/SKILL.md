@@ -71,7 +71,7 @@ A page without `papp-node` has no Node. It reaches files and programs only throu
 - Hidden files (names that start with a dot) are invisible unless a tag names them. So `rm` fails on a folder holding one, such as `.DS_Store`.
 - `watch` on a folder reports its own entries, not its subfolders'. One save may call back more than once.
 
-A `papp-node` page has `require` and `process` instead, and no `window.papp`.
+A `papp-node` page has `require` and `process` instead, and no `window.papp`. `require('@electron/remote')` is the main process: `getCurrentWindow()` for its own window (`setAlwaysOnTop(true, 'floating')`, `setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })`, `setOpacity`, `setIgnoreMouseEvents`), `screen`, `Menu`, `globalShortcut`, and on macOS `Tray` (on Linux the tray needs D-Bus, which the sandbox hides).
 
 ### Deliver it
 

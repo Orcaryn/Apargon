@@ -23,6 +23,11 @@
 
   result.storage_apart = localStorage.getItem('apargon-selftest') === null;
 
+  const win = require('@electron/remote').getCurrentWindow();
+  win.setAlwaysOnTop(true, 'floating');
+  result.electron_window = win.isAlwaysOnTop();
+  win.setAlwaysOnTop(false);
+
   try {
     const data = process.platform === 'darwin' ? 'Library/Application Support/Apargon' : '.config/Apargon';
     fs.appendFileSync(path.join(os.homedir(), data, 'grants.json'), '');

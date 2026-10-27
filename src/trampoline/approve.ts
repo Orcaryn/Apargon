@@ -5,7 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { describe, worstCase } from '../permissions/describe.ts';
 import { declaredPermissions, HOME } from '../permissions/tags.ts';
-import { GRANTS_FILE, writeJson, type Grants } from '../shared.ts';
+import { GRANTS_FILE, readJson, writeJson, type Grants } from '../shared.ts';
 
 export async function approve(file: string) {
   const page = fs.realpathSync.native(file);
@@ -16,7 +16,7 @@ export async function approve(file: string) {
   const opensWithoutAsking = downloadedFrom === null && lines.every(line => line.id.startsWith('own:'));
   const pageHash = downloadedFrom === null ? null : createHash('sha256').update(html).digest('hex');
   const grant = lines.map(line => line.id).concat(pageHash ? `content:${pageHash}` : []).sort();
-  const grants: Grants = fs.existsSync(GRANTS_FILE) ? JSON.parse(fs.readFileSync(GRANTS_FILE, 'utf8')) : {};
+  const grants = readJson<Grants>(GRANTS_FILE);
   const previous = grants[page];
   const worst = worstCase(permissions);
   const approved = { page, permissions, pageHash };
@@ -39,15 +39,15 @@ export async function approve(file: string) {
     trust: worst !== null || lines.some(line => line.level === 'red'),
   };
 
-  if (!app.isPackaged && process.env.PAPP_TEST_ALLOW === '1') {
-    console.log(['papp: allowed for the test:', popup.source, popup.name, popup.changed ?? [], worst ?? [], popup.lines.map(line => `${line.level}: ${line.text}`)].flat().join('\n  '));
+  if (!app.isPackaged && process.env.APARGON_TEST_ALLOW === '1') {
+    console.log(['Apargon: allowed for the test:', popup.source, popup.name, popup.changed ?? [], worst ?? [], popup.lines.map(line => `${line.level}: ${line.text}`)].flat().join('\n  '));
 
     return approved;
   } else if (!(await ask(popup))) {
     return null;
   }
 
-  const latest: Grants = fs.existsSync(GRANTS_FILE) ? JSON.parse(fs.readFileSync(GRANTS_FILE, 'utf8')) : {};
+  const latest = readJson<Grants>(GRANTS_FILE);
   writeJson(GRANTS_FILE, { ...latest, [page]: grant });
 
   return approved;

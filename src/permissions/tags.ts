@@ -31,10 +31,8 @@ export const PAGE_ENV = [
 export const PRIVATE = ['/run', '/tmp', '/var/tmp'];
 export const USES = ['notifications', 'clipboard', 'location', 'sound', 'camera', 'microphone', 'screen'] as const;
 const MODIFIERS: Partial<Record<string, string>> = { commandorcontrol: 'CommandOrControl', cmdorctrl: 'CommandOrControl', command: 'Command', cmd: 'Command', control: 'Control', ctrl: 'Control', alt: 'Alt', option: 'Alt', altgr: 'AltGr', shift: 'Shift', super: 'Super', meta: 'Super' };
-// On macOS, CommandOrControl and Super are the Command key; elsewhere CommandOrControl is Control.
 const SAME_KEY: Partial<Record<string, string>> = process.platform === 'darwin' ? { CommandOrControl: 'Command', Super: 'Command' } : { CommandOrControl: 'Control' };
-// These type characters: Option and Option+Shift on macOS, AltGr and AltGr+Shift elsewhere.
-const TYPING = process.platform === 'darwin' ? ['Alt', 'Shift'] : ['AltGr', 'Shift'];
+const TYPING_MODIFIERS = process.platform === 'darwin' ? ['Alt', 'Shift'] : ['AltGr', 'Shift'];
 const KEYS = [...Array.from({ length: 24 }, (_, i) => `F${i + 1}`), 'Space', 'Tab', 'Backspace', 'Delete', 'Insert', 'Return', 'Enter', 'Up', 'Down', 'Left', 'Right', 'Home', 'End', 'PageUp', 'PageDown', 'Escape', 'Esc'];
 const MAC_BROWSERS = ['Google/Chrome', 'Chromium', 'BraveSoftware', 'Microsoft Edge', 'Arc', 'Firefox'].map(name => `Library/Application Support/${name}`);
 const LINUX_BROWSERS = ['.config/google-chrome', '.config/chromium', '.config/BraveSoftware', '.config/microsoft-edge', '.mozilla', 'snap/firefox'];
@@ -115,7 +113,7 @@ export function declaredPermissions(page: string, html = fs.readFileSync(page, '
   if (quoted) {
     throw new Error(`${quoted} has a " in its path, which the sandbox cannot take. Rename it.`);
   } else if (process.platform === 'linux' && reopened) {
-    throw new Error(`On Linux papp cannot open ${reopened}: it would bring back sockets to programs outside the sandbox. Use a folder of its own, such as /tmp/papp.`);
+    throw new Error(`On Linux Apargon cannot open ${reopened}: it would bring back sockets to programs outside the sandbox. Use a folder of its own, such as /tmp/apargon.`);
   } else if (invisible) {
     throw new Error(`${JSON.stringify(invisible)} has a line break or another invisible character, which the popup cannot show. Write the value on one line, or rename the file.`);
   }
@@ -135,7 +133,7 @@ function folderPattern(value: string, dir: string) {
     throw new Error(`Bad folder "${value}". Use a path such as ./data, ~/notes or ~/notes/*.md.`);
   }
 
-  const absolute = path.resolve(dir, value === '~' ? HOME : value.replace(/^~\//, HOME + '/'));
+  const absolute = absolutePath(value, dir);
   const base = absolute.includes('*') || fs.existsSync(absolute) ? literalBase(absolute) : path.dirname(absolute);
 
   if (!fs.existsSync(base)) {
@@ -145,6 +143,10 @@ function folderPattern(value: string, dir: string) {
   return path.join(fs.realpathSync.native(base), path.relative(base, absolute));
 }
 
+export function absolutePath(value: string, dir: string) {
+  return path.resolve(dir, value === '~' ? HOME : value.replace(/^~\//, HOME + '/'));
+}
+
 function hostPattern(value: string) {
   const pattern = value === '*' ? '*:*' : value.toLowerCase();
   const [host, port] = pattern.split(':');
@@ -152,15 +154,15 @@ function hostPattern(value: string) {
   if (!/^(\*|(\*\.)?[a-z0-9][a-z0-9.-]*):(\*|\d+)$/.test(pattern) || +port < 1 || +port > 65535) {
     throw new Error(`Bad papp-net value "${value}". One host:port per <meta>, such as api.example.com:443 or *.example.com:443.`);
   } else if (host !== '127.0.0.1' && /^(0|127|169\.254)\./.test(host)) {
-    throw new Error(`papp never reaches ${host}, which is this computer or a link-local address, where cloud machines keep their keys. For a program on this computer, declare localhost:<port>.`);
+    throw new Error(`Apargon never reaches ${host}, which is this computer or a link-local address, where cloud machines keep their keys. For a program on this computer, declare localhost:<port>.`);
   } else if (net.isIPv4(host) && Object.values(os.networkInterfaces()).flat().some(own => own?.address === host && !own.internal)) {
-    throw new Error(`papp never reaches ${host}: it is one of this computer's own addresses. For a program on this computer, declare localhost:<port>.`);
+    throw new Error(`Apargon never reaches ${host}: it is one of this computer's own addresses. For a program on this computer, declare localhost:<port>.`);
   } else if (host.endsWith('.local')) {
-    throw new Error(`papp reaches a device on your local network only by its address in numbers, such as 192.168.1.5:${port === '*' ? '80' : port}, not by a name such as ${host}.`);
+    throw new Error(`Apargon reaches a device on your local network only by its address in numbers, such as 192.168.1.5:${port === '*' ? '80' : port}, not by a name such as ${host}.`);
   } else if (privateNetwork().check(host) && port === '*') {
-    throw new Error(`papp reaches a device on your local network on one port only. Write ${host}:<port>.`);
+    throw new Error(`Apargon reaches a device on your local network on one port only. Write ${host}:<port>.`);
   } else if (process.platform === 'linux' && LOCAL_HOSTS.includes(host) && port === '*') {
-    throw new Error('On Linux, a port on this computer must be a number, such as localhost:11434: papp carries each declared port into the sandbox.');
+    throw new Error('On Linux, a port on this computer must be a number, such as localhost:11434: Apargon carries each declared port into the sandbox.');
   }
 
   return pattern;
@@ -201,7 +203,7 @@ function socketPath(value: string, dir: string) {
     throw new Error(`Bad papp-socket value "${value}". Use a path such as /var/run/docker.sock or ~/.gnupg.`);
   }
 
-  const absolute = path.resolve(dir, value === '~' ? HOME : value.replace(/^~\//, HOME + '/'));
+  const absolute = absolutePath(value, dir);
   const stats = fs.statSync(absolute, { throwIfNoEntry: false });
 
   if (!stats) {
@@ -219,14 +221,12 @@ function useName(value: string) {
   if (!USES.includes(name)) {
     throw new Error(`Bad papp-use value "${value}". The values are ${USES.join(', ')}.`);
   } else if (name === 'location' && process.platform === 'linux') {
-    throw new Error('On Linux papp cannot give a page its location: Chromium finds it through a web service, and the page has no network.');
+    throw new Error('On Linux Apargon cannot give a page its location: Chromium finds it through a web service, and the page has no network.');
   }
 
   return name;
 }
 
-// Spelled Electron's way, in Electron's casing. One modifier belongs to the app in front: a page taking Ctrl+C would catch what you copy elsewhere.
-// The same key named twice, Shift+Shift+A or Cmd+CommandOrControl+C on macOS, counts once. Modifiers that type characters, Alt+Shift+K on macOS, do not count.
 function shortcut(value: string) {
   const parts = value.split('+');
   const last = parts[parts.length - 1];
@@ -237,8 +237,8 @@ function shortcut(value: string) {
 
   if (modifiers.length < named.length || key === undefined) {
     throw new Error(`Bad papp-shortcut value "${value}". Write modifiers and one key, such as CommandOrControl+Shift+N or Alt+F9.`);
-  } else if (/^F\d+$/.test(key) ? keysHeld.size === 0 : keysHeld.size < 2 || [...keysHeld].every(name => TYPING.includes(name))) {
-    throw new Error(`papp-shortcut ${value} would catch keys meant for the app in front. Use two different modifiers, not only ${TYPING.join(' and ')}, or one with a function key.`);
+  } else if (/^F\d+$/.test(key) ? keysHeld.size === 0 : keysHeld.size < 2 || [...keysHeld].every(name => TYPING_MODIFIERS.includes(name))) {
+    throw new Error(`papp-shortcut ${value} would catch keys meant for the app in front. Use two different modifiers, not only ${TYPING_MODIFIERS.join(' and ')}, or one with a function key.`);
   }
 
   return [...new Set(modifiers), key].join('+');

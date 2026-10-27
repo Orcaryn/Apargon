@@ -2,7 +2,7 @@
 <meta charset="utf-8">
 <meta name="papp-net" content="api.github.com:443">
 <meta name="papp-write" content="./electron-latest.json">
-<title>papp net</title>
+<title>Apargon net</title>
 <style>
   body { font: 15px/1.5 system-ui; max-width: 720px; margin: 40px auto; padding: 0 20px; color: #222; }
   pre { background: #f4f4f4; padding: 12px; overflow: auto; }

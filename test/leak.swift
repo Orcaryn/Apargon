@@ -35,7 +35,7 @@ let page = Page()
 let webView = WKWebView(frame: .zero)
 
 if CommandLine.arguments[1] == "download" {
-  URLSession(configuration: .background(withIdentifier: "papp.leak.\(getpid())"), delegate: Download(), delegateQueue: nil).downloadTask(with: url).resume()
+  URLSession(configuration: .background(withIdentifier: "apargon.leak.\(getpid())"), delegate: Download(), delegateQueue: nil).downloadTask(with: url).resume()
 } else {
   webView.navigationDelegate = page
   webView.load(URLRequest(url: url))

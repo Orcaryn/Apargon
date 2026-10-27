@@ -15,20 +15,20 @@ export function pageAccess(permissions: Permissions) {
 
     return firstWild === -1 ? [] : names.slice(firstWild).map((_, i) => new RegExp(patternSource('/' + names.slice(0, firstWild + i).join('/'), false)));
   });
-  const pappFolders = [DATA, APP_BUNDLE ?? []].flat();
+  const apargonFolders = [DATA, APP_BUNDLE ?? []].flat();
   const isSecret = (file: string) => permissions.hidden.some(secret => file === secret || file.startsWith(secret + '/'));
   const canSee = (file: string) => visible.some(pattern => pattern.test(file)) && !isSecret(file);
 
   return {
     canSee,
     canList: (file: string) => canSee(file) || listable.some(pattern => pattern.test(file)),
-    canChange: (file: string) => (PAGE_FILE.test(file) ? changeablePages : changeable).some(pattern => pattern.test(file)) && !isSecret(file) && !pappFolders.some(dir => file === dir || file.startsWith(dir + '/')),
+    canChange: (file: string) => (PAGE_FILE.test(file) ? changeablePages : changeable).some(pattern => pattern.test(file)) && !isSecret(file) && !apargonFolders.some(dir => file === dir || file.startsWith(dir + '/')),
   };
 }
 
 export function realPath(file: string): string {
   if (fs.lstatSync(file, { throwIfNoEntry: false })) {
-    return fs.realpathSync.native(file); // throws for a dangling link, which a write would follow
+    return fs.realpathSync.native(file);
   }
 
   return path.dirname(file) === file ? file : path.join(realPath(path.dirname(file)), path.basename(file));

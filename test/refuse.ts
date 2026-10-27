@@ -11,7 +11,7 @@ fs.rmSync(result, { force: true });
 const page = path.join(import.meta.dirname, 'selftest.papp');
 const permissions = declaredPermissions(page);
 const child = spawn(electron, ['.', page], {
-  env: { ...process.env, PAPP: JSON.stringify({ page, permissions, proxy: null, bridges: [] }) },
+  env: { ...process.env, APARGON: JSON.stringify({ page, permissions, proxy: null, bridges: [] }) },
   stdio: ['inherit', 'inherit', 'pipe'],
 });
 let stderr = '';

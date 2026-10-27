@@ -28,7 +28,6 @@ export async function startProxy(patterns: string[], socketFile: string | null) 
     const own = Object.values(os.networkInterfaces()).flat().some(each => each?.address === address);
     const declaredByNumber = net.isIPv4(host) && patterns.includes(`${host}:${port}`);
 
-    // The local network only by a declared address in numbers: a name could be pointed there after the popup. This computer's own addresses never.
     return own || (privateNetwork().check(address, family === 6 ? 'ipv6' : 'ipv4') && !declaredByNumber) ? null : address;
   };
 
@@ -41,10 +40,9 @@ export async function startProxy(patterns: string[], socketFile: string | null) 
     if (!url || !address) {
       response.writeHead(403);
 
-      return response.end('papp: host not declared\n');
+      return response.end('Apargon: host not declared\n');
     }
 
-    // Host must be the declared name: a server that hosts many sites must not be asked for another.
     const upstream = http.request({ host: address, port, method: request.method, path: url.pathname + url.search, headers: { ...request.headers, host: url.host } }, reply => {
       response.writeHead(reply.statusCode!, reply.headers);
       reply.pipe(response);

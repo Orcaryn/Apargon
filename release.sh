@@ -3,7 +3,7 @@ set -euo pipefail
 
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
 
-REPO="Orcaryn/papp"
+REPO="Orcaryn/Apargon"
 TEAM_ID="PURHNJF27S"
 SIGNING_IDENTITY="Developer ID Application"
 NOTARY_PROFILE="notarize"
@@ -32,10 +32,9 @@ EOF
     --patch) VERSION="$major.$minor.$((patch + 1))" ;;
   esac
 
-  DMGS=("dist/papp-$VERSION-x64.dmg" "dist/papp-$VERSION-arm64.dmg")
-  ZIPS=("dist/papp-$VERSION-x64.zip" "dist/papp-$VERSION-arm64.zip")
-  # No AppImage: it brings neither bwrap nor the AppArmor profile.
-  DEB="dist/papp_${VERSION}_amd64.deb"
+  DMGS=("dist/Apargon-$VERSION-x64.dmg" "dist/Apargon-$VERSION-arm64.dmg")
+  ZIPS=("dist/Apargon-$VERSION-x64.zip" "dist/Apargon-$VERSION-arm64.zip")
+  DEB="dist/apargon_${VERSION}_amd64.deb"
 
   echo "==> Version: $current_version -> $VERSION"
   refuse_unless_ready
@@ -52,7 +51,7 @@ EOF
 
   git commit -m "Release $VERSION" -- package.json
   trap - EXIT
-  git tag -a "v$VERSION" -m "papp $VERSION"
+  git tag -a "v$VERSION" -m "Apargon $VERSION"
 
   publish
 }
@@ -84,7 +83,7 @@ build() {
   APPLE_KEYCHAIN_PROFILE="$NOTARY_PROFILE" pnpm dist --publish never
   pnpm dist:linux --publish never
 
-  for app in dist/mac/papp.app dist/mac-arm64/papp.app; do
+  for app in dist/mac/Apargon.app dist/mac-arm64/Apargon.app; do
     codesign -dv "$app" 2>&1 | grep "TeamIdentifier=$TEAM_ID" >/dev/null || { echo "Not signed by team $TEAM_ID: $app" >&2; exit 1; }
     xcrun stapler validate "$app"
     spctl --assess --type execute --verbose=2 "$app"
@@ -105,18 +104,18 @@ publish() {
   (cd dist && shasum -a 256 "${DMGS[@]#dist/}" "${ZIPS[@]#dist/}" "${DEB#dist/}") > dist/SHA256SUMS
 
   for arch in x64 arm64; do
-    feeds+=("$(write_feed darwin "$arch" "papp-$VERSION-$arch.zip")")
+    feeds+=("$(write_feed darwin "$arch" "Apargon-$VERSION-$arch.zip")")
   done
 
   feeds+=("$(write_feed linux x64 "${DEB#dist/}")")
 
   {
     cat "release-notes/$VERSION.md"
-    printf '\n---\n\npapp checks for a new version once a day when a page opens, unless you turned that off under Permissions. If you did, watch this repository to hear about security fixes: **Watch → Custom → Releases**.\n'
+    printf '\n---\n\nApargon checks for a new version once a day when a page opens, unless you turned that off under Permissions. If you did, watch this repository to hear about security fixes: **Watch → Custom → Releases**.\n'
   } > dist/release-notes.md
 
   git push --follow-tags
-  gh release create "v$VERSION" --repo "$REPO" --verify-tag --title "papp $VERSION" --notes-file dist/release-notes.md "${DMGS[@]}" "${ZIPS[@]}" "$DEB" dist/SHA256SUMS "${feeds[@]}"
+  gh release create "v$VERSION" --repo "$REPO" --verify-tag --title "Apargon $VERSION" --notes-file dist/release-notes.md "${DMGS[@]}" "${ZIPS[@]}" "$DEB" dist/SHA256SUMS "${feeds[@]}"
 
   echo "==> https://github.com/$REPO/releases/tag/v$VERSION"
 }
@@ -130,7 +129,7 @@ const [repo, version, asset, notesFile] = process.argv.slice(2);
 const notes = require('fs').readFileSync(notesFile, 'utf8');
 const url = `https://github.com/${repo}/releases/download/v${version}/${asset}`;
 const pubDate = new Date().toISOString().replace(/\.\d+Z$/, '+00:00');
-const updateTo = { version, name: `papp ${version}`, pub_date: pubDate, notes, url };
+const updateTo = { version, name: `Apargon ${version}`, pub_date: pubDate, notes, url };
 console.log(JSON.stringify({ currentRelease: version, releases: [{ version, updateTo }] }, null, 2));
 JS
 

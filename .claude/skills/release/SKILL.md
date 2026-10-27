@@ -1,9 +1,9 @@
 ---
 name: release
-description: Never run without a direct command! Use when releasing a new papp version, writing release notes, recovering from a failed release, or changing release.sh.
+description: Never run without a direct command! Use when releasing a new Apargon version, writing release notes, recovering from a failed release, or changing release.sh.
 ---
 
-# Releasing papp
+# Releasing Apargon
 
 `./release.sh --patch|--minor|--major` runs every check, bumps the version, builds a notarized `.dmg` and `.zip` for each Mac architecture and a `.deb`, commits, tags, pushes and publishes a GitHub release with the update feeds. `release.sh` is the source of truth for the steps.
 

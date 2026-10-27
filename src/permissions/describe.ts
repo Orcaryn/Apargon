@@ -15,7 +15,6 @@ const USE_LINES: Record<Use, Omit<Line, 'id'>> = {
   microphone: { level: 'yellow', text: 'Listen through the microphone.' },
   screen: { level: 'red', text: 'See your screen: every window, passwords on it included.' },
 };
-// What each use lets a page with papp-net send out.
 const USE_SENDS: Partial<Record<Use, string>> = { clipboard: 'what you copy', location: 'where you are', camera: 'what the camera sees', microphone: 'what the microphone hears', screen: 'what is on your screen' };
 
 export function describe(permissions: Permissions) {
@@ -129,7 +128,7 @@ function hostLine(pattern: string): Line {
   } else if (host === '*') {
     return { id, level: 'red', text: `Send and receive data with any server on the internet, ${where}.` };
   } else if (privateNetwork().check(host)) {
-    return { id, level: 'red', text: `Send and receive data with the device at ${host} on your local network, on port ${port}. papp cannot tell what answers there.` };
+    return { id, level: 'red', text: `Send and receive data with the device at ${host} on your local network, on port ${port}. Apargon cannot tell what answers there.` };
   } else if (net.isIPv4(host)) {
     return { id, level: 'red', text: `Send and receive data with the machine at ${host}, ${where}. An address in numbers has no name to check.` };
   } else if (host.startsWith('*.') && !host.slice(2).includes('.')) {

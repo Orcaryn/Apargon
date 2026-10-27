@@ -24,9 +24,17 @@ export const TRAMPOLINE_NETWORK_FD = 4;
 export const PARENT_FD = 5;
 export const APP_BUNDLE = app.isPackaged && process.platform === 'darwin' ? path.resolve(process.execPath, '../../..') : null;
 
+export function readJson<T extends object>(file: string): T {
+  return JSON.parse(fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '{}');
+}
+
 export function writeJson(file: string, value: object) {
   fs.writeFileSync(`${file}.tmp`, JSON.stringify(value, null, 2) + '\n');
   fs.renameSync(`${file}.tmp`, file);
+}
+
+export function tellTrampoline(message: ChildMessage) {
+  fs.writeSync(MESSAGE_FD, JSON.stringify(message) + '\n');
 }
 
 export async function relay(from: net.ListenOptions, to: net.NetConnectOpts) {

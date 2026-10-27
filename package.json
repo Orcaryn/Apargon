@@ -1,21 +1,21 @@
 {
-  "name": "papp",
+  "name": "apargon",
   "version": "0.1.1",
   "description": "A local page runner: a page asks for folders, servers and programs in <meta> tags; the OS denies everything else on the network.",
   "type": "module",
   "main": "src/main.ts",
   "scripts": {
     "start": "electron . examples/hello.papp",
-    "test": "rm -f test/result*.json && node test/popup.ts && node test/refuse.ts && node test/daemons.ts && PAPP_TEST_ALLOW=1 electron . test/selftest.papp && PAPP_TEST_ALLOW=1 electron . test/selftest-node.papp && PAPP_TEST_ALLOW=1 PAPP_TEST_ENV=passed electron . test/selftest-net.papp && node test/check.ts",
+    "test": "rm -f test/result*.json && node test/popup.ts && node test/refuse.ts && node test/daemons.ts && APARGON_TEST_ALLOW=1 electron . test/selftest.papp && APARGON_TEST_ALLOW=1 electron . test/selftest-node.papp && APARGON_TEST_ALLOW=1 APARGON_TEST_ENV=passed electron . test/selftest-net.papp && node test/check.ts",
     "dist": "electron-builder --mac --arm64 --x64",
     "dist:linux": "electron-builder --linux --x64",
-    "start:net": "PAPP_TEST_ALLOW=1 electron . examples/net.papp",
+    "start:net": "APARGON_TEST_ALLOW=1 electron . examples/net.papp",
     "lint": "tsc && eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
-  "homepage": "https://github.com/Orcaryn/papp",
+  "homepage": "https://github.com/Orcaryn/Apargon",
   "license": "MIT",
   "packageManager": "pnpm@11.1.2",
   "devDependencies": {
@@ -31,8 +31,8 @@
     "typescript-eslint": "^8.72.0"
   },
   "build": {
-    "appId": "com.hammer.papp",
-    "productName": "papp",
+    "appId": "com.hammer.apargon",
+    "productName": "Apargon",
     "files": [
       "src/**"
     ],
@@ -50,8 +50,8 @@
     "fileAssociations": [
       {
         "ext": "papp",
-        "name": "papp page",
-        "description": "papp page",
+        "name": "Apargon page",
+        "description": "Apargon page",
         "mimeType": "application/x-papp",
         "role": "Editor",
         "rank": "Owner",
@@ -71,10 +71,10 @@
       "notarize": true,
       "icon": "build/icon.icns",
       "extendInfo": {
-        "NSCameraUsageDescription": "A page you opened in papp asked to use the camera.",
-        "NSMicrophoneUsageDescription": "A page you opened in papp asked to use the microphone.",
-        "NSLocationUsageDescription": "A page you opened in papp asked for this computer's location.",
-        "NSLocationWhenInUseUsageDescription": "A page you opened in papp asked for this computer's location."
+        "NSCameraUsageDescription": "A page you opened in Apargon asked to use the camera.",
+        "NSMicrophoneUsageDescription": "A page you opened in Apargon asked to use the microphone.",
+        "NSLocationUsageDescription": "A page you opened in Apargon asked for this computer's location.",
+        "NSLocationWhenInUseUsageDescription": "A page you opened in Apargon asked for this computer's location."
       }
     },
     "deb": {

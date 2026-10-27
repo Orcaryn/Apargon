@@ -7,7 +7,7 @@ import readline from 'readline';
 import { describe } from '../permissions/describe.ts';
 import { HOME, type Use } from '../permissions/tags.ts';
 import { PAGE_FILE } from '../permissions/patterns.ts';
-import { APP_ROOT, GRANTS_FILE, PARENT_FD, relay, type ChildConfig, type Grants, type ParentMessage } from '../shared.ts';
+import { APP_ROOT, GRANTS_FILE, PARENT_FD, readJson, relay, type ChildConfig, type Grants, type ParentMessage } from '../shared.ts';
 import { pageAccess, realPath } from './access.ts';
 import { pageApi } from './api.ts';
 import { followFavicon } from './icon.ts';
@@ -25,12 +25,12 @@ export async function showPage({ page, permissions, pageHash, bridges }: ChildCo
     const file = realPath(decodeURIComponent(new URL(request.url).pathname));
 
     if (!canSee(file)) {
-      return new Response(`papp: this page may not see ${file}\n`, { status: 403 });
+      return new Response(`Apargon: this page may not see ${file}\n`, { status: 403 });
     } else if (PAGE_FILE.test(file)) {
       const html = fs.readFileSync(file);
 
       if (file === page && pageHash && createHash('sha256').update(html).digest('hex') !== pageHash) {
-        return new Response('papp: this page changed since you allowed it. Reopen it to be asked again.\n', { status: 409 });
+        return new Response('Apargon: this page changed since you allowed it. Reopen it to be asked again.\n', { status: 409 });
       }
 
       return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } });
@@ -39,8 +39,6 @@ export async function showPage({ page, permissions, pageHash, bridges }: ChildCo
     return electronNet.fetch(request, { bypassCustomProtocolHandlers: true });
   });
 
-  // Electron grants any permission request it has no handler for.
-  // A media request lists video for the camera and audio for the microphone, and needs a tag for each. One that lists neither is denied.
   const webPermissions: Partial<Record<Use, string>> = { clipboard: 'clipboard-read', location: 'geolocation', camera: 'media:video', microphone: 'media:audio', screen: 'display-capture' };
   const allowed = ['clipboard-sanitized-write', 'fullscreen', 'pointerLock', ...permissions.use.flatMap(name => webPermissions[name] ?? [])];
   pageSession.setPermissionRequestHandler((_contents, permission, answer, details) => {
@@ -49,7 +47,6 @@ export async function showPage({ page, permissions, pageHash, bridges }: ChildCo
   });
   pageSession.setPermissionCheckHandler((_contents, permission, _origin, details) => allowed.includes(permission === 'media' ? `media:${details.mediaType}` : permission));
 
-  // The whole main screen, with no picker: the popup already asked. No sound: the sound of other apps is not on the screen.
   if (permissions.use.includes('screen')) {
     pageSession.setDisplayMediaRequestHandler(async (_request, answer) => {
       const [screen] = await desktopCapturer.getSources({ types: ['screen'] });
@@ -57,8 +54,7 @@ export async function showPage({ page, permissions, pageHash, bridges }: ChildCo
     });
   }
 
-  const grants: Grants = fs.existsSync(GRANTS_FILE) ? JSON.parse(fs.readFileSync(GRANTS_FILE, 'utf8')) : {};
-  installMenu(page, describe(permissions), Object.keys(grants));
+  installMenu(page, describe(permissions), Object.keys(readJson<Grants>(GRANTS_FILE)));
 
   const icon = app.isPackaged ? undefined : path.join(APP_ROOT, 'build/icon.png');
 
@@ -66,7 +62,6 @@ export async function showPage({ page, permissions, pageHash, bridges }: ChildCo
     app.dock?.setIcon(icon);
   }
 
-  // CORS is off when a page may reach servers: the host list is the boundary.
   const webSecurity = !permissions.net.length;
   const webPreferences: Electron.WebPreferences = access
     ? { session: pageSession, nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity, preload: path.join(import.meta.dirname, 'preload.cjs') }
@@ -80,17 +75,16 @@ export async function showPage({ page, permissions, pageHash, bridges }: ChildCo
     front?.focus();
   };
 
-  // One api per window, found by the sender of each call.
-  const apis = new Map<number, Record<string, (...args: unknown[]) => unknown>>();
+  const apiBySender = new Map<number, Record<string, (...args: unknown[]) => unknown>>();
 
   if (access) {
-    ipcMain.on('papp-dir', event => (event.returnValue = dir));
-    ipcMain.handle('papp', async (event, call: string, ...args: unknown[]) => {
-      const api = apis.get(event.sender.id)!;
+    ipcMain.on('apargon-dir', event => (event.returnValue = dir));
+    ipcMain.handle('apargon', async (event, call: string, ...args: unknown[]) => {
+      const api = apiBySender.get(event.sender.id)!;
 
       try {
         if (!Object.hasOwn(api, call)) {
-          throw new Error(`papp: no such call ${call}.`);
+          throw new Error(`Apargon: no such call ${call}.`);
         }
 
         return { value: await api[call](...args) };
@@ -112,13 +106,11 @@ export async function showPage({ page, permissions, pageHash, bridges }: ChildCo
     }
   };
 
-  // A new window may show the page itself, under another hash or query, and nothing else: another file would run with the page's permissions.
-  // Electron does not pass the preload on to it, so it gets the opener's settings by hand.
-  const guard = (opened: BrowserWindow) => {
+  const setUpWindow = (opened: BrowserWindow) => {
     opened.webContents.on('will-frame-navigate', stayOnPage);
     opened.webContents.on('will-redirect', stayOnPage);
     opened.webContents.setWindowOpenHandler(({ url }) => (isPage(url) ? { action: 'allow', overrideBrowserWindowOptions: { icon, webPreferences } } : { action: 'deny' }));
-    opened.webContents.on('did-create-window', guard);
+    opened.webContents.on('did-create-window', setUpWindow);
     opened.webContents.setAudioMuted(!permissions.use.includes('sound'));
 
     if (permissions.net.length) {
@@ -131,26 +123,25 @@ export async function showPage({ page, permissions, pageHash, bridges }: ChildCo
     if (access) {
       const api = pageApi(dir, permissions, access, opened, toFront);
       const id = opened.webContents.id;
-      apis.set(id, api as Record<string, (...args: unknown[]) => unknown>);
+      apiBySender.set(id, api as Record<string, (...args: unknown[]) => unknown>);
       opened.on('closed', () => {
         api.reset();
-        apis.delete(id);
+        apiBySender.delete(id);
       });
     }
   };
 
-  guard(win);
+  setUpWindow(win);
   followFavicon(win, canSee, pageHash === null);
   win.loadFile(page);
 
   for (const keys of permissions.shortcuts) {
     globalShortcut.register(keys, () => {
       toFront();
-      pageWindows().forEach(other => other.webContents.send('papp-shortcut', keys));
+      pageWindows().forEach(other => other.webContents.send('apargon-shortcut', keys));
     });
   }
 
-  // The trampoline owns the tray and says so here when it is clicked.
   readline.createInterface({ input: new net.Socket({ fd: PARENT_FD, writable: false }) }).on('line', line => {
     if ((JSON.parse(line) as ParentMessage).trayClick) {
       toFront();

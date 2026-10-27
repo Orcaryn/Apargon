@@ -2,7 +2,7 @@ import { app, BrowserWindow, nativeImage } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { MESSAGE_FD, type ChildMessage } from '../shared.ts';
+import { tellTrampoline } from '../shared.ts';
 import { realPath } from './access.ts';
 
 const IMAGE_TYPES: Record<string, string> = {
@@ -31,7 +31,7 @@ export function followFavicon(win: BrowserWindow, canSee: (file: string) => bool
       app.dock?.setIcon(icon);
 
       if (madeHere) {
-        fs.writeSync(MESSAGE_FD, JSON.stringify({ fileIcon: icon.toPNG().toString('base64') } satisfies ChildMessage) + '\n');
+        tellTrampoline({ fileIcon: icon.toPNG().toString('base64') });
       }
     } else if (!win.isDestroyed()) {
       win.setIcon(icon);

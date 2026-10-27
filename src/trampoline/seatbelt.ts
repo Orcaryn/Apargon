@@ -1,11 +1,24 @@
 import { app } from 'electron';
 import fs from 'fs';
+import type { AddressInfo } from 'net';
 import path from 'path';
 import { PAGE_SOURCE } from '../permissions/patterns.ts';
 import { changeableSources, localPorts, type Permissions } from '../permissions/tags.ts';
 import { APP_BUNDLE, APP_ROOT, DATA, PAGE_DATA } from '../shared.ts';
+import type { Sandbox } from './platform.ts';
+import { startProxy } from './proxy.ts';
 
-export function seatbeltProfile(permissions: Permissions, proxyPort: number | null) {
+export const seatbelt: Sandbox = {
+  async prepare(_page, permissions) {
+    const proxy = permissions.net.length ? await startProxy(permissions.net, null) : null;
+    const proxyPort = proxy && (proxy.address() as AddressInfo).port;
+
+    return { command: ['sandbox-exec', '-p', seatbeltProfile(permissions, proxyPort)], proxyPort, bridges: [], networkFd: null, close: () => proxy?.close() };
+  },
+  installHint: '',
+};
+
+function seatbeltProfile(permissions: Permissions, proxyPort: number | null) {
   const ports = [proxyPort ?? [], localPorts(permissions)].flat();
   const rules = [
     fs.readFileSync(path.join(APP_ROOT, 'sandbox/macos.sb'), 'utf8'),
@@ -16,10 +29,8 @@ export function seatbeltProfile(permissions: Permissions, proxyPort: number | nu
   if (!permissions.node) {
     const { files, pages } = changeableSources(permissions);
     rules.push(
-      ';; Apple Events go through a Mach service; denying appleevent-send alone does not stop osascript.',
       '(deny lsopen)',
       '(deny mach-lookup (global-name "com.apple.coreservices.appleevents"))',
-      ';; cfprefsd writes preferences from outside the sandbox, so file-write* alone does not stop them.',
       '(deny user-preference-write)',
       '(deny file-write*)',
       `(allow file-write* (subpath "/dev") (subpath "${fs.realpathSync(app.getPath('temp'))}"))`,

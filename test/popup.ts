@@ -6,7 +6,7 @@ import { describe, worstCase } from '../src/permissions/describe.ts';
 import { declaredPermissions } from '../src/permissions/tags.ts';
 
 if (process.platform === 'linux') {
-  const page = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'papp-popup-')), 'case.papp');
+  const page = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'apargon-popup-')), 'case.papp');
   const opened = ['/', '/var', '/var/tmp', '/tmp', '/tmp/*', '/run'].filter(folder => {
     fs.writeFileSync(page, `<meta name="papp-read" content="${folder}">`);
 
@@ -27,7 +27,7 @@ if (process.platform !== 'darwin') {
   process.exit(0);
 }
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'papp-popup-'));
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apargon-popup-'));
 const page = path.join(dir, 'case.papp');
 fs.writeFileSync(page, '<meta name="papp-write" content="~/LIBRARY">\n<meta name="papp-write" content="~/DOCUMENTS">\n<meta name="papp-write" content="./*.papp">\n');
 const lines = describe(declaredPermissions(page)).filter(line => line.id.startsWith('write:'));

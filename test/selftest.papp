@@ -2,11 +2,10 @@
 <meta charset="utf-8">
 <meta name="papp-write" content="./result.json">
 <meta name="papp-write" content="./scratch*">
-<title>papp selftest</title>
+<title>Apargon selftest</title>
 <body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
 
 <script type="module">
-  // The second window, which watch_survives_second_window opens, must not run the checks too: it would write the same files.
   if (location.hash === '#second') {
     document.body.textContent = 'second window';
     await new Promise(() => {});
@@ -47,10 +46,10 @@
 
   try {
     result.no_node = typeof require === 'undefined' && typeof process === 'undefined';
-    localStorage.setItem('papp-selftest', 'kept by selftest.papp');
-    result.storage_own = localStorage.getItem('papp-selftest') === 'kept by selftest.papp';
+    localStorage.setItem('apargon-selftest', 'kept by selftest.papp');
+    result.storage_own = localStorage.getItem('apargon-selftest') === 'kept by selftest.papp';
 
-    result.own_folder_read = (await papp.readFile('selftest.papp')).includes('papp selftest') && (await papp.readdir('.')).includes('selftest-node.papp');
+    result.own_folder_read = (await papp.readFile('selftest.papp')).includes('Apargon selftest') && (await papp.readdir('.')).includes('selftest-node.papp');
     result.own_subfolder_read = (await papp.readFile('subfolder/note.txt')).includes('subfolder');
     result.own_folder_write_refused = await refused(() => papp.writeFile('own.txt', 'x'));
     result.own_subfolder_write_refused = await refused(() => papp.writeFile('subfolder/x.txt', 'x')) && await refused(() => papp.mkdir('sub'));

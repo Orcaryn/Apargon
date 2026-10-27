@@ -1,17 +1,13 @@
 import { app, dialog, nativeImage, Notification, shell, Tray } from 'electron';
 import { spawn, spawnSync, type ChildProcess } from 'child_process';
 import { createHash } from 'crypto';
-import fs from 'fs';
-import type { AddressInfo } from 'net';
 import path from 'path';
 import readline from 'readline';
 import type { Readable, Writable } from 'stream';
-import { localPorts, PAGE_ENV } from '../permissions/tags.ts';
-import { APP_ROOT, EGRESS_LOG, GRANTS_FILE, NET_DATA, MESSAGE_FD, PARENT_FD, relay, UPDATE_FILE, writeJson, type Bridge, type ChildConfig, type ChildMessage, type Grants, type ParentMessage, type UpdateState } from '../shared.ts';
+import { PAGE_ENV } from '../permissions/tags.ts';
+import { APP_ROOT, EGRESS_LOG, GRANTS_FILE, MESSAGE_FD, PARENT_FD, readJson, UPDATE_FILE, writeJson, type ChildConfig, type ChildMessage, type Grants, type ParentMessage, type UpdateState } from '../shared.ts';
 import { approve } from './approve.ts';
-import { bwrapArgs } from './bwrap.ts';
-import { startProxy } from './proxy.ts';
-import { seatbeltProfile } from './seatbelt.ts';
+import { SANDBOX } from './platform.ts';
 
 let openPages = 0;
 const trays = new Map<ChildProcess, Tray>();
@@ -20,7 +16,7 @@ export async function openPage(file: string) {
   openPages++;
   const child = await approve(file)
     .then(approved => approved && startChild(approved))
-    .catch((err: Error) => dialog.showErrorBox('papp', err.message));
+    .catch((err: Error) => dialog.showErrorBox('Apargon', err.message));
 
   if (child) {
     await new Promise(resolve => child.on('close', resolve));
@@ -34,72 +30,38 @@ export async function openPage(file: string) {
 }
 
 async function startChild({ page, permissions, pageHash }: Pick<ChildConfig, 'page' | 'permissions' | 'pageHash'>) {
-  const linux = process.platform === 'linux';
-
-  if (linux) {
-    fs.mkdirSync(NET_DATA, { recursive: true });
-  }
-
-  const socketFolder = linux && permissions.net.length ? fs.mkdtempSync(path.join(NET_DATA, 'page-')) : null;
-  const proxySocket = socketFolder && path.join(socketFolder, 'proxy.sock');
-  const proxy = permissions.net.length ? await startProxy(permissions.net, proxySocket) : null;
-  const localBridges = socketFolder ? localPorts(permissions).map(port => ({ port: +port, socket: path.join(socketFolder, `${port}.sock`) })) : [];
-  const localRelays = await Promise.all(localBridges.map(({ port, socket }) => relay({ path: socket }, { host: '127.0.0.1', port })));
-  const proxyPort = !proxy ? null : proxySocket ? unusedPort(localBridges) : (proxy.address() as AddressInfo).port;
-  const bridges = proxySocket && proxyPort ? [{ port: proxyPort, socket: proxySocket }, ...localBridges] : [];
+  const sandbox = await SANDBOX!.prepare(page, permissions);
+  const proxy = sandbox.proxyPort === null ? null : `127.0.0.1:${sandbox.proxyPort}`;
   const inherited = Object.entries(process.env).filter(([name]) => permissions.node || PAGE_ENV.includes(name) || permissions.env.includes(name));
-  const env: NodeJS.ProcessEnv = { ...Object.fromEntries(inherited), PAPP: JSON.stringify({ page, permissions, pageHash, proxy: proxy && `127.0.0.1:${proxyPort}`, bridges } satisfies ChildConfig) };
+  const env: NodeJS.ProcessEnv = { ...Object.fromEntries(inherited), APARGON: JSON.stringify({ page, permissions, pageHash, proxy, bridges: sandbox.bridges } satisfies ChildConfig) };
 
   if (proxy) {
-    env.http_proxy = env.https_proxy = `http://127.0.0.1:${proxyPort}`;
+    env.http_proxy = env.https_proxy = `http://${proxy}`;
     env.no_proxy = 'localhost,127.0.0.1';
   }
 
   app.dock?.hide();
-  const sandbox = linux ? ['bwrap', ...bwrapArgs(page, permissions, socketFolder)] : ['sandbox-exec', '-p', seatbeltProfile(permissions, proxyPort)];
-  const [command, ...args] = [...sandbox, process.execPath, '--no-sandbox', ...(app.isPackaged ? [] : [APP_ROOT]), page];
-  const trampolineNetwork = linux ? fs.openSync('/proc/self/ns/net', 'r') : null;
-  const child = spawn(command, args, { stdio: ['inherit', 'inherit', 'inherit', 'pipe', trampolineNetwork ?? 'ignore', 'pipe'], env });
-
-  if (trampolineNetwork !== null) {
-    fs.closeSync(trampolineNetwork);
-  }
-
+  const [command, ...args] = [...sandbox.command, process.execPath, '--no-sandbox', ...(app.isPackaged ? [] : [APP_ROOT]), page];
+  const child = spawn(command, args, { stdio: ['inherit', 'inherit', 'inherit', 'pipe', sandbox.networkFd ?? 'ignore', 'pipe'], env });
   readline.createInterface({ input: child.stdio[MESSAGE_FD] as Readable }).on('line', line => handleChildMessage(child, page, JSON.parse(line)));
-  child.on('error', err => dialog.showErrorBox('papp', `Could not start the sandbox: ${err.message}${linux ? '. Install papp from the .deb: it brings bwrap and the AppArmor profile Ubuntu needs.' : ''}`));
+  child.on('error', err => dialog.showErrorBox('Apargon', `Could not start the sandbox: ${err.message}${SANDBOX!.installHint}`));
   child.on('close', () => {
     setTray(child, page, null);
-    proxy?.close();
-    localRelays.forEach(server => server.close());
-
-    if (socketFolder) {
-      fs.rmSync(socketFolder, { recursive: true });
-    }
+    sandbox.close();
   });
 
   return child;
 }
 
-function unusedPort(declared: Bridge[]) {
-  let port = 3128;
-
-  while (declared.some(bridge => bridge.port === port)) {
-    port++;
-  }
-
-  return port;
-}
-
-// Nothing the child sends can add an approval, or set the icon of any file but its page's.
 function handleChildMessage(child: ChildProcess, page: string, message: ChildMessage) {
   if ('open' in message) {
     openPage(message.open);
   } else if ('revoke' in message) {
-    const grants: Grants = fs.existsSync(GRANTS_FILE) ? JSON.parse(fs.readFileSync(GRANTS_FILE, 'utf8')) : {};
-    const kept = Object.entries(grants).filter(([page]) => !message.revoke.includes(page));
+    const grants = readJson<Grants>(GRANTS_FILE);
+    const kept = Object.entries(grants).filter(([approved]) => !message.revoke.includes(approved));
     writeJson(GRANTS_FILE, Object.fromEntries(kept));
   } else if ('automaticUpdates' in message) {
-    const state: UpdateState = fs.existsSync(UPDATE_FILE) ? JSON.parse(fs.readFileSync(UPDATE_FILE, 'utf8')) : {};
+    const state = readJson<UpdateState>(UPDATE_FILE);
     writeJson(UPDATE_FILE, { ...state, automatic: message.automaticUpdates });
   } else if ('fileIcon' in message) {
     setFileIcon(page, message.fileIcon);
@@ -115,7 +77,7 @@ function handleChildMessage(child: ChildProcess, page: string, message: ChildMes
 function setFileIcon(page: string, png: string) {
   const hash = createHash('sha256').update(png).digest('hex');
 
-  if (spawnSync('/usr/bin/xattr', ['-p', 'com.papp.icon', page], { encoding: 'utf8' }).stdout.trim() === hash) {
+  if (spawnSync('/usr/bin/xattr', ['-p', 'com.apargon.icon', page], { encoding: 'utf8' }).stdout.trim() === hash) {
     return;
   }
 
@@ -125,10 +87,9 @@ function setFileIcon(page: string, png: string) {
     $.NSWorkspace.sharedWorkspace.setIconForFileOptions(image, page, 0);
   }`;
   spawnSync('/usr/bin/osascript', ['-l', 'JavaScript', '-e', script, page, png]);
-  spawnSync('/usr/bin/xattr', ['-w', 'com.papp.icon', hash, page]);
+  spawnSync('/usr/bin/xattr', ['-w', 'com.apargon.icon', hash, page]);
 }
 
-// papp's own icon, never the page's: in the menu bar there is no room for the badge.
 function setTray(child: ChildProcess, page: string, title: string | null) {
   const tray = trays.get(child);
 

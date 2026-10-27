@@ -1,7 +1,4 @@
 (version 1)
 (allow default)
 (deny network*)
-;; These services fetch for a process from outside its sandbox. Electron uses none of them.
-;; trustd fetches the issuer URL a certificate names, so any program that checks a certificate
-;; could send data to any host in that URL.
 (deny mach-lookup (global-name "com.apple.nsurlsessiond" "com.apple.trustd" "com.apple.trustd.agent") (xpc-service-name-prefix "com.apple.WebKit."))

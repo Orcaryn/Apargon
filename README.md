@@ -1,15 +1,15 @@
-# papp
+# Apargon
 
 |           | Network | Your files |
 | --------- | ------- | ---------- |
 | A browser | yes     | no         |
-| papp      | no      | yes        |
+| Apargon   | no      | yes        |
 
-papp opens an HTML file from disk. The page gets the files it asks for, and the OS denies it the network. Each `.papp` file is one personal app, such as a viewer, an editor or a dashboard. You or an agent write it; papp runs it.
+Apargon opens an HTML file from disk. The page gets the files it asks for, and the OS denies it the network. Each `.papp` file is one personal app, such as a viewer, an editor or a dashboard. You or an agent write it; Apargon runs it.
 
 ## Download
 
-From the [latest release](https://github.com/Orcaryn/resworb/releases/latest):
+From the [latest release](https://github.com/Orcaryn/Apargon/releases/latest):
 
 | Platform             | File              |
 | -------------------- | ----------------- |
@@ -22,12 +22,12 @@ From the [latest release](https://github.com/Orcaryn/resworb/releases/latest):
 
 ## Install
 
-- **macOS:** open the `.dmg` and drag papp to Applications.
+- **macOS:** open the `.dmg` and drag Apargon to Applications.
 - **Linux:** `sudo apt install ./<the file>.deb`. It brings `bwrap` and the AppArmor profile Ubuntu 23.10 and later need. Tested on a server, not yet on a desktop.
 
-Double-click a `.papp` file to open it, or run `open page.papp` (macOS) or `papp page.papp` (Linux).
+Double-click a `.papp` file to open it, or run `open page.papp` (macOS) or `apargon page.papp` (Linux).
 
-Once a day papp checks GitHub for a new version. macOS installs it on the next start; Linux shows a link. **Permissions → Check for Updates Automatically** turns this off. If you turn it off, watch this repository (**Watch → Custom → Releases**) to hear about security fixes.
+Once a day Apargon checks GitHub for a new version. macOS installs it on the next start; Linux shows a link. **Permissions → Check for Updates Automatically** turns this off. If you turn it off, watch this repository (**Watch → Custom → Releases**) to hear about security fixes.
 
 ## Meta tags
 
@@ -45,17 +45,17 @@ A page with no tags may see the files in its own folder, and nothing else. To do
 <meta name="papp-node"   content="full">                 <!-- full Node: any file, any program -->
 ```
 
-Before the page runs, a popup says in plain words what the tags allow. Red marks broad requests and needs a tick; yellow marks other wildcards. papp remembers your answer until the tags change. **Permissions → Approved Pages** takes it back.
+Before the page runs, a popup says in plain words what the tags allow. Red marks broad requests and needs a tick; yellow marks other wildcards. Apargon remembers your answer until the tags change. **Permissions → Approved Pages** takes it back.
 
-A page without `papp-node` is held to its tags. A page with `papp-node` runs as you, like a script, with only the network blocked: open one only if you trust it. [SECURITY.md](SECURITY.md) says what papp enforces and what it does not.
+A page without `papp-node` is held to its tags. A page with `papp-node` runs as you, like a script, with only the network blocked: open one only if you trust it. [SECURITY.md](SECURITY.md) says what Apargon enforces and what it does not.
 
 ## Build with agents
 
-Give your agent the papp skill, [`skills/papp/SKILL.md`](skills/papp/SKILL.md). For Claude Code:
+Give your agent the Apargon skill, [`skills/apargon/SKILL.md`](skills/apargon/SKILL.md). For Claude Code:
 
 ```sh
-mkdir -p ~/.claude/skills/papp
-curl -fsSL https://raw.githubusercontent.com/Orcaryn/resworb/main/skills/papp/SKILL.md -o ~/.claude/skills/papp/SKILL.md
+mkdir -p ~/.claude/skills/apargon
+curl -fsSL https://raw.githubusercontent.com/Orcaryn/Apargon/main/skills/apargon/SKILL.md -o ~/.claude/skills/apargon/SKILL.md
 ```
 
 Other agents: give them the same file.

@@ -1,24 +1,24 @@
-import { Notification, type BrowserWindow } from 'electron';
+import type { BrowserWindow } from 'electron';
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import { once } from 'events';
 import fs from 'fs';
 import path from 'path';
-import { HOME, PROGRAM_ENV, type Permissions } from '../permissions/tags.ts';
-import { MESSAGE_FD, type ChildMessage } from '../shared.ts';
+import { absolutePath, PROGRAM_ENV, type Permissions } from '../permissions/tags.ts';
+import { tellTrampoline } from '../shared.ts';
 import { realPath, type pageAccess } from './access.ts';
+import { PAGE_PLATFORM } from './platform.ts';
 
-// One per window: its watchers and programs end with it, or when it loads anew.
 export function pageApi(dir: string, permissions: Permissions, { canSee, canList, canChange }: ReturnType<typeof pageAccess>, win: BrowserWindow, toFront: () => void) {
   const watchers = new Map<string, fs.FSWatcher>();
   const jobs = new Map<string, ChildProcessWithoutNullStreams>();
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => PROGRAM_ENV.includes(name) || permissions.env.includes(name)));
-  const where = (file: string) => realPath(path.resolve(dir, file === '~' ? HOME : file.replace(/^~\//, HOME + '/')));
+  const where = (file: string) => realPath(absolutePath(file, dir));
 
   const need = (allowed: boolean, file: string, verb: 'see' | 'change') => {
     if (!allowed) {
       const tag = verb === 'see' ? 'papp-read' : 'papp-write';
 
-      throw new Error(`papp: this page may not ${verb} ${file}. Ask for it with <meta name="${tag}" content="...">.`);
+      throw new Error(`Apargon: this page may not ${verb} ${file}. Ask for it with <meta name="${tag}" content="...">.`);
     }
   };
 
@@ -32,10 +32,9 @@ export function pageApi(dir: string, permissions: Permissions, { canSee, canList
 
   const startProgram = (name: string, args: string[], cwd = '.', detached = false) => {
     if (!Object.hasOwn(permissions.run, name)) {
-      throw new Error(`papp: this page may not run ${name}. Ask for it with <meta name="papp-run" content="${name}">.`);
+      throw new Error(`Apargon: this page may not run ${name}. Ask for it with <meta name="papp-run" content="${name}">.`);
     } else if (!Array.isArray(args)) {
-      // Node would read an object here as the options, an unchecked cwd included.
-      throw new Error('papp: a program takes its arguments as an array.');
+      throw new Error('Apargon: a program takes its arguments as an array.');
     }
 
     const folder = where(cwd);
@@ -44,26 +43,26 @@ export function pageApi(dir: string, permissions: Permissions, { canSee, canList
     return spawn(permissions.run[name], args, { cwd: folder, env, detached });
   };
 
-  // A spawned program leads a group of its own, so what it starts stops with it.
   const killGroup = (child: ChildProcessWithoutNullStreams) => {
     try {
       process.kill(-child.pid!);
-    } catch {
-      // The group ended before close reported it.
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ESRCH') {
+        throw err;
+      }
     }
   };
 
   return {
     readFile(file: string, encoding: BufferEncoding | null) {
-      // Node would read an object here as options: { flag: 'w' } empties a file the page may only see.
       if (encoding !== null && !Buffer.isEncoding(encoding)) {
-        throw new Error('papp: readFile takes an encoding name, or null for bytes.');
+        throw new Error('Apargon: readFile takes an encoding name, or null for bytes.');
       }
 
       const target = where(file);
       need(canSee(target), target, 'see');
 
-      return encoding === null ? fs.promises.readFile(target) : fs.promises.readFile(target, encoding);
+      return fs.promises.readFile(target, encoding);
     },
     writeFile(file: string, data: string | Uint8Array) {
       const target = where(file);
@@ -126,26 +125,23 @@ export function pageApi(dir: string, permissions: Permissions, { canSee, canList
         child.on('close', status => resolve({ status, stdout, stderr }));
       });
     },
-    // Output reaches the window as it comes, and the exit once all of it has.
-    // A job reset dropped, for a closed or reloaded window, sends nothing.
     async spawn(id: string, name: string, args: string[] = [], options: { cwd?: string } = {}) {
       const child = startProgram(name, args, options.cwd, true);
       await once(child, 'spawn');
       jobs.set(id, child);
-      child.stdout.setEncoding('utf8').on('data', text => {
-        if (jobs.has(id)) {
-          win.webContents.send('papp-output', id, 'stdout', text);
-        }
-      });
-      child.stderr.setEncoding('utf8').on('data', text => {
-        if (jobs.has(id)) {
-          win.webContents.send('papp-output', id, 'stderr', text);
-        }
-      });
+
+      for (const stream of ['stdout', 'stderr'] as const) {
+        child[stream].setEncoding('utf8').on('data', text => {
+          if (jobs.has(id)) {
+            win.webContents.send('apargon-output', id, stream, text);
+          }
+        });
+      }
+
       child.stdin.on('error', () => {});
       child.on('close', (status, signal) => {
         if (jobs.delete(id)) {
-          win.webContents.send('papp-exit', id, { status, signal });
+          win.webContents.send('apargon-exit', id, { status, signal });
         }
       });
     },
@@ -173,7 +169,7 @@ export function pageApi(dir: string, permissions: Permissions, { canSee, canList
           const file = name && path.join(watched, name);
 
           if (file && (isFolder ? canList(file) : file === target)) {
-            win.webContents.send('papp-change', id, path.relative(dir, file));
+            win.webContents.send('apargon-change', id, path.relative(dir, file));
           }
         })
       );
@@ -182,22 +178,15 @@ export function pageApi(dir: string, permissions: Permissions, { canSee, canList
       watchers.get(id)?.close();
       watchers.delete(id);
     },
-    // The page may send anything, so what goes to the trampoline is made text here.
     notify(title: string, body = '') {
-      const text = { title: String(title), body: String(body) };
-
       if (!permissions.use.includes('notifications')) {
-        throw new Error('papp: this page may not show notifications. Ask for it with <meta name="papp-use" content="notifications">.');
-      } else if (process.platform === 'linux') {
-        // Notifications travel on D-Bus, which the sandbox hides, so the trampoline shows it.
-        fs.writeSync(MESSAGE_FD, JSON.stringify({ notify: text } satisfies ChildMessage) + '\n');
-      } else {
-        new Notification(text).on('click', toFront).show();
+        throw new Error('Apargon: this page may not show notifications. Ask for it with <meta name="papp-use" content="notifications">.');
       }
+
+      PAGE_PLATFORM!.notify({ title: String(title), body: String(body) }, toFront);
     },
     tray(title: string | null) {
-      // On Linux the tray talks over D-Bus, which the sandbox hides, so the trampoline owns it on both.
-      fs.writeSync(MESSAGE_FD, JSON.stringify({ tray: title === null ? null : String(title).slice(0, 24) } satisfies ChildMessage) + '\n');
+      tellTrampoline({ tray: title === null ? null : String(title).slice(0, 24) });
     },
     reset() {
       watchers.forEach(watcher => watcher.close());

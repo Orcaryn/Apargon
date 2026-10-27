@@ -10,7 +10,7 @@
 <meta name="papp-run" content="cat">
 <meta name="papp-run" content="env">
 <meta name="papp-run" content="sh">
-<meta name="papp-env" content="PAPP_TEST_ENV">
+<meta name="papp-env" content="APARGON_TEST_ENV">
 <meta name="papp-run" content="/usr/bin/open">
 <meta name="papp-run" content="/usr/bin/osascript">
 <meta name="papp-run" content="/usr/sbin/ipconfig">
@@ -20,7 +20,7 @@
 <meta name="papp-write" content="./touched*">
 <meta name="papp-use" content="clipboard">
 <meta name="papp-use" content="microphone">
-<title>papp selftest (net and programs)</title>
+<title>Apargon selftest (net and programs)</title>
 <body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
 
 <script type="module">
@@ -57,7 +57,7 @@
       result.program_page_write_blocked = (await papp.run('touch', ['touched.papp'])).status !== 0;
       result.program_open_app_blocked = (await papp.run('open', ['-g', '-a', 'Finder'])).status !== 0;
       result.program_apple_event_blocked = (await papp.run('osascript', ['-e', 'tell application "Finder" to get name of home'])).status !== 0;
-      result.program_preference_write_blocked = (await papp.run('defaults', ['write', 'com.papp.selftest', 'leaked', '-bool', 'true'])).status !== 0;
+      result.program_preference_write_blocked = (await papp.run('defaults', ['write', 'com.apargon.selftest', 'leaked', '-bool', 'true'])).status !== 0;
     }
 
     result.program_input = (await papp.run('cat', [], { input: 'piped' })).stdout === 'piped';
@@ -78,16 +78,16 @@
     result.spawn_options_as_args_refused = await refused(() => papp.spawn('touch', { cwd: '/' }));
 
     const env = (await papp.run('env')).stdout;
-    result.program_env_named = env.includes('PAPP_TEST_ENV=passed') && /^HOME=/m.test(env);
-    result.program_env_unnamed_left_out = !env.includes('PAPP_TEST_ALLOW=') && !env.includes('PAPP=');
+    result.program_env_named = env.includes('APARGON_TEST_ENV=passed') && /^HOME=/m.test(env);
+    result.program_env_unnamed_left_out = !env.includes('APARGON_TEST_ALLOW=') && !env.includes('APARGON=');
     const ssh = await papp.run('sh', ['-c', 'ls -A "$HOME/.ssh"']);
     result.program_ssh_hidden = mac ? ssh.stderr.includes('Operation not permitted') : ssh.status === 0 && ssh.stdout === '';
     result.undeclared_program_refused = await refused(() => papp.run('ls'));
 
     if (!mac) {
-      const folders = (await papp.run('sh', ['-c', 'ls -A "$HOME/.config/papp/net"'])).stdout.trim().split('\n');
+      const folders = (await papp.run('sh', ['-c', 'ls -A "$HOME/.config/Apargon/net"'])).stdout.trim().split('\n');
       result.own_sockets_only = folders.length === 1 && folders[0].startsWith('page-');
-      result.page_process_env_unnamed_left_out = (await papp.run('sh', ['-c', 'tr "\\0" "\\n" < /proc/$PPID/environ 2>/dev/null | grep -c "^PAPP_TEST_ALLOW="'])).stdout.trim() === '0';
+      result.page_process_env_unnamed_left_out = (await papp.run('sh', ['-c', 'tr "\\0" "\\n" < /proc/$PPID/environ 2>/dev/null | grep -c "^APARGON_TEST_ALLOW="'])).stdout.trim() === '0';
     }
     result.options_as_args_refused = await refused(() => papp.run('touch', { cwd: '/' }));
 

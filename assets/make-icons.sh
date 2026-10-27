@@ -22,7 +22,6 @@ icns() {
 echo "icons:"
 icns icon
 icns papp
-# The menu bar icon: a template image, black with alpha, so macOS colours it for the bar.
 rsvg-convert -w 18 -h 18 assets/tray.svg -o src/trampoline/tray.png
 rsvg-convert -w 36 -h 36 assets/tray.svg -o src/trampoline/tray@2x.png
 echo "  src/trampoline/tray.png  src/trampoline/tray@2x.png"

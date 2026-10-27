@@ -1,11 +1,11 @@
 # AGENTS.md
 
-papp is an Electron app that opens an HTML file from disk.
+Apargon is an Electron app that opens an HTML file from disk.
 
 - A browser gives a page the network and no files.
-- papp gives a page files and no network.
+- Apargon gives a page files and no network.
 
-The point: a single HTML file is the quickest viewer or editor for files on your machine, and in papp it can also save.
+The point: a single HTML file is the quickest viewer or editor for files on your machine, and in Apargon it can also save.
 
 ## How a page gets access
 
@@ -18,7 +18,7 @@ A page asks in `<meta>` tags for what it needs: folders to see or change, server
 
 The OS denies sockets and DNS to the page's process and every process it starts.
 
-A page is code the user chose to run, by double-click or from the command line. papp never fetches a page or runs one on its own.
+A page is code the user chose to run, by double-click or from the command line. Apargon never fetches a page or runs one on its own.
 
 ## Vocabulary
 
@@ -43,7 +43,7 @@ Both hide keys and logins (`SECRETS`) from the page and its programs unless a ta
 - With no tags: granted without asking for a page made here. A downloaded page is asked once, so its site is seen.
 - With tags: listed in the popup.
 
-**Pages are not writable by default.** A `papp-write` pattern reaches a `.papp` only if it ends in `.papp`, which the popup marks red. Otherwise a page could rewrite another approved for more. `PAGE_SOURCE` in `src/permissions/patterns.ts` is the rule for both Seatbelt and papp's checks.
+**Pages are not writable by default.** A `papp-write` pattern reaches a `.papp` only if it ends in `.papp`, which the popup marks red. Otherwise a page could rewrite another approved for more. `PAGE_SOURCE` in `src/permissions/patterns.ts` is the rule for both Seatbelt and Apargon's checks.
 
 **Trampoline.** The first process, with network. It:
 
@@ -64,7 +64,7 @@ On Linux it then relays its own loopback ports to the trampoline's socket files.
 
 ## What the fence does not cover
 
-- papp enforces read grants, not the OS.
+- Apargon enforces read grants, not the OS.
 - A declared program can read every file but keys and logins (`SECRETS` in `src/permissions/tags.ts`).
 - A full-Node page can launch another app that has network, write into a synced folder, or use the clipboard.
 - An approval is remembered by file path and permission list, not content, unless the page is marked as downloaded.
@@ -87,7 +87,7 @@ On Linux, `daemons.ts` and the checks marked macOS skip.
 
 `pnpm lint` runs `tsc` (types only), then ESLint.
 
-In dev builds only, `PAPP_TEST_ALLOW=1` answers the popup and prints what it would have listed.
+In dev builds only, `APARGON_TEST_ALLOW=1` answers the popup and prints what it would have listed.
 
 ### Develop
 
@@ -111,14 +111,14 @@ Icons are SVGs in `assets/`; `assets/make-icons.sh` renders them with `rsvg-conv
 
 ### The installed `.deb`
 
-`release.sh` does not run the Linux checks. Before a release, run them on the installed `.deb`, on Ubuntu 24.04. The installed app ignores `PAPP_TEST_ALLOW`, so this tests it as a user runs it:
+`release.sh` does not run the Linux checks. Before a release, run them on the installed `.deb`, on Ubuntu 24.04. The installed app ignores `APARGON_TEST_ALLOW`, so this tests it as a user runs it:
 
 1. `pnpm dist:linux`, then `sudo apt install ./dist/*.deb xvfb xauth`.
-2. Approve the three self-test pages once, at a display. Without one, write their approvals to `~/.config/papp/grants.json`: each page's real path, mapped to the sorted `id`s of `describe(declaredPermissions(page))`.
+2. Approve the three self-test pages once, at a display. Without one, write their approvals to `~/.config/Apargon/grants.json`: each page's real path, mapped to the sorted `id`s of `describe(declaredPermissions(page))`.
 3. Delete any `test/result*.json`. Make sure `~/.ssh` exists: `program_ssh_hidden` lists it.
-4. `xvfb-run -a papp test/selftest.papp`, then `test/selftest-node.papp`, then `test/selftest-net.papp`.
+4. `xvfb-run -a apargon test/selftest.papp`, then `test/selftest-node.papp`, then `test/selftest-net.papp`.
 5. `node test/check.ts`.
-6. Refusal, with a control: run `papp test/selftest.papp` with `PAPP` set by hand to a `ChildConfig` for it. No `test/result.json` may appear. Run it normally: now one must.
+6. Refusal, with a control: run `apargon test/selftest.papp` with `APARGON` set by hand to a `ChildConfig` for it. No `test/result.json` may appear. Run it normally: now one must.
 
 Record the date and result in `SECURITY.md` under "Verification".
 
@@ -153,6 +153,8 @@ Record the date and result in `SECURITY.md` under "Verification".
 | `src/page/`        | the offline process                         |
 | `src/shared.ts`    | what both processes need                    |
 
+Each OS sits behind one interface per process: `SANDBOX` in `src/trampoline/platform.ts` (`seatbelt.ts`, `bwrap.ts`) starts the sandbox, and `PAGE_PLATFORM` in `src/page/platform.ts` (`macos.ts`, `linux.ts`) checks that the page is offline and shows notifications. A new platform adds one file to each. Smaller differences, in what the tags allow and what the popup says, stay in `src/permissions/`.
+
 ### "This process can still open sockets"
 
 That dialog means the offline check worked. Find out why the process is not in the sandbox. Do not skip the check.
@@ -162,7 +164,7 @@ That dialog means the offline check worked. Find out why the process is not in t
 **The fence**
 
 - Keep it strict. A change to any of these must keep `pnpm test` green and add no way to skip the offline check: `sandbox/macos.sb`, `seatbeltProfile`, `bwrapArgs`, `PRIVATE`, `canBindLoopback`, `inEmptyNetwork`, `startProxy`, `privateNetwork`, `relay`, `declaredPermissions`, `socketPath`, `patternSource`, `PAGE_SOURCE`, `changeableSources`, `pageAccess`, `pageApi`, `SECRETS`, `PROGRAM_ENV`, `PAGE_ENV`.
-- `patternSource` and `PAGE_SOURCE` are the one pattern source for Seatbelt and for papp's checks. Do not write a second matcher.
+- `patternSource` and `PAGE_SOURCE` are the one pattern source for Seatbelt and for Apargon's checks. Do not write a second matcher.
 - The window shows only the page. A link to another file or to a declared host does not navigate, a frame does not load another file, and a new window opens only on the page itself: another file would run with the page's permissions.
 - The app's one network call of its own is the update check, from the trampoline, never from the page process. No crash reporter or telemetry.
 
@@ -174,20 +176,20 @@ That dialog means the offline check worked. Find out why the process is not in t
 - The colour depends on how a value is written, not on guesses about where it leads.
 - Above the lines, what they allow together (`worstCase`), when that is more than any one line says. A page marked as downloaded leads with its site and is held to its content.
 - A red line, or a `worstCase`, needs a checkbox wherever the page came from: `git clone`, `curl` and USB sticks leave no download mark.
-- A device on the local network (`privateNetwork`) is declared by its address in numbers and one port, and is red: papp cannot tell what answers there. The proxy refuses a name that leads there. This computer's own addresses, loopback other than `127.0.0.1`, `0/8` and link-local `169.254/16` are refused before the popup. A server named by a public address is red.
+- A device on the local network (`privateNetwork`) is declared by its address in numbers and one port, and is red: Apargon cannot tell what answers there. The proxy refuses a name that leads there. This computer's own addresses, loopback other than `127.0.0.1`, `0/8` and link-local `169.254/16` are refused before the popup. A server named by a public address is red.
 
 **Tag values**
 
-| Tag                       | Rule                                                                                                                                                                                                                                          |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| all                       | one value per `<meta>`                                                                                                                                                                                                                        |
-| `papp-net`                | `host:port`; `*` only as the whole host, a leading `*.`, or the port; `*` alone means `*:*`; no schemes, no host without a port; on Linux, no `localhost:*`; a local-network address only in numbers, IPv4, with a numeric port               |
-| `papp-read`, `papp-write` | `*` within a name; `*` alone is refused                                                                                                                                                                                                       |
-| `papp-run`, `papp-node`   | no wildcards                                                                                                                                                                                                                                  |
-| `papp-env`                | one variable name, no wildcards; only with `papp-run`                                                                                                                                                                                         |
-| `papp-socket`             | one socket file or folder of them that exists now; no wildcards; always red                                                                                                                                                                   |
-| `papp-use`                | `notifications`, `clipboard`, `location`, `sound`, `camera`, `microphone` or `screen`; `location` is refused on Linux; `clipboard`, `location`, `camera` and `microphone` are yellow, `screen` red; with `papp-net` they join the `worstCase` |
-| `papp-shortcut`           | modifiers and one key in Electron's spelling (`CommandOrControl+Shift+N`); two different modifiers, or one with a function key, so a page cannot take `Ctrl+C`; not only modifiers that type characters (Option and Shift on macOS, AltGr and Shift elsewhere); yellow                                        |
+| Tag                       | Rule                                                                                                                                                                                                                                                                   |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| all                       | one value per `<meta>`                                                                                                                                                                                                                                                 |
+| `papp-net`                | `host:port`; `*` only as the whole host, a leading `*.`, or the port; `*` alone means `*:*`; no schemes, no host without a port; on Linux, no `localhost:*`; a local-network address only in numbers, IPv4, with a numeric port                                        |
+| `papp-read`, `papp-write` | `*` within a name; `*` alone is refused                                                                                                                                                                                                                                |
+| `papp-run`, `papp-node`   | no wildcards                                                                                                                                                                                                                                                           |
+| `papp-env`                | one variable name, no wildcards; only with `papp-run`                                                                                                                                                                                                                  |
+| `papp-socket`             | one socket file or folder of them that exists now; no wildcards; always red                                                                                                                                                                                            |
+| `papp-use`                | `notifications`, `clipboard`, `location`, `sound`, `camera`, `microphone` or `screen`; `location` is refused on Linux; `clipboard`, `location`, `camera` and `microphone` are yellow, `screen` red; with `papp-net` they join the `worstCase`                          |
+| `papp-shortcut`           | modifiers and one key in Electron's spelling (`CommandOrControl+Shift+N`); two different modifiers, or one with a function key, so a page cannot take `Ctrl+C`; not only modifiers that type characters (Option and Shift on macOS, AltGr and Shift elsewhere); yellow |
 
 **Code**
 
@@ -197,7 +199,7 @@ That dialog means the offline check worked. Find out why the process is not in t
 
 **Pages**
 
-- Pages follow `skills/papp/SKILL.md`.
+- Pages follow `skills/apargon/SKILL.md`.
 - Ask for as little as the page needs. Use `papp-node` only when the page truly needs Node.
 
 **Claims**

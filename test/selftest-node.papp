@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="papp-node" content="full">
-<title>papp selftest (full Node)</title>
+<title>Apargon selftest (full Node)</title>
 <body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
 
 <script>
@@ -21,10 +21,10 @@
 
   result.child_process = execSync('echo ok').toString().trim() === 'ok';
 
-  result.storage_apart = localStorage.getItem('papp-selftest') === null;
+  result.storage_apart = localStorage.getItem('apargon-selftest') === null;
 
   try {
-    const data = process.platform === 'darwin' ? 'Library/Application Support/papp' : '.config/papp';
+    const data = process.platform === 'darwin' ? 'Library/Application Support/Apargon' : '.config/Apargon';
     fs.appendFileSync(path.join(os.homedir(), data, 'grants.json'), '');
     result.grants_protected = false;
   } catch {
@@ -53,7 +53,7 @@
     const display = [process.env.WAYLAND_DISPLAY && path.resolve(runtime, process.env.WAYLAND_DISPLAY), x11 && `/tmp/.X11-unix/X${x11[1]}`].filter(Boolean);
     const sockets = ['/run', '/tmp', '/var/tmp'].flatMap((folder) => fs.readdirSync(folder, { recursive: true, withFileTypes: true }).filter((entry) => entry.isSocket()).map((entry) => path.join(entry.parentPath, entry.name)));
     result.socket_folders_hidden = sockets.every((socket) => display.includes(socket));
-    result.other_pages_sockets_hidden = fs.readdirSync(path.join(os.homedir(), '.config/papp/net')).length === 0;
+    result.other_pages_sockets_hidden = fs.readdirSync(path.join(os.homedir(), '.config/Apargon/net')).length === 0;
   }
 
   const fetched = fetch('https://example.com', { cache: 'no-store', signal: AbortSignal.timeout(3000) })

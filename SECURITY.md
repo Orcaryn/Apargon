@@ -50,7 +50,7 @@ A page **with** `papp-node` runs with your permissions, like a script. Open it o
 
 ### Keys and logins
 
-- For a page without full Node, the OS hides a fixed list of folders and files that hold keys and logins from the page and from every program it runs: `~/.ssh`, `~/.gnupg`, `~/.aws`, cloud and GitHub CLI logins, saved passwords, browser profiles. `SECRETS` in `src/permissions/tags.ts` is the list, and [docs/permissions.md](docs/permissions.md#keys-and-logins) repeats it.
+- For a page without full Node, the OS hides a fixed list of folders and files that hold keys and logins from the page and from every program it runs: `~/.ssh`, `~/.gnupg`, `~/.aws`, cloud and GitHub CLI logins, saved passwords, browser profiles. `SECRETS` in `src/permissions/tags.ts` is the list.
   - macOS: Seatbelt denies reading and writing them, at their real paths.
   - Linux: `bwrap` lays an empty folder, or an empty file, over each.
 - papp's own checks refuse them too, so `~/Library` does not reach a browser profile.
@@ -247,7 +247,7 @@ A firm "nothing leaves" guarantee needs a VM with no network card, no shared fol
 
 ## Verification
 
-`pnpm test` runs every check in the real app and fails if one fails. [docs/verification.md](docs/verification.md) lists the checks, the egress matrix, and manual canaries for channels the suite cannot cover.
+`pnpm test` runs every check in the real app and fails if one fails. `test/check.ts` lists the checks for each platform. [AGENTS.md](AGENTS.md#the-installed-deb) has the Linux run on the installed `.deb`.
 
 | Platform      | Last verified                                                                                                                                                                                                 |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

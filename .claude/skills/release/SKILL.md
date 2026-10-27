@@ -12,7 +12,7 @@ Publishing is public and cannot be taken back. Installed copies read the feeds o
 ## Order
 
 1. **Preflight.** Run each check in `refuse_unless_ready` yourself, then `pnpm format:check`, `pnpm lint` and `pnpm test`. Don't run the script for this: when every check passes, it publishes. A dirty tree is expected if the only change is the notes file.
-2. **Ask about Linux.** The script does not run the Linux checks. Ask the user whether they ran `docs/verification.md` on the `.deb` for this commit.
+2. **Ask about Linux.** The script does not run the Linux checks. Ask the user whether they ran the checks in AGENTS.md's "The installed `.deb`" for this commit.
 3. **Report.** List what still blocks the release, each with the failing command's output. Fix what you can and hand the rest to the user, such as `gh auth switch`.
 4. **Propose the version, write the notes and get approval.**
 5. **Commit the notes.** That commit holds only `release-notes/<new-version>.md`. It is the one commit you make without being asked. The script pushes it.
@@ -25,7 +25,7 @@ The new version is `version` in `package.json`, bumped. Before 1.0: `--minor` fo
 ## Release notes
 
 - Range: `v<current version>..HEAD`. Read the diffs, not only the commit messages.
-- No such tag means this is the first release. Ask the user what the notes should cover, and whether `README.md` and `docs/using.md` should stop saying "There are no releases yet".
+- No such tag means this is the first release. Ask the user what the notes should cover.
 - Use only these headings, in this order, and leave out the empty ones:
   - `### Security`: fixes to the fence, the popup, the tag rules or `pageApi`, and any new gap in `SECURITY.md` under "Not enforced". Say what a page could do before and cannot now, or the reverse.
   - `### New`

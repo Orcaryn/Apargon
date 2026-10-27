@@ -82,11 +82,44 @@ On Linux it then relays its own loopback ports to the trampoline's socket files.
 4. `selftest.papp` (only writes, for its results), `selftest-node.papp`, `selftest-net.papp`.
 5. `check.ts`: fails if any result is not `true`, is missing, or is not in its list for the platform. A new check goes in that list.
 
-On Linux, `daemons.ts` and the checks marked macOS skip. From source on Ubuntu 23.10 and later, the sandbox needs the setup in the README's Develop section. `docs/verification.md` tests the installed `.deb` instead.
+On Linux, `daemons.ts` and the checks marked macOS skip.
 
 `pnpm lint` runs `tsc` (types only), then ESLint.
 
 In dev builds only, `PAPP_TEST_ALLOW=1` answers the popup and prints what it would have listed.
+
+### Develop
+
+```sh
+pnpm install
+pnpm start       # examples/hello.papp
+pnpm start:net   # examples/net.papp, popup answered for you
+pnpm dist        # signed .dmg (Developer ID in the keychain)
+pnpm dist:linux  # .deb, and an untested AppImage
+```
+
+The tests need:
+
+- Node 22.18 or later, to run `.ts` files with plain `node`;
+- on macOS, `swiftc`, from the Xcode Command Line Tools;
+- on Linux, `bwrap`; on Ubuntu 23.10 and later also a setuid `bwrap` (`sudo chmod u+s /usr/bin/bwrap`) and Electron's `chrome-sandbox` in `node_modules` owned by root with mode 4755. Only the `.deb` brings the AppArmor profile that spares you this.
+
+Notarization runs when `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID`, or `APPLE_KEYCHAIN_PROFILE`, are set.
+
+Icons are SVGs in `assets/`; `assets/make-icons.sh` renders them with `rsvg-convert`. A page's badge is `src/page/badge.svg`, drawn at run time.
+
+### The installed `.deb`
+
+`release.sh` does not run the Linux checks. Before a release, run them on the installed `.deb`, on Ubuntu 24.04. The installed app ignores `PAPP_TEST_ALLOW`, so this tests it as a user runs it:
+
+1. `pnpm dist:linux`, then `sudo apt install ./dist/*.deb xvfb xauth`.
+2. Approve the three self-test pages once, at a display. Without one, write their approvals to `~/.config/papp/grants.json`: each page's real path, mapped to the sorted `id`s of `describe(declaredPermissions(page))`.
+3. Delete any `test/result*.json`. Make sure `~/.ssh` exists: `program_ssh_hidden` lists it.
+4. `xvfb-run -a papp test/selftest.papp`, then `test/selftest-node.papp` and `test/selftest-net.papp`.
+5. `node test/check.ts`.
+6. Refusal, with a control: run `papp test/selftest.papp` with `PAPP` set by hand to a `ChildConfig` for it. No `test/result.json` may appear. Run it normally: now one must.
+
+Record the date and result in `SECURITY.md` under "Verification".
 
 ### Releases
 
@@ -98,7 +131,7 @@ In dev builds only, `PAPP_TEST_ALLOW=1` answers the popup and prints what it wou
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | macOS    | works end to end                                                                                                                                                  |
 | Linux    | every Linux check passes in the installed `.deb` on a headless Ubuntu 24.04 server; not yet run on a desktop; programs' writes are limited by folder, not pattern |
-| Windows  | refuses to open pages; `docs/windows.md` has the plan (Microsoft's MXC) and why it waits for a Windows 11 machine to test on                                      |
+| Windows  | refuses to open pages; the plan is Microsoft's MXC, which waits for a Windows 11 machine to test on                                                               |
 
 ### TypeScript without a build
 

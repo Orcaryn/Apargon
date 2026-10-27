@@ -263,7 +263,7 @@ A firm "nothing leaves" guarantee needs a VM with no network card, no shared fol
 | Platform      | Last verified                                                                                                                                                           |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | macOS         | 2026-10-27, `pnpm test`: every check                                                                                                                                    |
-| Linux         | 2026-10-27, the installed `.deb` built from `4a6c07d` on a headless Ubuntu 24.04 server with the AppArmor limit on: every Linux check, and the refusal with its control |
+| Linux         | 2026-10-27, the installed `.deb` built from `c9fab4c` on a headless Ubuntu 24.04 server with the AppArmor limit on: every Linux check, and the refusal with its control |
 | Linux desktop | not yet: no run with a real display and a double-click                                                                                                                  |
 
 ## Reporting

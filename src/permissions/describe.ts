@@ -2,9 +2,21 @@ import fs from 'fs';
 import net from 'net';
 import path from 'path';
 import { literalBase, PAGE_FILE, patternFolder, patternSource } from './patterns.ts';
-import { BIG_FOLDERS, HOME, LOCAL_HOSTS, SECRETS, type Permissions } from './tags.ts';
+import { BIG_FOLDERS, HOME, LOCAL_HOSTS, privateNetwork, SECRETS, type Permissions, type Use } from './tags.ts';
 
 export type Line = { id: string; level: 'red' | 'yellow' | 'plain'; text: string };
+
+const USE_LINES: Record<Use, Omit<Line, 'id'>> = {
+  notifications: { level: 'plain', text: 'Show notifications.' },
+  clipboard: { level: 'yellow', text: 'Read what you copy. The clipboard can hold a password.' },
+  location: { level: 'yellow', text: 'Know where this computer is.' },
+  sound: process.platform === 'linux' ? { level: 'yellow', text: 'Play sound, through the sound server, which can also stream to another computer. A program it runs, or full Node, can also record from the microphone through it.' } : { level: 'plain', text: 'Play sound.' },
+  camera: { level: 'yellow', text: 'Use the camera.' },
+  microphone: { level: 'yellow', text: 'Listen through the microphone.' },
+  screen: { level: 'red', text: 'See your screen: every window, passwords on it included.' },
+};
+// What each use lets a page with papp-net send out.
+const USE_SENDS: Partial<Record<Use, string>> = { clipboard: 'what you copy', location: 'where you are', camera: 'what the camera sees', microphone: 'what the microphone hears', screen: 'what is on your screen' };
 
 export function describe(permissions: Permissions) {
   const lines: Line[] = [];
@@ -20,7 +32,15 @@ export function describe(permissions: Permissions) {
     lines.push({ id: `run:${file}`, level: 'red', text: `Run ${program} (${file}), which can see all your files, and keys and logins only if named below.${linuxWriteNote}` });
   }
 
-  lines.push(...permissions.sockets.map(socketLine), ...permissions.env.map(envLine), ...permissions.write.map(pattern => folderLine('write', pattern)), ...permissions.read.map(pattern => folderLine('read', pattern)), ...permissions.net.map(hostLine));
+  lines.push(
+    ...permissions.sockets.map(socketLine),
+    ...permissions.env.map(envLine),
+    ...permissions.write.map(pattern => folderLine('write', pattern)),
+    ...permissions.read.map(pattern => folderLine('read', pattern)),
+    ...permissions.net.map(hostLine),
+    ...permissions.use.map(name => ({ id: `use:${name}`, ...USE_LINES[name] })),
+    ...permissions.shortcuts.map(keys => ({ id: `shortcut:${keys}`, level: 'yellow' as const, text: `Answer ${keys} in every app, and come to the front when you press it.` }))
+  );
 
   if (permissions.own) {
     lines.push({ id: `own:${permissions.own}`, level: 'plain', text: `See files in its own folder and its subfolders, ${permissions.own}.` });
@@ -31,8 +51,9 @@ export function describe(permissions: Permissions) {
   return lines.sort((a, b) => order[a.level] - order[b.level]);
 }
 
-export function worstCase({ node, run, sockets, net, own, read, write }: Permissions) {
+export function worstCase({ node, run, sockets, net, own, read, write, use }: Permissions) {
   const hosts = [...new Set(net.map(pattern => pattern.split(':')[0]))];
+  const sends = [...(own || read.length || write.length ? ['the files it sees'] : []), ...use.flatMap(name => USE_SENDS[name] ?? [])];
 
   if (node) {
     return 'It can do anything you can, including sending your files anywhere.';
@@ -40,8 +61,8 @@ export function worstCase({ node, run, sockets, net, own, read, write }: Permiss
     return 'It can run programs that see all your files. Through other apps, they may send them anywhere.';
   } else if (sockets.length) {
     return 'It can talk to other programs on this computer. Through them, it may send the files it sees anywhere.';
-  } else if (hosts.length && (own || read.length || write.length)) {
-    return `It can send the files it sees to ${hosts.includes('*') ? 'any server' : hosts.join(', ')}.`;
+  } else if (hosts.length && sends.length) {
+    return `It can send ${sends.join(' and ')} to ${hosts.includes('*') ? 'any server' : hosts.join(', ')}.`;
   }
 
   return null;
@@ -107,6 +128,8 @@ function hostLine(pattern: string): Line {
     return { id, level: 'plain', text: `Connect to a program on this computer, on port ${port}.` };
   } else if (host === '*') {
     return { id, level: 'red', text: `Send and receive data with any server on the internet, ${where}.` };
+  } else if (privateNetwork().check(host)) {
+    return { id, level: 'red', text: `Send and receive data with the device at ${host} on your local network, on port ${port}. papp cannot tell what answers there.` };
   } else if (net.isIPv4(host)) {
     return { id, level: 'red', text: `Send and receive data with the machine at ${host}, ${where}. An address in numbers has no name to check.` };
   } else if (host.startsWith('*.') && !host.slice(2).includes('.')) {

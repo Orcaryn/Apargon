@@ -14,8 +14,11 @@ export type Permissions = {
   sockets: string[];
   hidden: string[];
   node: boolean;
+  use: Use[];
+  shortcuts: string[];
   tags: string[];
 };
+export type Use = (typeof USES)[number];
 
 export const HOME = fs.realpathSync(os.homedir());
 export const BIG_FOLDERS = ['Desktop', 'Documents', 'Downloads'].map(name => path.join(HOME, name));
@@ -26,7 +29,13 @@ export const PAGE_ENV = [
   ...'DISPLAY WAYLAND_DISPLAY XAUTHORITY XDG_RUNTIME_DIR XDG_SESSION_TYPE XDG_CURRENT_DESKTOP XDG_DATA_DIRS XDG_DATA_HOME XDG_CONFIG_HOME XDG_CACHE_HOME GDK_BACKEND GDK_SCALE GDK_DPI_SCALE GTK_IM_MODULE XMODIFIERS LANGUAGE ELECTRON_OZONE_PLATFORM_HINT __CF_USER_TEXT_ENCODING'.split(' '),
 ];
 export const PRIVATE = ['/run', '/tmp', '/var/tmp'];
-
+export const USES = ['notifications', 'clipboard', 'location', 'sound', 'camera', 'microphone', 'screen'] as const;
+const MODIFIERS: Partial<Record<string, string>> = { commandorcontrol: 'CommandOrControl', cmdorctrl: 'CommandOrControl', command: 'Command', cmd: 'Command', control: 'Control', ctrl: 'Control', alt: 'Alt', option: 'Alt', altgr: 'AltGr', shift: 'Shift', super: 'Super', meta: 'Super' };
+// On macOS, CommandOrControl and Super are the Command key; elsewhere CommandOrControl is Control.
+const SAME_KEY: Partial<Record<string, string>> = process.platform === 'darwin' ? { CommandOrControl: 'Command', Super: 'Command' } : { CommandOrControl: 'Control' };
+// These type characters: Option and Option+Shift on macOS, AltGr and AltGr+Shift elsewhere.
+const TYPING = process.platform === 'darwin' ? ['Alt', 'Shift'] : ['AltGr', 'Shift'];
+const KEYS = [...Array.from({ length: 24 }, (_, i) => `F${i + 1}`), 'Space', 'Tab', 'Backspace', 'Delete', 'Insert', 'Return', 'Enter', 'Up', 'Down', 'Left', 'Right', 'Home', 'End', 'PageUp', 'PageDown', 'Escape', 'Esc'];
 const MAC_BROWSERS = ['Google/Chrome', 'Chromium', 'BraveSoftware', 'Microsoft Edge', 'Arc', 'Firefox'].map(name => `Library/Application Support/${name}`);
 const LINUX_BROWSERS = ['.config/google-chrome', '.config/chromium', '.config/BraveSoftware', '.config/microsoft-edge', '.mozilla', 'snap/firefox'];
 export const SECRETS = Object.entries({
@@ -49,7 +58,7 @@ export const SECRETS = Object.entries({
 
 export function declaredPermissions(page: string, html = fs.readFileSync(page, 'utf8')) {
   const dir = path.dirname(page);
-  const permissions: Permissions = { own: null, read: [], write: [], net: [], run: {}, env: [], sockets: [], hidden: [], node: false, tags: [] };
+  const permissions: Permissions = { own: null, read: [], write: [], net: [], run: {}, env: [], sockets: [], hidden: [], node: false, use: [], shortcuts: [], tags: [] };
   const head = html.replace(/<!--[\s\S]*?-->/g, '').split(/<script\b|<body\b|<\/head\b/i)[0];
 
   for (const [, attrs] of head.matchAll(/<meta\s+([^>]*)>/gi)) {
@@ -81,8 +90,12 @@ export function declaredPermissions(page: string, html = fs.readFileSync(page, '
       permissions.node = true;
     } else if (name === 'node') {
       throw new Error(`Bad papp-node value "${value}". The only value is "full".`);
+    } else if (name === 'use') {
+      permissions.use.push(useName(value));
+    } else if (name === 'shortcut') {
+      permissions.shortcuts.push(shortcut(value));
     } else {
-      throw new Error(`Unknown tag papp-${name}. The tags are papp-read, papp-write, papp-net, papp-run, papp-env, papp-socket and papp-node.`);
+      throw new Error(`Unknown tag papp-${name}. The tags are papp-read, papp-write, papp-net, papp-run, papp-env, papp-socket, papp-use, papp-shortcut and papp-node.`);
     }
   }
 
@@ -138,8 +151,14 @@ function hostPattern(value: string) {
 
   if (!/^(\*|(\*\.)?[a-z0-9][a-z0-9.-]*):(\*|\d+)$/.test(pattern) || +port < 1 || +port > 65535) {
     throw new Error(`Bad papp-net value "${value}". One host:port per <meta>, such as api.example.com:443 or *.example.com:443.`);
-  } else if (host !== '127.0.0.1' && privateNetwork().check(host)) {
-    throw new Error(`papp never reaches your local network, and ${host} is an address on it. For a program on this computer, declare localhost:<port>.`);
+  } else if (host !== '127.0.0.1' && /^(0|127|169\.254)\./.test(host)) {
+    throw new Error(`papp never reaches ${host}, which is this computer or a link-local address, where cloud machines keep their keys. For a program on this computer, declare localhost:<port>.`);
+  } else if (net.isIPv4(host) && Object.values(os.networkInterfaces()).flat().some(own => own?.address === host && !own.internal)) {
+    throw new Error(`papp never reaches ${host}: it is one of this computer's own addresses. For a program on this computer, declare localhost:<port>.`);
+  } else if (host.endsWith('.local')) {
+    throw new Error(`papp reaches a device on your local network only by its address in numbers, such as 192.168.1.5:${port === '*' ? '80' : port}, not by a name such as ${host}.`);
+  } else if (privateNetwork().check(host) && port === '*') {
+    throw new Error(`papp reaches a device on your local network on one port only. Write ${host}:<port>.`);
   } else if (process.platform === 'linux' && LOCAL_HOSTS.includes(host) && port === '*') {
     throw new Error('On Linux, a port on this computer must be a number, such as localhost:11434: papp carries each declared port into the sandbox.');
   }
@@ -192,6 +211,37 @@ function socketPath(value: string, dir: string) {
   }
 
   return fs.realpathSync.native(absolute);
+}
+
+function useName(value: string) {
+  const name = value.toLowerCase() as Use;
+
+  if (!USES.includes(name)) {
+    throw new Error(`Bad papp-use value "${value}". The values are ${USES.join(', ')}.`);
+  } else if (name === 'location' && process.platform === 'linux') {
+    throw new Error('On Linux papp cannot give a page its location: Chromium finds it through a web service, and the page has no network.');
+  }
+
+  return name;
+}
+
+// Spelled Electron's way, in Electron's casing. One modifier belongs to the app in front: a page taking Ctrl+C would catch what you copy elsewhere.
+// The same key named twice, Shift+Shift+A or Cmd+CommandOrControl+C on macOS, counts once. Modifiers that type characters, Alt+Shift+K on macOS, do not count.
+function shortcut(value: string) {
+  const parts = value.split('+');
+  const last = parts[parts.length - 1];
+  const named = parts.slice(0, -1).map(part => MODIFIERS[part.toLowerCase()]);
+  const modifiers = named.filter(name => name !== undefined);
+  const keysHeld = new Set(modifiers.map(name => SAME_KEY[name] ?? name));
+  const key = KEYS.find(known => known.toLowerCase() === last.toLowerCase()) ?? (/^[a-z0-9]$/i.test(last) ? last.toUpperCase() : undefined);
+
+  if (modifiers.length < named.length || key === undefined) {
+    throw new Error(`Bad papp-shortcut value "${value}". Write modifiers and one key, such as CommandOrControl+Shift+N or Alt+F9.`);
+  } else if (/^F\d+$/.test(key) ? keysHeld.size === 0 : keysHeld.size < 2 || [...keysHeld].every(name => TYPING.includes(name))) {
+    throw new Error(`papp-shortcut ${value} would catch keys meant for the app in front. Use two different modifiers, not only ${TYPING.join(' and ')}, or one with a function key.`);
+  }
+
+  return [...new Set(modifiers), key].join('+');
 }
 
 export function localPorts({ net }: Permissions) {

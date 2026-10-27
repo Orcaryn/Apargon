@@ -69,7 +69,13 @@
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
       "notarize": true,
-      "icon": "build/icon.icns"
+      "icon": "build/icon.icns",
+      "extendInfo": {
+        "NSCameraUsageDescription": "A page you opened in papp asked to use the camera.",
+        "NSMicrophoneUsageDescription": "A page you opened in papp asked to use the microphone.",
+        "NSLocationUsageDescription": "A page you opened in papp asked for this computer's location.",
+        "NSLocationWhenInUseUsageDescription": "A page you opened in papp asked for this computer's location."
+      }
     },
     "deb": {
       "depends": [

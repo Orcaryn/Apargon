@@ -1,11 +1,16 @@
-import { spawn } from 'child_process';
+import { Notification, type BrowserWindow } from 'electron';
+import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
+import { once } from 'events';
 import fs from 'fs';
 import path from 'path';
 import { HOME, PROGRAM_ENV, type Permissions } from '../permissions/tags.ts';
+import { MESSAGE_FD, type ChildMessage } from '../shared.ts';
 import { realPath, type pageAccess } from './access.ts';
 
-export function pageApi(dir: string, permissions: Permissions, { canSee, canList, canChange }: ReturnType<typeof pageAccess>, notify: (id: string, file: string) => void) {
+// One per window: its watchers and programs end with it, or when it loads anew.
+export function pageApi(dir: string, permissions: Permissions, { canSee, canList, canChange }: ReturnType<typeof pageAccess>, win: BrowserWindow, toFront: () => void) {
   const watchers = new Map<string, fs.FSWatcher>();
+  const jobs = new Map<string, ChildProcessWithoutNullStreams>();
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => PROGRAM_ENV.includes(name) || permissions.env.includes(name)));
   const where = (file: string) => realPath(path.resolve(dir, file === '~' ? HOME : file.replace(/^~\//, HOME + '/')));
 
@@ -22,6 +27,29 @@ export function pageApi(dir: string, permissions: Permissions, { canSee, canList
 
     if (fs.lstatSync(file).isDirectory()) {
       fs.readdirSync(file).forEach(name => needChangeAll(path.join(file, name)));
+    }
+  };
+
+  const startProgram = (name: string, args: string[], cwd = '.', detached = false) => {
+    if (!Object.hasOwn(permissions.run, name)) {
+      throw new Error(`papp: this page may not run ${name}. Ask for it with <meta name="papp-run" content="${name}">.`);
+    } else if (!Array.isArray(args)) {
+      // Node would read an object here as the options, an unchecked cwd included.
+      throw new Error('papp: a program takes its arguments as an array.');
+    }
+
+    const folder = where(cwd);
+    need(canList(folder), folder, 'see');
+
+    return spawn(permissions.run[name], args, { cwd: folder, env, detached });
+  };
+
+  // A spawned program leads a group of its own, so what it starts stops with it.
+  const killGroup = (child: ChildProcessWithoutNullStreams) => {
+    try {
+      process.kill(-child.pid!);
+    } catch {
+      // The group ended before close reported it.
     }
   };
 
@@ -85,16 +113,7 @@ export function pageApi(dir: string, permissions: Permissions, { canSee, canList
       fs.renameSync(source, destination);
     },
     run(name: string, args: string[] = [], options: { cwd?: string; input?: string } = {}) {
-      if (!Object.hasOwn(permissions.run, name)) {
-        throw new Error(`papp: this page may not run ${name}. Ask for it with <meta name="papp-run" content="${name}">.`);
-      } else if (!Array.isArray(args)) {
-        // Node would read an object here as the options, an unchecked cwd included.
-        throw new Error('papp: run takes its arguments as an array.');
-      }
-
-      const cwd = where(options.cwd ?? '.');
-      need(canList(cwd), cwd, 'see');
-      const child = spawn(permissions.run[name], args, { cwd, env });
+      const child = startProgram(name, args, options.cwd);
       let stdout = '';
       let stderr = '';
       child.stdout.setEncoding('utf8').on('data', text => (stdout += text));
@@ -107,6 +126,42 @@ export function pageApi(dir: string, permissions: Permissions, { canSee, canList
         child.on('close', status => resolve({ status, stdout, stderr }));
       });
     },
+    // Output reaches the window as it comes, and the exit once all of it has.
+    // A job reset dropped, for a closed or reloaded window, sends nothing.
+    async spawn(id: string, name: string, args: string[] = [], options: { cwd?: string } = {}) {
+      const child = startProgram(name, args, options.cwd, true);
+      await once(child, 'spawn');
+      jobs.set(id, child);
+      child.stdout.setEncoding('utf8').on('data', text => {
+        if (jobs.has(id)) {
+          win.webContents.send('papp-output', id, 'stdout', text);
+        }
+      });
+      child.stderr.setEncoding('utf8').on('data', text => {
+        if (jobs.has(id)) {
+          win.webContents.send('papp-output', id, 'stderr', text);
+        }
+      });
+      child.stdin.on('error', () => {});
+      child.on('close', (status, signal) => {
+        if (jobs.delete(id)) {
+          win.webContents.send('papp-exit', id, { status, signal });
+        }
+      });
+    },
+    write(id: string, data: string | Uint8Array) {
+      jobs.get(id)?.stdin.write(data);
+    },
+    endInput(id: string) {
+      jobs.get(id)?.stdin.end();
+    },
+    kill(id: string) {
+      const child = jobs.get(id);
+
+      if (child) {
+        killGroup(child);
+      }
+    },
     watch(id: string, file: string) {
       const target = where(file);
       need(canList(target), target, 'see');
@@ -115,21 +170,40 @@ export function pageApi(dir: string, permissions: Permissions, { canSee, canList
       watchers.set(
         id,
         fs.watch(watched, (_event, name) => {
-          const changed = name && path.join(watched, name);
+          const file = name && path.join(watched, name);
 
-          if (changed && (isFolder ? canList(changed) : changed === target)) {
-            notify(id, path.relative(dir, changed));
+          if (file && (isFolder ? canList(file) : file === target)) {
+            win.webContents.send('papp-change', id, path.relative(dir, file));
           }
         })
       );
     },
-    unwatch(id?: string) {
-      for (const [key, watcher] of watchers) {
-        if (id === undefined || key === id) {
-          watcher.close();
-          watchers.delete(key);
-        }
+    unwatch(id: string) {
+      watchers.get(id)?.close();
+      watchers.delete(id);
+    },
+    // The page may send anything, so what goes to the trampoline is made text here.
+    notify(title: string, body = '') {
+      const text = { title: String(title), body: String(body) };
+
+      if (!permissions.use.includes('notifications')) {
+        throw new Error('papp: this page may not show notifications. Ask for it with <meta name="papp-use" content="notifications">.');
+      } else if (process.platform === 'linux') {
+        // Notifications travel on D-Bus, which the sandbox hides, so the trampoline shows it.
+        fs.writeSync(MESSAGE_FD, JSON.stringify({ notify: text } satisfies ChildMessage) + '\n');
+      } else {
+        new Notification(text).on('click', toFront).show();
       }
+    },
+    tray(title: string | null) {
+      // On Linux the tray talks over D-Bus, which the sandbox hides, so the trampoline owns it on both.
+      fs.writeSync(MESSAGE_FD, JSON.stringify({ tray: title === null ? null : String(title).slice(0, 24) } satisfies ChildMessage) + '\n');
+    },
+    reset() {
+      watchers.forEach(watcher => watcher.close());
+      watchers.clear();
+      jobs.forEach(killGroup);
+      jobs.clear();
     },
   };
 }

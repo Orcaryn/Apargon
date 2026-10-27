@@ -12,7 +12,7 @@ export async function startProxy(patterns: string[], socketFile: string | null) 
   fs.mkdirSync(path.dirname(EGRESS_LOG), { recursive: true });
   const log = fs.createWriteStream(EGRESS_LOG, { flags: 'a' });
 
-  const publicAddressIfDeclared = async (host: string, port: string) => {
+  const addressIfDeclared = async (host: string, port: string) => {
     const declared = patterns.some(pattern => {
       const [allowedHost, allowedPort] = pattern.split(':');
       const hostMatches = allowedHost === '*' || allowedHost === host || (allowedHost.startsWith('*.') && host.endsWith(allowedHost.slice(1)));
@@ -25,19 +25,17 @@ export async function startProxy(patterns: string[], socketFile: string | null) 
     }
 
     const { address, family } = await dns.promises.lookup(host);
-    const local = privateNetwork();
+    const own = Object.values(os.networkInterfaces()).flat().some(each => each?.address === address);
+    const declaredByNumber = net.isIPv4(host) && patterns.includes(`${host}:${port}`);
 
-    for (const own of Object.values(os.networkInterfaces()).flatMap(list => list ?? [])) {
-      local.addAddress(own.address, own.family === 'IPv6' ? 'ipv6' : 'ipv4');
-    }
-
-    return local.check(address, family === 6 ? 'ipv6' : 'ipv4') ? null : address;
+    // The local network only by a declared address in numbers: a name could be pointed there after the popup. This computer's own addresses never.
+    return own || (privateNetwork().check(address, family === 6 ? 'ipv6' : 'ipv4') && !declaredByNumber) ? null : address;
   };
 
   const server = http.createServer(async (request, response) => {
     const url = URL.parse(request.url!);
     const port = url?.port === '' ? '80' : url?.port;
-    const address = url && port ? await publicAddressIfDeclared(url.hostname, port).catch(() => null) : null;
+    const address = url && port ? await addressIfDeclared(url.hostname, port).catch(() => null) : null;
     response.on('finish', () => log.write(`${new Date().toISOString()} ${request.method} ${url ? `${url.hostname}:${port}` : request.url} ${response.statusCode}\n`));
 
     if (!url || !address) {
@@ -62,7 +60,7 @@ export async function startProxy(patterns: string[], socketFile: string | null) 
     socket.on('error', () => socket.destroy());
     const target = request.url!.toLowerCase();
     const [host, port] = target.split(':');
-    const address = /^\d+$/.test(port) ? await publicAddressIfDeclared(host, port).catch(() => null) : null;
+    const address = /^\d+$/.test(port) ? await addressIfDeclared(host, port).catch(() => null) : null;
 
     if (!address) {
       log.write(`${new Date().toISOString()} CONNECT ${target} 403\n`);

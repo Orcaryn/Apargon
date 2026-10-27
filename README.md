@@ -40,6 +40,8 @@ A page with no tags may see the files in its own folder, and nothing else. To do
 <meta name="papp-run"    content="git">                  <!-- one program -->
 <meta name="papp-env"    content="AWS_PROFILE">          <!-- one variable for its programs -->
 <meta name="papp-socket" content="/var/run/docker.sock"> <!-- one socket file -->
+<meta name="papp-use"    content="notifications">        <!-- or clipboard, location, sound, camera, microphone, screen -->
+<meta name="papp-shortcut" content="CommandOrControl+Shift+N"> <!-- a key combination that works in every app -->
 <meta name="papp-node"   content="full">                 <!-- full Node: any file, any program -->
 ```
 

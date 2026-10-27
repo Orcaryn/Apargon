@@ -7,7 +7,8 @@ import type { Permissions } from './permissions/tags.ts';
 
 export type Bridge = { port: number; socket: string };
 export type ChildConfig = { page: string; permissions: Permissions; pageHash: string | null; proxy: string | null; bridges: Bridge[] };
-export type ChildMessage = { open: string } | { revoke: string[] } | { showEgressLog: true } | { automaticUpdates: boolean } | { fileIcon: string };
+export type ChildMessage = { open: string } | { revoke: string[] } | { showEgressLog: true } | { automaticUpdates: boolean } | { fileIcon: string } | { notify: { title: string; body: string } } | { tray: string | null };
+export type ParentMessage = { trayClick: true };
 export type Grants = Record<string, string[]>;
 export type UpdateState = { automatic?: boolean; checked?: string; noticed?: string };
 
@@ -20,6 +21,7 @@ export const UPDATE_FILE = path.join(DATA, 'update.json');
 export const EGRESS_LOG = path.join(app.getPath('logs'), 'egress.log');
 export const MESSAGE_FD = 3;
 export const TRAMPOLINE_NETWORK_FD = 4;
+export const PARENT_FD = 5;
 export const APP_BUNDLE = app.isPackaged && process.platform === 'darwin' ? path.resolve(process.execPath, '../../..') : null;
 
 export function writeJson(file: string, value: object) {

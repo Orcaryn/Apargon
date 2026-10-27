@@ -6,6 +6,12 @@
 <body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
 
 <script type="module">
+  // The second window, which watch_survives_second_window opens, must not run the checks too: it would write the same files.
+  if (location.hash === '#second') {
+    document.body.textContent = 'second window';
+    await new Promise(() => {});
+  }
+
   const result = {};
   const refused = async (call) => {
     try { await call(); return false; } catch { return true; }
@@ -58,6 +64,12 @@
     result.watch_folder = await changeSeen('.', () => papp.writeFile('scratch.txt', 'again')) === 'scratch.txt';
     await papp.writeFile('scratch.new', 'new');
     result.watch_file_renamed_over = await changeSeen('scratch.txt', () => papp.rename('scratch.new', 'scratch.txt')) === 'scratch.txt';
+    result.watch_survives_second_window = await changeSeen('.', async () => {
+      const second = window.open('#second');
+      await new Promise((done) => setTimeout(done, 1500));
+      await papp.writeFile('scratch.txt', 'seen from the first window');
+      second.close();
+    }) === 'scratch.txt';
     result.watch_outside_refused = await refused(() => papp.watch('..', () => {}));
     result.watch_hidden_refused = await refused(() => papp.watch('.hidden', () => {}));
     await papp.rm('scratch.txt');
@@ -70,6 +82,10 @@
     result.home_read_refused = await refused(() => papp.readdir('~'));
     result.hidden_write_refused = await refused(() => papp.writeFile('.hidden', 'x'));
     result.run_refused = await refused(() => papp.run('ls'));
+    result.spawn_refused = await refused(() => papp.spawn('ls'));
+    result.use_refused = await refused(() => papp.notify('selftest', 'should not show'));
+    result.screen_capture_refused = await refused(() => navigator.mediaDevices.getDisplayMedia({ video: true }));
+    result.other_file_window_refused = window.open('subfolder/frame.html') === null;
 
     result.fetch_blocked = await fetched;
     result.outside_file_url_refused = !(await loads('../package.json'));

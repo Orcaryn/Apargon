@@ -42,6 +42,7 @@
   // macOS: system services started by launchd fetch for a process outside its sandbox.
   // test/daemons.ts built leak and saw both answer without the sandbox.
   if (process.platform === 'darwin') {
+    result.trust_blocked = execFileSync(leak, ['trust', path.join(here, 'leak.der')], { encoding: 'utf8' }).trim() === 'blocked';
     const leak = path.join(here, 'leak');
     result.download_service_blocked = execFileSync(leak, ['download', 'https://example.com/'], { encoding: 'utf8' }).trim() === 'blocked';
     result.webkit_blocked = execFileSync(leak, ['webkit', 'https://example.com/'], { encoding: 'utf8' }).trim() === 'blocked';

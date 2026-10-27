@@ -6,4 +6,5 @@ test/result.json
 test/result-net.json
 test/result-node.json
 test/leak
+test/leak.der
 examples/electron-latest.json

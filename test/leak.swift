@@ -1,7 +1,5 @@
-// Asks a system service to fetch a URL for this process: a background download goes
-// through nsurlsessiond, a WKWebView through WebKit's network process. launchd starts
-// both, outside the sandbox. Prints "answered" if the server replied, else "blocked".
 import AppKit
+import Security
 import WebKit
 
 let url = URL(string: CommandLine.arguments[2])!
@@ -21,9 +19,19 @@ final class Page: NSObject, WKNavigationDelegate {
   func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { done(false) }
 }
 
+if CommandLine.arguments[1] == "trust" {
+  let trustdOutOfReach = -26276
+  let certificate = SecCertificateCreateWithData(nil, FileManager.default.contents(atPath: CommandLine.arguments[2])! as CFData)!
+  var trust: SecTrust?
+  SecTrustCreateWithCertificates(certificate, SecPolicyCreateSSL(true, nil), &trust)
+  var error: CFError?
+  _ = SecTrustEvaluateWithError(trust!, &error)
+  done(error.map { CFErrorGetCode($0) } != trustdOutOfReach)
+}
+
 let app = NSApplication.shared
 app.setActivationPolicy(.prohibited)
-let page = Page() // WKWebView holds its delegate weakly; a URLSession holds its own
+let page = Page()
 let webView = WKWebView(frame: .zero)
 
 if CommandLine.arguments[1] == "download" {

@@ -19,9 +19,10 @@ A page **with** `papp-node` runs with your permissions, like a script. Open it o
   - macOS: Seatbelt (`sandbox-exec`, with `sandbox/macos.sb` plus rules for each page);
   - Linux: `bwrap --unshare-net --unshare-pid --new-session`, which gives the process a network of its own, holding only a loopback, and a process list of its own, and detaches it from the terminal papp was started from.
 - Connections, binds and DNS lookups fail in the kernel. The only exceptions are the proxy port and declared `localhost` ports. On Linux the sandbox's own loopback works but leads nowhere. papp relays the proxy and each declared `localhost` port into it through socket files.
-- macOS: two system services fetch for a process from outside its sandbox: background downloads (`nsurlsessiond`) and WebKit's network process. The page and its children cannot reach them.
-  - `test/daemons.ts` checks that both answer outside the sandbox.
-  - `selftest-node` checks that both fail inside it.
+- macOS: three system services fetch for a process from outside its sandbox: background downloads (`nsurlsessiond`), WebKit's network process, and `trustd`, which fetches the issuer URL a certificate names. The page and its children cannot reach them.
+  - `test/daemons.ts` checks that all three answer outside the sandbox.
+  - `selftest-node` checks that all three fail inside it.
+  - Without `trustd`, a program that checks a certificate through macOS gets an error, not a pass. Chromium checks the page's certificates without it.
 - The sandboxed process checks that it is offline before it opens a page, and refuses if it cannot tell. No flag skips this check; `test/refuse.ts` tests it.
   - macOS: it must fail to bind a loopback port.
   - Linux: its network must hold only `lo`, plus the tunnel stubs the kernel adds to every network, and must not be the trampoline's.
@@ -167,7 +168,7 @@ Declared `localhost` and `127.0.0.1` ports bypass the proxy, so they are not log
 **macOS**
 
 - The profile allows Mach messages to system services, because the GUI needs them.
-- It blocks the two services known to fetch for a process, not every service that might. Another such service would be a way out for a program the page runs, or for a page that exploits Chromium.
+- It blocks the three services known to fetch for a process, not every service that might. Another such service would be a way out for a program the page runs, or for a page that exploits Chromium.
 
 **Linux**
 
@@ -185,7 +186,7 @@ Declared `localhost` and `127.0.0.1` ports bypass the proxy, so they are not log
 
 ### For a page with full Node
 
-The sandbox blocks sockets, writes to papp's own files and, on macOS, the two fetch services. Nothing else.
+The sandbox blocks sockets, writes to papp's own files and, on macOS, the three fetch services. Nothing else.
 
 With `child_process` and your files, the page can:
 

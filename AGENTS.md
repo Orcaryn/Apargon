@@ -199,7 +199,7 @@ That dialog means the offline check worked. Find out why the process is not in t
 
 **Pages**
 
-- Pages follow `skills/apargon/SKILL.md`.
+- Pages follow `skills/papp/SKILL.md`.
 - Ask for as little as the page needs. Use `papp-node` only when the page truly needs Node.
 
 **Claims**

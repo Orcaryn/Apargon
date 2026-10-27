@@ -1,5 +1,5 @@
 ---
-name: apargon
+name: papp
 description: Use when the user wants a small app with a window, for their own computer, instead of a CLI, a local server plus a browser tab, or a new Electron app. Also for any .papp file, including checking one the user did not write before they open it. Not for websites, apps other people will install, or Windows.
 ---
 

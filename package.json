@@ -50,8 +50,8 @@
     "fileAssociations": [
       {
         "ext": "papp",
-        "name": "Apargon page",
-        "description": "Apargon page",
+        "name": "papp page",
+        "description": "papp page",
         "mimeType": "application/x-papp",
         "role": "Editor",
         "rank": "Owner",

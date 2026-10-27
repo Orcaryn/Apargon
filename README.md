@@ -51,11 +51,11 @@ A page without `papp-node` is held to its tags. A page with `papp-node` runs as 
 
 ## Build with agents
 
-Give your agent the Apargon skill, [`skills/apargon/SKILL.md`](skills/apargon/SKILL.md). For Claude Code:
+Give your agent the papp skill, [`skills/papp/SKILL.md`](skills/papp/SKILL.md). For Claude Code:
 
 ```sh
-mkdir -p ~/.claude/skills/apargon
-curl -fsSL https://raw.githubusercontent.com/Orcaryn/Apargon/main/skills/apargon/SKILL.md -o ~/.claude/skills/apargon/SKILL.md
+mkdir -p ~/.claude/skills/papp
+curl -fsSL https://raw.githubusercontent.com/Orcaryn/Apargon/main/skills/papp/SKILL.md -o ~/.claude/skills/papp/SKILL.md
 ```
 
 Other agents: give them the same file.

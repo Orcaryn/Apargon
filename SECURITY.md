@@ -255,7 +255,6 @@ A firm "nothing leaves" guarantee needs a VM with no network card, no shared fol
 - On Ubuntu 23.10 and later, an unprivileged `bwrap` may create a user namespace but not use it (`bwrap: loopback: Failed RTM_NEWADDR`). The `.deb` installs an AppArmor profile that lets papp, and the `bwrap` it starts, use one. From source there is no profile: `bwrap` fails, and papp shows "Could not start the sandbox".
 - The `.deb` depends on `bubblewrap (>= 0.8.0)`, the first with `--disable-userns`, so installing it installs a `bwrap` that takes every flag papp passes. Ubuntu 22.04 ships 0.6.1 and is refused at install.
 - Hiding the runtime folder also hides the sound server, and `/dev/snd` is not in the sandbox's `/dev`, so a page plays no sound unless it declares `papp-use sound`, which binds `pipewire-0`, `pulse` and `/dev/snd` back. `papp-use microphone` binds the same, so a page with it can also play sound through the sound server, though its window stays muted. `papp-use sound` binds the same, so a program the page runs, or a full-Node page, can record from the microphone without `papp-use microphone`; the line says so. PulseAudio and PipeWire can be set to stream over the network, so the line is yellow. Untested on a desktop.
-- The user namespace and the minimal `/dev` came after the last Linux run below and have not been run on Linux yet.
 
 ## Verification
 
@@ -263,8 +262,8 @@ A firm "nothing leaves" guarantee needs a VM with no network card, no shared fol
 
 | Platform      | Last verified                                                                                                                                      |
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| macOS         | 2026-10-26, `pnpm test`: every check                                                                                                               |
-| Linux         | 2026-10-27, the installed `.deb` on a headless Ubuntu 24.04 server with the AppArmor limit on: every Linux check, and the refusal with its control |
+| macOS         | 2026-10-27, `pnpm test`: every check                                                                                                               |
+| Linux         | 2026-10-27, the installed `.deb` built from `4a6c07d` on a headless Ubuntu 24.04 server with the AppArmor limit on: every Linux check, and the refusal with its control |
 | Linux desktop | not yet: no run with a real display and a double-click                                                                                             |
 
 ## Reporting

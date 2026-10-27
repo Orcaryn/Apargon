@@ -33,21 +33,18 @@ EOF
   esac
 
   DMGS=("dist/papp-$VERSION-x64.dmg" "dist/papp-$VERSION-arm64.dmg")
-  # Squirrel, the macOS updater built into Electron, installs from the .zip.
   ZIPS=("dist/papp-$VERSION-x64.zip" "dist/papp-$VERSION-arm64.zip")
-  # The AppImage is built but not published: it brings neither bwrap nor the AppArmor profile, and is untested.
+  # No AppImage: it brings neither bwrap nor the AppArmor profile.
   DEB="dist/papp_${VERSION}_amd64.deb"
 
   echo "==> Version: $current_version -> $VERSION"
   refuse_unless_ready
 
-  # A release ships the fence: it goes out only if every check passes on this commit.
   pnpm install --frozen-lockfile
   pnpm format:check
   pnpm lint
   pnpm test
 
-  # Until the commit, a failure puts package.json back.
   trap 'git checkout -- package.json' EXIT
   npm pkg set version="$VERSION"
 
@@ -60,7 +57,6 @@ EOF
   publish
 }
 
-# Runs before anything changes and lists every problem at once.
 refuse_unless_ready() {
   local -a problems=()
 
@@ -88,14 +84,12 @@ build() {
   APPLE_KEYCHAIN_PROFILE="$NOTARY_PROFILE" pnpm dist --publish never
   pnpm dist:linux --publish never
 
-  # electron-builder signs and notarizes the apps.
   for app in dist/mac/papp.app dist/mac-arm64/papp.app; do
     codesign -dv "$app" 2>&1 | grep "TeamIdentifier=$TEAM_ID" >/dev/null || { echo "Not signed by team $TEAM_ID: $app" >&2; exit 1; }
     xcrun stapler validate "$app"
     spctl --assess --type execute --verbose=2 "$app"
   done
 
-  # The DMGs that hold them are signed and notarized here.
   for dmg in "${DMGS[@]}"; do
     codesign --sign "$SIGNING_IDENTITY" --timestamp "$dmg"
     xcrun notarytool submit "$dmg" --keychain-profile "$NOTARY_PROFILE" --wait
@@ -110,7 +104,6 @@ publish() {
 
   (cd dist && shasum -a 256 "${DMGS[@]#dist/}" "${ZIPS[@]#dist/}" "${DEB#dist/}") > dist/SHA256SUMS
 
-  # Installed copies fetch update-<platform>-<arch>.json from the latest release (src/trampoline/update.ts).
   for arch in x64 arm64; do
     feeds+=("$(write_feed darwin "$arch" "papp-$VERSION-$arch.zip")")
   done
@@ -128,7 +121,6 @@ publish() {
   echo "==> https://github.com/$REPO/releases/tag/v$VERSION"
 }
 
-# Squirrel's JSON feed for one build, pointing at its asset in this release. Prints the file's path.
 write_feed() {
   local platform="$1" arch="$2" asset="$3"
   local feed="dist/update-$platform-$arch.json"
@@ -137,7 +129,7 @@ write_feed() {
 const [repo, version, asset, notesFile] = process.argv.slice(2);
 const notes = require('fs').readFileSync(notesFile, 'utf8');
 const url = `https://github.com/${repo}/releases/download/v${version}/${asset}`;
-const pubDate = new Date().toISOString().replace(/\.\d+Z$/, '+00:00'); // Squirrel's ISO 8601: whole seconds, offset with a colon
+const pubDate = new Date().toISOString().replace(/\.\d+Z$/, '+00:00');
 const updateTo = { version, name: `papp ${version}`, pub_date: pubDate, notes, url };
 console.log(JSON.stringify({ currentRelease: version, releases: [{ version, updateTo }] }, null, 2));
 JS

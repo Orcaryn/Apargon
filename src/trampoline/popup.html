@@ -193,7 +193,7 @@
   }
   button:focus-visible,
   input:focus-visible {
-    outline: 3px solid -webkit-focus-ring-color; /* the system's ring, in the user's accent colour */
+    outline: 3px solid -webkit-focus-ring-color;
     outline-offset: 1px;
   }
 </style>
@@ -210,7 +210,7 @@
     <pre id="tagList"></pre>
   </details>
   <div class="trust" id="trust" hidden>
-    <label><input type="checkbox" id="trusted" /> I trust where this page came from.</label>
+    <label><input type="checkbox" id="trusted" /> I trust this page.</label>
     <p class="hint">Not sure? Ask an AI to check the file before you allow it.</p>
   </div>
 </main>
@@ -221,7 +221,7 @@
 </footer>
 
 <script>
-  // approve.ts calls render once, fits the window, then reads the answer from the hash. Every string is text, never HTML.
+  // Every string in popup comes from the page: set it as text, never HTML. Only ICONS go in as HTML.
   function render(popup) {
     source.textContent = popup.source;
     source.classList.toggle('downloaded', popup.downloaded);
@@ -254,7 +254,6 @@
     deny.focus();
   }
 
-  // An icon for each kind of line, named by the start of its id. Static shapes: the page never supplies them.
   const ICONS = {
     node: '<rect x="3" y="7" width="10" height="7" rx="1.2"/><path d="M5.5 7V5a2.5 2.5 0 0 1 4.9-.7"/>',
     run: '<rect x="1.8" y="2.8" width="12.4" height="10.4" rx="1.5"/><path d="M4.5 6.3l2 1.7-2 1.7M8 10h3"/>',
@@ -267,7 +266,7 @@
   ICONS.own = ICONS.read;
 
   trusted.onchange = () => (allow.disabled = !trusted.checked);
-  tags.ontoggle = () => (location.hash = tags.open ? 'tags-open' : 'tags-closed'); // approve.ts refits the window
+  tags.ontoggle = () => (location.hash = tags.open ? 'tags-open' : 'tags-closed');
   deny.onclick = () => (location.hash = 'deny');
   allow.onclick = () => (location.hash = 'allow');
   onkeydown = event => event.key === 'Escape' && (location.hash = 'deny');

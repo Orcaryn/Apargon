@@ -1,9 +1,7 @@
-// The popup: what the user reads. Red marks broad requests, yellow other wildcards; the
-// rules are about how a value is written.
-
 import fs from 'fs';
+import net from 'net';
 import path from 'path';
-import { literalBase, PAGE_SOURCE, patternFolder, patternSource } from './patterns.ts';
+import { literalBase, PAGE_FILE, patternFolder, patternSource } from './patterns.ts';
 import { BIG_FOLDERS, HOME, LOCAL_HOSTS, SECRETS, type Permissions } from './tags.ts';
 
 export type Line = { id: string; level: 'red' | 'yellow' | 'plain'; text: string };
@@ -15,12 +13,11 @@ export function describe(permissions: Permissions) {
     lines.push({ id: 'node', level: 'red', text: 'Full access: see, change and delete any of your files, and run any program.' });
   }
 
-  // bwrap opens whole folders, not patterns: on Linux a program reaches more than the page does.
   const writable = [...new Set(permissions.write.map(patternFolder))];
-  const linuxWrites = process.platform === 'linux' && writable.length ? ` It can also change any file in ${writable.join(', ')}, hidden ones and pages included.` : '';
+  const linuxWriteNote = process.platform === 'linux' && writable.length ? ` It can also change any file in ${writable.join(', ')}, hidden ones and pages included.` : '';
 
   for (const [program, file] of Object.entries(permissions.run)) {
-    lines.push({ id: `run:${file}`, level: 'red', text: `Run ${program} (${file}), which can see all your files, and keys and logins only if named below.${linuxWrites}` });
+    lines.push({ id: `run:${file}`, level: 'red', text: `Run ${program} (${file}), which can see all your files, and keys and logins only if named below.${linuxWriteNote}` });
   }
 
   lines.push(...permissions.sockets.map(socketLine), ...permissions.env.map(envLine), ...permissions.write.map(pattern => folderLine('write', pattern)), ...permissions.read.map(pattern => folderLine('read', pattern)), ...permissions.net.map(hostLine));
@@ -34,8 +31,6 @@ export function describe(permissions: Permissions) {
   return lines.sort((a, b) => order[a.level] - order[b.level]);
 }
 
-// What a page from another computer could do with the lines together, or null if each line says it
-// all. Programs and full Node reach the internet through other apps (SECURITY.md, "Not enforced").
 export function worstCase({ node, run, sockets, net, own, read, write }: Permissions) {
   const hosts = [...new Set(net.map(pattern => pattern.split(':')[0]))];
 
@@ -52,7 +47,6 @@ export function worstCase({ node, run, sockets, net, own, read, write }: Permiss
   return null;
 }
 
-// What answers at a socket is not known from its path, only that it runs outside the fence.
 function socketLine(socket: string): Line {
   const secret = SECRETS.find(secret => socket === secret.path || socket.startsWith(secret.path + '/'));
   const where = secret ? `${socket}, where your ${secret.holds} are kept` : socket;
@@ -60,7 +54,6 @@ function socketLine(socket: string): Line {
   return { id: `socket:${socket}`, level: 'red', text: `Talk to the programs behind ${where}. They can have network and act as you.` };
 }
 
-// The name is all there is to go on: one that reads like a secret is red.
 function envLine(name: string): Line {
   const id = `env:${name}`;
 
@@ -80,7 +73,7 @@ function folderLine(kind: 'read' | 'write', pattern: string): Line {
 
   if (secret) {
     return { id, level: 'red', text: `${verb} files in ${pattern}, where your ${secret.holds} are kept.` };
-  } else if (kind === 'write' && new RegExp(PAGE_SOURCE).test(pattern)) {
+  } else if (kind === 'write' && PAGE_FILE.test(pattern)) {
     return { id, level: 'red', text: `${verb} pages matching ${pattern}. A page you approved could be rewritten to do anything it was allowed.` };
   } else if (pattern === '/') {
     return { id, level: 'red', text: `${verb} all your files.` };
@@ -114,6 +107,8 @@ function hostLine(pattern: string): Line {
     return { id, level: 'plain', text: `Connect to a program on this computer, on port ${port}.` };
   } else if (host === '*') {
     return { id, level: 'red', text: `Send and receive data with any server on the internet, ${where}.` };
+  } else if (net.isIPv4(host)) {
+    return { id, level: 'red', text: `Send and receive data with the machine at ${host}, ${where}. An address in numbers has no name to check.` };
   } else if (host.startsWith('*.') && !host.slice(2).includes('.')) {
     return { id, level: 'red', text: `Send and receive data with any server under .${host.slice(2)}, ${where}.` };
   } else if (host.startsWith('*.')) {
@@ -123,7 +118,6 @@ function hostLine(pattern: string): Line {
   return { id, level: port === '*' ? 'red' : 'plain', text: `Send and receive data with ${host}, ${where}.` };
 }
 
-// Files and folders a wildcard matches now, found one level at a time from the folders before the first *.
 function countMatches(pattern: string) {
   const names = pattern.split('/').filter(Boolean);
   const paths = names.map((_, level) => '/' + names.slice(0, level + 1).join('/'));

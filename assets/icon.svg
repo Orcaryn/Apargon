@@ -17,16 +17,13 @@
     </filter>
   </defs>
 
-  <!-- macOS tile -->
   <rect x="100" y="100" width="824" height="824" rx="188" fill="url(#tile)"/>
   <rect x="100" y="100" width="824" height="412" rx="188" fill="url(#sheen)"/>
 
-  <!-- halo: the filter sits on an unrotated group; librsvg clips a filter on a rotated element to its box -->
   <g filter="url(#glow)">
     <rect x="341" y="341" width="342" height="342" rx="79" fill="#E6E8F2" opacity=".6" transform="rotate(45 512 512)"/>
   </g>
 
-  <!-- the diamond, hollow at the centre -->
   <g transform="rotate(45 512 512)">
     <rect x="362" y="362" width="300" height="300" rx="69" fill="url(#silver)"/>
     <rect x="446" y="446" width="132" height="132" rx="33" fill="#13131A"/>

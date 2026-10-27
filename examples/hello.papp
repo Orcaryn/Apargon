@@ -19,7 +19,6 @@ Nothing else.</p>
     text.value = await papp.exists('notes.txt') ? await papp.readFile('notes.txt') : '';
   };
   load();
-  // Saved in another editor: show it here too.
   papp.watch('notes.txt', load);
   save.onclick = async () => {
     await papp.writeFile('notes.txt', text.value);

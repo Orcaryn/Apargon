@@ -6,11 +6,9 @@
     </linearGradient>
   </defs>
 
-  <!-- page with a folded corner -->
   <path d="M280 140H652L792 280V836Q792 884 744 884H280Q232 884 232 836V188Q232 140 280 140Z" fill="#fff"/>
   <path d="M652 140V280H792Z" fill="#DADFEA"/>
 
-  <!-- the diamond, hollow at the centre: the app icon's, at 280/300 -->
   <g transform="rotate(45 512 500)">
     <rect x="372" y="360" width="280" height="280" rx="64" fill="url(#graphite)"/>
     <rect x="450" y="438" width="124" height="124" rx="31" fill="#fff"/>

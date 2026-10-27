@@ -6,16 +6,10 @@
 <body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
 
 <script type="module">
-  // Only writes: the page sees its own folder and its subfolders through window.papp, and
-  // changes only what papp-write names. No Node, no files outside, no hidden files, no pages
-  // but those a pattern names, no programs, no network. The two writes are only for the
-  // results and scratch files: without them the own folder is the same, read-only.
-  // Writes test/result.json and closes the window, which quits the app.
   const result = {};
   const refused = async (call) => {
     try { await call(); return false; } catch { return true; }
   };
-  // The first file a watch reports while change runs and for a second after, or null.
   const changeSeen = async (watching, change) => {
     let seen = null;
     const stop = await papp.watch(watching, (file) => { seen ??= file; });
@@ -32,14 +26,12 @@
     document.head.append(script);
   });
 
-  // If this ever resolves, keep the evidence: what answered, from where.
   const fetched = fetch('https://example.com', { cache: 'no-store', signal: AbortSignal.timeout(3000) })
     .then((r) => {
       result.fetch_leak = { status: r.status, type: r.type, url: r.url };
       return false;
     }, () => true);
 
-  // Asked, never used: the camera and microphone are only queried, the clipboard read is not kept.
   const permissions = Promise.all([
     Notification.requestPermission(),
     navigator.clipboard.readText().then(() => 'allowed', () => 'denied'),
@@ -49,6 +41,8 @@
 
   try {
     result.no_node = typeof require === 'undefined' && typeof process === 'undefined';
+    localStorage.setItem('papp-selftest', 'kept by selftest.papp');
+    result.storage_own = localStorage.getItem('papp-selftest') === 'kept by selftest.papp';
 
     result.own_folder_read = (await papp.readFile('selftest.papp')).includes('papp selftest') && (await papp.readdir('.')).includes('selftest-node.papp');
     result.own_subfolder_read = (await papp.readFile('subfolder/note.txt')).includes('subfolder');
@@ -57,14 +51,11 @@
 
     await papp.writeFile('scratch.txt', 'hi');
     result.granted_write = await papp.readFile('scratch.txt') === 'hi' && (await papp.readdir('.')).includes('scratch.txt');
-    // A page that may change another could rewrite one approved for more: scratch* names no pages.
     result.page_write_refused = await refused(() => papp.writeFile('scratch.papp', 'x')) && await refused(() => papp.writeFile('selftest-node.papp', 'x'));
     result.page_rename_refused = await refused(() => papp.rename('scratch.txt', 'scratch.papp')) && await refused(() => papp.rename('selftest-node.papp', 'scratch.txt'));
-    // Node would read { flag: 'w' } as options and empty the file.
     result.options_refused = await refused(() => papp.readFile('scratch.txt', { flag: 'w' })) && await papp.readFile('scratch.txt') === 'hi';
 
     result.watch_folder = await changeSeen('.', () => papp.writeFile('scratch.txt', 'again')) === 'scratch.txt';
-    // Editors save by renaming a new file over the old one; the watch must survive it.
     await papp.writeFile('scratch.new', 'new');
     result.watch_file_renamed_over = await changeSeen('scratch.txt', () => papp.rename('scratch.new', 'scratch.txt')) === 'scratch.txt';
     result.watch_outside_refused = await refused(() => papp.watch('..', () => {}));
@@ -82,7 +73,6 @@
 
     result.fetch_blocked = await fetched;
     result.outside_file_url_refused = !(await loads('../package.json'));
-    // Another file in a frame would run with this page's permissions and reach window.papp through its parent.
     result.other_file_frame_refused = await new Promise((done) => {
       const frame = document.createElement('iframe');
       frame.src = 'subfolder/frame.html';
@@ -91,7 +81,7 @@
     });
     result.permissions_denied = (await permissions).every((answer) => answer === 'denied');
   } catch (err) {
-    result.error = err.message; // check.ts fails on it, and the window still closes
+    result.error = err.message;
   }
 
   document.body.textContent = JSON.stringify(result);

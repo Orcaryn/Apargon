@@ -1,5 +1,3 @@
-// The macOS sandbox profile for one page: sandbox/macos.sb plus the page's own rules.
-
 import { app } from 'electron';
 import fs from 'fs';
 import path from 'path';
@@ -12,28 +10,27 @@ export function seatbeltProfile(permissions: Permissions, proxyPort: number | nu
   const rules = [
     fs.readFileSync(path.join(APP_ROOT, 'sandbox/macos.sb'), 'utf8'),
     ...ports.map(port => `(allow network-outbound (remote ip "localhost:${port}"))`),
-    ';; Declared sockets: a file, or every socket in a folder.',
     ...permissions.sockets.map(socket => `(allow network-outbound (${fs.statSync(socket).isDirectory() ? 'subpath' : 'literal'} "${socket}"))`),
   ];
 
   if (!permissions.node) {
     const { files, pages } = changeableSources(permissions);
     rules.push(
-      ';; No full Node: no opening other apps, writes only where granted, pages only where named.',
-      ';; cfprefsd writes preferences from outside the sandbox, so file-write* alone does not stop them.',
+      ';; Apple Events go through a Mach service; denying appleevent-send alone does not stop osascript.',
       '(deny lsopen)',
+      '(deny mach-lookup (global-name "com.apple.coreservices.appleevents"))',
+      ';; cfprefsd writes preferences from outside the sandbox, so file-write* alone does not stop them.',
       '(deny user-preference-write)',
       '(deny file-write*)',
       `(allow file-write* (subpath "/dev") (subpath "${fs.realpathSync(app.getPath('temp'))}"))`,
       ...files.map(source => `(allow file-write* (regex #"${source}"))`),
       `(deny file-write* (regex #"${PAGE_SOURCE}"))`,
       ...pages.map(source => `(allow file-write* (regex #"${source}"))`),
-      ';; Keys and logins no tag names.',
       ...permissions.hidden.map(secret => `(deny file-read* file-write* (subpath "${secret}"))`)
     );
   }
 
-  rules.push(';; Never papp itself: its approvals or the app.', `(deny file-write* (subpath "${DATA}"))`, `(allow file-write* (subpath "${PAGE_DATA}"))`);
+  rules.push(`(deny file-write* (subpath "${DATA}"))`, `(allow file-write* (subpath "${PAGE_DATA}"))`);
 
   if (APP_BUNDLE) {
     rules.push(`(deny file-write* (subpath "${APP_BUNDLE}"))`);

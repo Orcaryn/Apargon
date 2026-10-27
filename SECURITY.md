@@ -17,16 +17,17 @@ A page **with** `papp-node` runs with your permissions, like a script. Open it o
 
 - The page's process and every process it starts run in an OS network sandbox:
   - macOS: Seatbelt (`sandbox-exec`, with `sandbox/macos.sb` plus rules for each page);
-  - Linux: `bwrap --unshare-net --unshare-pid --new-session`, which gives the process a network of its own, holding only a loopback, and a process list of its own, and detaches it from the terminal papp was started from.
+  - Linux: `bwrap --unshare-net --unshare-pid --unshare-user --disable-userns --new-session`, which gives the process a network of its own, holding only a loopback, a process list of its own, and a user namespace in which no further namespace can be made: most Linux privilege escalations need one to reach the vulnerable kernel code, and root would ignore the sandbox; and detaches it from the terminal papp was started from. Its `/dev` holds the devices `bwrap` makes and the GPU (`/dev/dri`), not the camera, the microphone or the disks.
 - Connections, binds and DNS lookups fail in the kernel. The only exceptions are the proxy port and declared `localhost` ports. On Linux the sandbox's own loopback works but leads nowhere. papp relays the proxy and each declared `localhost` port into it through socket files.
 - macOS: three system services fetch for a process from outside its sandbox: background downloads (`nsurlsessiond`), WebKit's network process, and `trustd`, which fetches the issuer URL a certificate names. The page and its children cannot reach them.
   - `test/daemons.ts` checks that all three answer outside the sandbox.
   - `selftest-node` checks that all three fail inside it.
   - Without `trustd`, a program that checks a certificate through macOS gets an error, not a pass. Chromium checks the page's certificates without it.
 - The sandboxed process checks that it is offline before it opens a page, and refuses if it cannot tell. No flag skips this check; `test/refuse.ts` tests it.
-  - macOS: it must fail to bind a loopback port.
+  - macOS: it must fail to bind a loopback port with `EPERM`, the sandbox's answer. Any other failure refuses too.
   - Linux: its network must hold only `lo`, plus the tunnel stubs the kernel adds to every network, and must not be the trampoline's.
 - Linux: `--unshare-net` stops IP, not socket files, and each socket leads to a program outside the sandbox. The folders where they live, `/run`, `/tmp` and `/var/tmp`, are replaced by empty ones. That removes the session and system D-Bus, through which `systemd-run --user` runs a command and the portal opens a link; `systemd-resolved` and nscd, which carry data out in a name lookup; the sound server, which can stream to a server; tmux and screen, which type into a shell that has network; and Docker, which acts as root. Only the display's socket (Wayland or X11) and what the tags name come back: the page's own folder, its `papp-read` and `papp-write` folders, and its `papp-socket` files. `selftest-node` checks that those folders hold no socket but the display's, that the process sees only its own processes, and that its session started inside the sandbox.
+- Linux: `bwrap` opens folders, not patterns, so a `papp-read` or `papp-write` that would open `/tmp`, `/var/tmp`, any folder at or under `/run` (sockets also sit below its top: `/run/user/<uid>/bus`, `/run/dbus`, `/run/docker.sock`) or a folder holding one, such as `/` or `/var`, and a page that sits in one of them, are refused before the popup: the folder would come back with its sockets, and a read-only mount does not stop a connection to a socket.
 - Linux: the socket files that carry the proxy and the declared `localhost` ports into a sandbox are in a folder of that page's. A page sees its own folder and no other page's, so two pages open at once cannot use each other's servers. `selftest-net` checks that a page sees one folder, `selftest-node` that a page without servers sees none.
 
 ### Tags
@@ -58,8 +59,9 @@ A page **with** `papp-node` runs with your permissions, like a script. Open it o
 
 ### Programs' environment
 
-- A program gets `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TMPDIR`, `TERM`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TZ`, papp's proxy settings, and the variables `papp-env` names (`PROGRAM_ENV` in `src/permissions/tags.ts`). Nothing else of the environment papp was started with.
+- A program gets a short list of variables (`PROGRAM_ENV` in `src/permissions/tags.ts`), papp's proxy settings, and the variables `papp-env` names. Nothing else of the environment papp was started with.
 - A `papp-env` name that reads like a secret (`KEY`, `TOKEN` and the like) shows red.
+- The page's own process holds the same list and what the window needs to open (`PAGE_ENV` in `src/permissions/tags.ts`): the display and desktop settings on Linux, the text encoding on macOS. On Linux a program the page runs could otherwise read the rest off it (`/proc/<pid>/environ`); macOS lets no process read another's environment. `selftest-net` checks on Linux that an unnamed variable is not in it.
 - A full-Node page sees the whole environment, and so do the programs it starts.
 - `selftest-net` checks that a named variable arrives and an unnamed one does not.
 
@@ -75,7 +77,7 @@ For a page without full Node, the OS also limits where the page and its programs
 | the page's own Electron data | Electron needs it   |
 
 - macOS: the OS and papp's checks use the same patterns, and the OS also keeps pages out of every pattern that does not name them.
-- macOS: the programs cannot open other apps (`open`, LaunchServices).
+- macOS: the programs cannot open other apps (`open`, LaunchServices) or script them (`osascript`, Apple Events).
 - macOS: they cannot write app settings (`defaults write`). `cfprefsd` would otherwise write them from outside the sandbox.
 - Linux: `bwrap` makes the disk read-only and each of these folders writable. It takes folders, not patterns, so the limit is looser than on macOS (see "Not enforced").
 
@@ -85,7 +87,8 @@ For a page with `papp-net`, a proxy in the trampoline:
 
 - forwards requests only to the declared `host:port` patterns;
 - looks up names itself;
-- refuses any name that points at this computer: loopback, `0.0.0.0/8`, `::`, and the current addresses of its network interfaces;
+- refuses any name that points at this computer or the local network: loopback and `0.0.0.0/8`; the private ranges `10/8`, `172.16/12` and `192.168/16`; `100.64/10`, which VPNs such as Tailscale use; link-local `169.254/16`, where cloud machines keep their metadata service and its keys; IPv6's `fc00::/7` and `fe80::/10`; and the current addresses of its network interfaces. `privateNetwork` in `src/permissions/tags.ts` is the list. A tag that names such an address is refused before the popup, and `selftest-net` checks that the proxy refuses them;
+- refuses a `CONNECT` that names no port, rather than failing on it;
 - answers 403 to everything else;
 - sends the requested name as `Host` for plain http;
 - appends every request, allowed or refused, to `egress.log`;
@@ -97,7 +100,7 @@ Declared `localhost` and `127.0.0.1` ports bypass the proxy, so they are not log
 
 - A page without full Node cannot write papp's approvals (`grants.json`).
 - No page can write them, not even a full-Node page. On macOS, no page can write the packaged app either.
-- A page's own Electron data lives apart, in `pages/`.
+- A page's own Electron data lives apart, in `pages/`, and apart from every other page's: `localStorage`, IndexedDB and the cache are in a partition named by the page's path. To Chromium every `file:` page is one origin, so in a shared profile a page would read what another kept. `selftest-node` checks that it finds nothing `selftest` kept.
 - The Permissions menu asks the trampoline to revoke approvals. Nothing a page sends can add one.
 
 ### Approvals
@@ -111,10 +114,12 @@ Declared `localhost` and `127.0.0.1` ports bypass the proxy, so they are not log
 ### The window
 
 - It shows only the page. A link to another file or to a declared host does not navigate, a frame does not load another file, and no new windows open. Another file would run with the page's permissions instead of its own tags. `selftest` checks the frame.
+- A frame from a declared host cannot reach `window.papp`. With `papp-net`, CORS is off for the page, but Chromium still keeps a frame of another origin out of the page's window: tested 2026-10-26 with a frame that tried `parent.papp.readFile` and was blocked as cross-origin.
 - A page with a favicon shows it as its icon in the Dock and the app switcher (macOS) or as its window icon (Linux). papp reads the icon only from a file the page may see, draws it in a window of its own that loads nothing but the image, and always puts its badge over the corner.
-- On macOS the trampoline also sets that icon as the page file's custom icon in Finder, and only on that file. It writes Finder's metadata (`com.apple.ResourceFork`, `com.apple.FinderInfo`) and a hash of the icon (`com.papp.icon`), not the page's content. iCloud Drive and AirDrop carry the icon along.
+- On macOS the trampoline also sets that icon as the page file's custom icon in Finder, for a page made here and only on that file. A downloaded page keeps papp's icon in Finder: with one of its own it could pass for a document or another app's file there. It writes Finder's metadata (`com.apple.ResourceFork`, `com.apple.FinderInfo`) and a hash of the icon (`com.papp.icon`), not the page's content. iCloud Drive and AirDrop carry the icon along.
 - A page gets only three web permissions: clipboard writing, fullscreen and pointer lock. Camera, microphone, screen capture, clipboard reading, notifications and location are denied, for full-Node pages too.
-- A page marked as downloaded gets a popup that leads with the site and with what its lines allow together. It must be trusted with a checkbox if a line is red or it can send files out. With no tags it opens without asking: it can see its folder but not change it. The mark stays, so a later change of tags is asked about the same way. A page made here gets the lines, without the checkbox.
+- The popup leads with what the lines allow together, when that is more than any one line says. Wherever the page came from, it must be trusted with a checkbox if a line is red or its lines together can send files out: `git clone`, `curl` and USB sticks leave no download mark, so a page from elsewhere can look made here.
+- A page marked as downloaded also leads with the site and is held to its content. With no tags it is asked about once, so the site is seen before it reads the folder it landed in; a page made here with no tags opens without asking. The mark stays, so a later change of tags is asked about the same way.
   - macOS: the quarantine attribute, which browsers, Mail, Messages and AirDrop set; Spotlight keeps the site.
   - Linux: `user.xdg.origin.url`, which Chrome sets, read with `getfattr`.
 
@@ -161,7 +166,7 @@ Declared `localhost` and `127.0.0.1` ports bypass the proxy, so they are not log
 **Network**
 
 - The popup judges wildcard hosts by how they are written: `*.github.io` shows yellow, though anyone can publish under it.
-- `*` also reaches machines on your local network; only this computer is refused.
+- The local network is told apart by address range. A machine reached at a public address, through a VPN or a tunnel that hands out public addresses, counts as the internet.
 - For https, the proxy sees only `host:port`. A program the page runs can ask a declared server that hosts many sites, such as a CDN, for another site inside the encrypted connection (domain fronting). Whether that works depends on the server.
 - If `egress.log` stops being writable, connections already open keep forwarding, unlogged.
 
@@ -174,15 +179,16 @@ Declared `localhost` and `127.0.0.1` ports bypass the proxy, so they are not log
 
 - The OS limits a program's writes by folder, not by pattern. A program the page runs may change any file in the page's writable folders: for `~/notes/*.md` or `~/notes/todo.md`, all of `~/notes`, hidden files (`.git/hooks`, `.envrc`) and pages too. The popup's `papp-run` line names those folders. papp's own checks still hold the page itself to the patterns.
 - `--unshare-net` isolates IP networking only. A socket file outside `/run` and `/tmp` remains, and can be a way out for a program the page runs, or for a page that exploits Chromium: tmux, screen or Docker started with a socket elsewhere (`tmux -S ~/some/socket`, Docker with `-H`), or any server listening in a folder the page may see.
+- `--unshare-net` does not cover `vsock`, which is not IP. In a virtual machine, a program the page runs can reach the host through it.
 - On X11, the display's socket comes back, because the window needs it. Through it a program can type into another window, such as a terminal. Wayland does not allow that.
 - A `papp-socket` opens whatever answers there. papp cannot tell what that is, so the line is red and says so, and nothing more.
 - A declared `localhost` port must be a number. papp relays each port on its own, so it refuses `localhost:*`.
 
 **Everywhere**
 
-- A page chooses its own icon, so it can look like another app's. papp's badge on the corner, and the app name in the menu bar, are the only marks that it is a papp page.
+- A page chooses its own icon, so in the Dock and the app switcher it can look like another app's. papp's badge on the corner, and the app name in the menu bar, are the only marks that it is a papp page. In Finder, only a page made here gets its icon.
 - Clipboard writing, printing, and files the user picks or drops into the page.
-- Where a page came from is read from a mark that not every route leaves: `git clone`, `curl`, USB sticks and Firefox on Linux leave none, and Linux needs `getfattr` installed. Such a page gets the popup for a page made here. A page can also drop its own mark by rewriting itself, as in "Approvals of pages made here follow the path".
+- Where a page came from is read from a mark that not every route leaves: `git clone`, `curl`, USB sticks and Firefox on Linux leave none, and Linux needs `getfattr` installed. Such a page gets the popup for a page made here: no site named, no content hold, and no popup at all with no tags. Its red lines still need the checkbox. A page can also drop its own mark by rewriting itself, as in "Approvals of pages made here follow the path".
 
 ### For a page with full Node
 
@@ -193,6 +199,7 @@ With `child_process` and your files, the page can:
 - launch another app that has network (`open`, `osascript`, `launchctl`; on Linux, through X11 or a socket file outside `/run` and `/tmp`);
 - write to a synced folder, or to shell startup files and launch agents that run later;
 - ask another app to write papp's approvals (Apple Events to Terminal; on Linux, a shell startup file);
+- read other pages' browser storage, which lives on disk in `pages/`;
 - ask a local daemon or another process to act for it.
 
 ### Approvals of pages made here follow the path
@@ -225,7 +232,7 @@ A firm "nothing leaves" guarantee needs a VM with no network card, no shared fol
 **macOS**
 
 - The profile starts from `(allow default)` on purpose. The GUI needs Mach IPC and the WindowServer.
-- That is also why Apple Events stay reachable: `appleevent-send` does not stop `osascript` here.
+- Apple Events travel through a Mach service, so for a page without full Node the profile denies the lookup of `com.apple.coreservices.appleevents`; `appleevent-send` alone does not stop `osascript`. `selftest-net` checks it.
 - `sandbox-exec` is deprecated, but it is still the way to apply a profile to a process tree.
 - The `app.asar` hash lives in the app's `Info.plist`, which only the code signature protects. Without a Developer ID signature, anyone can edit the app and update the hash.
 - `sandbox/macos.sb` sits outside `app.asar` and is not hash-checked. Pages cannot write it, as they cannot write the app.
@@ -234,8 +241,9 @@ A firm "nothing leaves" guarantee needs a VM with no network card, no shared fol
 
 - The sandbox's network has its own loopback, so it cannot reach the trampoline's proxy or your real `localhost`. The trampoline listens on socket files in papp's data, which the page can see but not change. The sandboxed process relays a port on its own loopback to each.
 - On Ubuntu 23.10 and later, an unprivileged `bwrap` may create a user namespace but not use it (`bwrap: loopback: Failed RTM_NEWADDR`). The `.deb` installs an AppArmor profile that lets papp, and the `bwrap` it starts, use one. From source there is no profile: `bwrap` fails, and papp shows "Could not start the sandbox".
-- The `.deb` depends on `bubblewrap`, so installing it installs `bwrap`.
-- Hiding the runtime folder also hides the sound server, so a page may play no sound. Untested on a desktop.
+- The `.deb` depends on `bubblewrap (>= 0.8.0)`, the first with `--disable-userns`, so installing it installs a `bwrap` that takes every flag papp passes. Ubuntu 22.04 ships 0.6.1 and is refused at install.
+- Hiding the runtime folder also hides the sound server, and `/dev/snd` is not in the sandbox's `/dev`, so a page may play no sound. Untested on a desktop.
+- The user namespace and the minimal `/dev` came after the last Linux run below and have not been run on Linux yet.
 
 ## Verification
 
@@ -243,7 +251,7 @@ A firm "nothing leaves" guarantee needs a VM with no network card, no shared fol
 
 | Platform      | Last verified                                                                                                                                                                                                 |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| macOS         | 2026-10-25, `pnpm test`: every check                                                                                                                                                                          |
+| macOS         | 2026-10-26, `pnpm test`: every check                                                                                                                                                                          |
 | Linux         | 2026-10-25, the installed `.deb` on a headless Ubuntu 24.04 server with the AppArmor limit on: every Linux check, hidden keys and logins, `papp-env` and the covered tmux, screen and Docker sockets included |
 | Linux desktop | not yet: no run with a real display and a double-click                                                                                                                                                        |
 

@@ -2,8 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <!-- Electron/Chromium needs JIT and unsigned executable memory under the hardened
-       runtime. Library validation stays on: there are no app-level native modules. -->
+  <!-- Chromium's JIT needs these two. Keep library validation on. -->
   <key>com.apple.security.cs.allow-jit</key><true/>
   <key>com.apple.security.cs.allow-unsigned-executable-memory</key><true/>
 </dict>

@@ -24,6 +24,5 @@ writes it to <code>electron-latest.json</code>, next to this page.</p>
     })
     .catch((err) => { out.textContent = 'failed: ' + err.message; });
 
-  // Anything not declared fails at the proxy; a raw socket fails in the kernel.
   fetch('https://example.com').then(() => console.log('should not happen'), (err) => console.log('undeclared host blocked:', err.message));
 </script>

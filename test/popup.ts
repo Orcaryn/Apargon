@@ -1,16 +1,26 @@
-// The popup's colours follow the folder, not how its name was typed. macOS paths ignore
-// case: ~/LIBRARY is ~/Library and must be red. A line break or invisible mark in a value
-// could pass for a permission of its own, so it stops the page. Changing pages is red: an
-// approved one could be rewritten. A page from elsewhere gets one sentence for what its lines
-// allow together. A variable named like a secret is red, a folder of keys or logins says what it
-// holds, and a variable with no program to take it stops the page. A socket is red and must exist.
-// Exits 1 if a check fails.
 import fs from 'fs';
 import net from 'net';
 import os from 'os';
 import path from 'path';
 import { describe, worstCase } from '../src/permissions/describe.ts';
 import { declaredPermissions } from '../src/permissions/tags.ts';
+
+if (process.platform === 'linux') {
+  const page = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'papp-popup-')), 'case.papp');
+  const opened = ['/', '/var', '/var/tmp', '/tmp', '/tmp/*', '/run'].filter(folder => {
+    fs.writeFileSync(page, `<meta name="papp-read" content="${folder}">`);
+
+    try {
+      declaredPermissions(page);
+
+      return true;
+    } catch (err) {
+      return !(err as Error).message.includes('cannot open');
+    }
+  });
+  console.log(opened.length ? `popup: FAIL, opened ${opened.join(' ')}` : 'popup: ok, every emptied folder refused');
+  process.exit(opened.length ? 1 : 0);
+}
 
 if (process.platform !== 'darwin') {
   console.log('popup: skipped, macOS only');
@@ -23,7 +33,7 @@ fs.writeFileSync(page, '<meta name="papp-write" content="~/LIBRARY">\n<meta name
 const lines = describe(declaredPermissions(page)).filter(line => line.id.startsWith('write:'));
 
 fs.mkdirSync(path.join(dir, 'data'));
-const listener = net.createServer().listen(path.join(dir, 'data', 'a.sock')); // a real socket for papp-socket to find
+const listener = net.createServer().listen(path.join(dir, 'data', 'a.sock'));
 const refusals = [
   { tag: '<meta name="papp-write" content="./data/*x\n•  See files in ./data.">', reason: 'invisible character' },
   { tag: '<meta name="papp-run" content="/bin/ls\n•  Nothing else.">', reason: 'invisible character' },
@@ -34,6 +44,10 @@ const refusals = [
   { tag: '<meta name="papp-socket" content="./data/missing.sock">', reason: 'does not exist' },
   { tag: '<meta name="papp-socket" content="./case.papp">', reason: 'not a socket' },
   { tag: '<meta name="papp-read" content="./data" data-x="a​b">', reason: 'invisible character' },
+  { tag: '<meta name="papp-net" content="10.0.0.1:80">', reason: 'local network' },
+  { tag: '<meta name="papp-net" content="192.168.1.1:443">', reason: 'local network' },
+  { tag: '<meta name="papp-net" content="169.254.169.254:80">', reason: 'local network' },
+  { tag: '<meta name="papp-net" content="100.100.1.1:*">', reason: 'local network' },
   { tag: '<meta name="papp-read" content=./data>', reason: 'quoted name and content' },
   { tag: '<meta name=papp-read content="./data">', reason: 'quoted name and content' },
 ].map(({ tag, reason }) => {
@@ -63,19 +77,19 @@ const worst = [
 const secrets = [
   { tags: '<meta name="papp-run" content="/bin/ls">\n<meta name="papp-env" content="OPENAI_API_KEY">', kind: 'env:', level: 'red', says: '' },
   { tags: '<meta name="papp-run" content="/bin/ls">\n<meta name="papp-env" content="AWS_PROFILE">', kind: 'env:', level: 'plain', says: '' },
-  { tags: '<meta name="papp-read" content="~/.netrc">', kind: 'read:', level: 'red', says: 'saved server passwords' }, // red as hidden too; it must say what it holds
+  { tags: '<meta name="papp-read" content="~/.netrc">', kind: 'read:', level: 'red', says: 'saved server passwords' },
   { tags: '<meta name="papp-socket" content="./data/a.sock">', kind: 'socket:', level: 'red', says: 'act as you' },
+  { tags: '<meta name="papp-net" content="1.1.1.1:443">', kind: 'net:', level: 'red', says: 'no name to check' },
+  { tags: '<meta name="papp-net" content="127.0.0.1:8080">', kind: 'net:', level: 'plain', says: 'on this computer' },
 ].map(({ tags, kind, level, says }) => {
   fs.writeFileSync(page, tags);
   const line = describe(declaredPermissions(page)).find(line => line.id.startsWith(kind))!;
 
   return { tags, ok: line.level === level && line.text.includes(says), said: `${line.level}: ${line.text}` };
 });
-// The tags come back as written, on one line each, for the popup's folded view.
 fs.writeFileSync(page, '<meta\n  name="papp-read"\n  content="./data">\n<meta charset="utf-8">');
 const written = declaredPermissions(page).tags;
 const tagsAsWritten = written.length === 1 && written[0] === '<meta name="papp-read" content="./data">';
-// Only the head before any script counts, outside comments; a " value may hold a '.
 fs.mkdirSync(path.join(dir, "Jon's notes"));
 fs.writeFileSync(
   page,

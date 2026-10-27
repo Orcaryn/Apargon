@@ -1,31 +1,32 @@
-// Tags: what a page asks for, read from its <meta> tags before it runs.
-
 import fs from 'fs';
+import net from 'net';
 import os from 'os';
 import path from 'path';
-import { literalBase, PAGE_SOURCE, patternSource } from './patterns.ts';
+import { literalBase, PAGE_FILE, patternFolder, patternSource } from './patterns.ts';
 
 export type Permissions = {
-  own: string | null; // the page's folder and its subfolders, to see; none for full Node or a big folder
+  own: string | null;
   read: string[];
   write: string[];
   net: string[];
-  run: Record<string, string>; // name → file
-  env: string[]; // variables its programs get beyond PROGRAM_ENV
-  sockets: string[]; // socket files, or folders of them, the page and its programs may connect to, as real paths
-  hidden: string[]; // the SECRETS no tag names, as real paths; the OS hides them from the page and its programs
+  run: Record<string, string>;
+  env: string[];
+  sockets: string[];
+  hidden: string[];
   node: boolean;
-  tags: string[]; // the papp <meta> tags as written, for the popup
+  tags: string[];
 };
 
 export const HOME = fs.realpathSync(os.homedir());
 export const BIG_FOLDERS = ['Desktop', 'Documents', 'Downloads'].map(name => path.join(HOME, name));
 export const LOCAL_HOSTS = ['localhost', '127.0.0.1'];
-// What a program gets of papp's environment without asking: enough to run, no tokens. The proxy
-// settings are papp's own. Any other variable needs papp-env.
 export const PROGRAM_ENV = ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'TERM', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TZ', 'http_proxy', 'https_proxy', 'no_proxy'];
-// Keys and logins, and what each holds for the popup. Hidden unless a tag names one or starts inside
-// it: ~/.ssh or ~/.ssh/config opens ~/.ssh, ~ does not. Browsers keep logins and cookies in their profiles.
+export const PAGE_ENV = [
+  ...PROGRAM_ENV,
+  ...'DISPLAY WAYLAND_DISPLAY XAUTHORITY XDG_RUNTIME_DIR XDG_SESSION_TYPE XDG_CURRENT_DESKTOP XDG_DATA_DIRS XDG_DATA_HOME XDG_CONFIG_HOME XDG_CACHE_HOME GDK_BACKEND GDK_SCALE GDK_DPI_SCALE GTK_IM_MODULE XMODIFIERS LANGUAGE ELECTRON_OZONE_PLATFORM_HINT __CF_USER_TEXT_ENCODING'.split(' '),
+];
+export const PRIVATE = ['/run', '/tmp', '/var/tmp'];
+
 const MAC_BROWSERS = ['Google/Chrome', 'Chromium', 'BraveSoftware', 'Microsoft Edge', 'Arc', 'Firefox'].map(name => `Library/Application Support/${name}`);
 const LINUX_BROWSERS = ['.config/google-chrome', '.config/chromium', '.config/BraveSoftware', '.config/microsoft-edge', '.mozilla', 'snap/firefox'];
 export const SECRETS = Object.entries({
@@ -46,12 +47,9 @@ export const SECRETS = Object.entries({
   ...Object.fromEntries([...MAC_BROWSERS, ...LINUX_BROWSERS].map(name => [name, 'browser logins and cookies'])),
 }).map(([name, holds]) => ({ path: path.join(HOME, name), holds }));
 
-// html: the page as the caller read it, so its tags and its hash come from one read.
 export function declaredPermissions(page: string, html = fs.readFileSync(page, 'utf8')) {
   const dir = path.dirname(page);
   const permissions: Permissions = { own: null, read: [], write: [], net: [], run: {}, env: [], sockets: [], hidden: [], node: false, tags: [] };
-  // The tags come from the head before any script, comments left out: a tag commented out is not
-  // asked for, and a page that edits pages may hold tags in its strings.
   const head = html.replace(/<!--[\s\S]*?-->/g, '').split(/<script\b|<body\b|<\/head\b/i)[0];
 
   for (const [, attrs] of head.matchAll(/<meta\s+([^>]*)>/gi)) {
@@ -60,7 +58,6 @@ export function declaredPermissions(page: string, html = fs.readFileSync(page, '
     }
 
     const tag = `<meta ${attrs.replace(/\s+/g, ' ').trim()}>`;
-    // A value ends at the quote that opened it, so ~/Jon's notes is whole.
     const name = /\bname=(["'])papp-(.*?)\1/is.exec(attrs)?.[2].toLowerCase();
     const value = /\bcontent=(["'])(.*?)\1/is.exec(attrs)?.[2].trim();
 
@@ -95,33 +92,29 @@ export function declaredPermissions(page: string, html = fs.readFileSync(page, '
     throw new Error('papp-env passes a variable to the programs a page runs, and this page runs none. Add papp-run, or remove papp-env.');
   }
 
-  // The sandbox profile quotes the folders a page may change and the sockets it may reach: a " in one would end the quote.
-  const quoted = [...permissions.write, ...permissions.sockets].find(folder => folder.includes('"'));
+  const { read, write, run, sockets, tags } = permissions;
+  const quoted = [...write, ...sockets].find(folder => folder.includes('"'));
+  const reopened = [dir, ...[...read, ...write].map(patternFolder)].find(
+    folder => folder.startsWith('/run/') || PRIVATE.some(emptied => emptied === folder || emptied.startsWith(path.join(folder, '/')))
+  );
+  const invisible = [page, ...read, ...write, ...Object.values(run), ...sockets, ...tags].find(text => /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(text));
 
   if (quoted) {
     throw new Error(`${quoted} has a " in its path, which the sandbox cannot take. Rename it.`);
-  }
-
-  // The popup shows each path on a line of its own, and the tags as written. A line break in one,
-  // typed in the tag or in a real folder name, would show as another permission; bidi and
-  // zero-width marks hide text.
-  const invisible = [page, ...permissions.read, ...permissions.write, ...Object.values(permissions.run), ...permissions.sockets, ...permissions.tags].find(text => /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(text));
-
-  if (invisible) {
+  } else if (process.platform === 'linux' && reopened) {
+    throw new Error(`On Linux papp cannot open ${reopened}: it would bring back sockets to programs outside the sandbox. Use a folder of its own, such as /tmp/papp.`);
+  } else if (invisible) {
     throw new Error(`${JSON.stringify(invisible)} has a line break or another invisible character, which the popup cannot show. Write the value on one line, or rename the file.`);
   }
 
-  permissions.own = permissions.node || ['/', HOME, ...BIG_FOLDERS].includes(dir) ? null : dir;
-  // Real paths, as the OS checks them; one not made yet as written, so it is hidden if made later.
-  // Resolved here: inside the sandbox the child could not.
-  const named = [...[...permissions.read, ...permissions.write].map(literalBase), ...permissions.sockets];
+  const named = [...[...read, ...write].map(literalBase), ...sockets];
   const secrets = SECRETS.map(secret => (fs.existsSync(secret.path) ? fs.realpathSync.native(secret.path) : secret.path));
+  permissions.own = permissions.node || ['/', HOME, ...BIG_FOLDERS].includes(dir) ? null : dir;
   permissions.hidden = permissions.node ? [] : secrets.filter(secret => !named.some(base => base === secret || base.startsWith(secret + '/')));
 
   return permissions;
 }
 
-// A folder value becomes an absolute pattern: the folders before the first * resolved to their real path, the rest as written.
 function folderPattern(value: string, dir: string) {
   if (value === '*') {
     throw new Error('A folder of "*" is unclear. Use / for the whole disk or ~ for your home folder.');
@@ -130,7 +123,6 @@ function folderPattern(value: string, dir: string) {
   }
 
   const absolute = path.resolve(dir, value === '~' ? HOME : value.replace(/^~\//, HOME + '/'));
-  // A value without * may name a file yet to be made: then its folder must exist.
   const base = absolute.includes('*') || fs.existsSync(absolute) ? literalBase(absolute) : path.dirname(absolute);
 
   if (!fs.existsSync(base)) {
@@ -146,6 +138,8 @@ function hostPattern(value: string) {
 
   if (!/^(\*|(\*\.)?[a-z0-9][a-z0-9.-]*):(\*|\d+)$/.test(pattern) || +port < 1 || +port > 65535) {
     throw new Error(`Bad papp-net value "${value}". One host:port per <meta>, such as api.example.com:443 or *.example.com:443.`);
+  } else if (host !== '127.0.0.1' && privateNetwork().check(host)) {
+    throw new Error(`papp never reaches your local network, and ${host} is an address on it. For a program on this computer, declare localhost:<port>.`);
   } else if (process.platform === 'linux' && LOCAL_HOSTS.includes(host) && port === '*') {
     throw new Error('On Linux, a port on this computer must be a number, such as localhost:11434: papp carries each declared port into the sandbox.');
   }
@@ -153,7 +147,6 @@ function hostPattern(value: string) {
   return pattern;
 }
 
-// Found now, so the popup shows which file runs; if a later search finds another, the page asks again.
 function findProgram(value: string) {
   if (value.includes('*')) {
     throw new Error('papp-run takes one program, no wildcards. For any program, use papp-node.');
@@ -172,7 +165,6 @@ function findProgram(value: string) {
   return found;
 }
 
-// One environment variable, named exactly: no wildcards, so the popup shows each one.
 function envName(value: string) {
   if (!/^[A-Za-z_]\w*$/.test(value)) {
     throw new Error(`Bad papp-env value "${value}". Name one environment variable, such as AWS_PROFILE.`);
@@ -183,8 +175,6 @@ function envName(value: string) {
   return value;
 }
 
-// One socket file, or a folder of them, that exists now, as its real path: the sandbox opens what
-// it can name. Through a socket a program can have network or act as the user, so the line is red.
 function socketPath(value: string, dir: string) {
   if (value.includes('*')) {
     throw new Error('papp-socket takes one socket file or folder, no wildcards.');
@@ -204,19 +194,33 @@ function socketPath(value: string, dir: string) {
   return fs.realpathSync.native(absolute);
 }
 
-// The declared ports on this computer, which the page reaches without the proxy.
 export function localPorts({ net }: Permissions) {
   return net
     .map(pattern => pattern.split(':'))
     .filter(([host]) => LOCAL_HOSTS.includes(host))
-    .map(([, port]) => +port);
+    .map(([, port]) => port);
 }
 
-// What a page may change, as pattern sources for papp's checks and for Seatbelt: its
-// papp-write patterns, never its own folder. Only those in pages reach a page.
+export function privateNetwork() {
+  const addresses = new net.BlockList();
+  addresses.addSubnet('127.0.0.0', 8, 'ipv4');
+  addresses.addSubnet('0.0.0.0', 8, 'ipv4');
+  addresses.addSubnet('10.0.0.0', 8, 'ipv4');
+  addresses.addSubnet('172.16.0.0', 12, 'ipv4');
+  addresses.addSubnet('192.168.0.0', 16, 'ipv4');
+  addresses.addSubnet('100.64.0.0', 10, 'ipv4');
+  addresses.addSubnet('169.254.0.0', 16, 'ipv4');
+  addresses.addAddress('::', 'ipv6');
+  addresses.addAddress('::1', 'ipv6');
+  addresses.addSubnet('fc00::', 7, 'ipv6');
+  addresses.addSubnet('fe80::', 10, 'ipv6');
+
+  return addresses;
+}
+
 export function changeableSources({ write }: Permissions) {
   return {
     files: write.map(pattern => patternSource(pattern)),
-    pages: write.filter(pattern => new RegExp(PAGE_SOURCE).test(pattern)).map(pattern => patternSource(pattern)),
+    pages: write.filter(pattern => PAGE_FILE.test(pattern)).map(pattern => patternSource(pattern)),
   };
 }

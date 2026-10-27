@@ -1,12 +1,12 @@
 #!/bin/sh
-# Render the SVG sources in assets/ into the icns + png that electron-builder consumes.
-# Needs: rsvg-convert (brew install librsvg), iconutil (macOS).
 set -eu
+command -v rsvg-convert >/dev/null || { echo "Needs rsvg-convert: brew install librsvg" >&2; exit 1; }
+command -v iconutil >/dev/null || { echo "Needs iconutil, which comes with macOS" >&2; exit 1; }
 cd "$(dirname "$0")/.."
 out=build
 mkdir -p "$out"
 
-icns() { # <name>  -> build/<name>.icns + build/<name>.png (1024, for Linux)
+icns() {
   name=$1; svg="assets/$name.svg"; set="/tmp/$name.iconset"
   rm -rf "$set"; mkdir -p "$set"
   for s in 16 32 128 256 512; do

@@ -11,10 +11,10 @@ The point: a single HTML file is the quickest viewer or editor for files on your
 
 A page asks in `<meta>` tags for what it needs: folders to see or change, servers to reach, programs to run, or full Node.
 
-| Page      | Gets                   | Asks first?     |
-| --------- | ---------------------- | --------------- |
-| no tags   | its own folder, to see | no              |
-| with tags | what the tags list     | yes, in a popup |
+| Page      | Gets                   | Asks first?                         |
+| --------- | ---------------------- | ----------------------------------- |
+| no tags   | its own folder, to see | no; a downloaded page is asked once |
+| with tags | what the tags list     | yes, in a popup                     |
 
 The OS denies sockets and DNS to the page's process and every process it starts.
 
@@ -30,17 +30,17 @@ A page is code the user chose to run, by double-click or from the command line. 
 
 **Fence.** The block on sockets and DNS. A page without full Node also writes only to its granted folders: on macOS by pattern, on Linux by folder. On macOS it also:
 
-- cannot open other apps;
+- cannot open or script other apps;
 - cannot write app settings.
 
 On Linux it also empties the folders where socket files live (`/run`, `/tmp`, `/var/tmp`: D-Bus, the name lookup service, the sound server, tmux, screen, Docker) but for the display's socket and what the tags name, shows a page only its own relay sockets, and gives the page its own process list and session.
 
-Both hide keys and logins (`SECRETS`) from the page and its programs unless a tag names one, and give a program a short environment plus the `papp-env` names.
+Both hide keys and logins (`SECRETS`) from the page and its programs unless a tag names one, and give the page's process a short environment (`PAGE_ENV`) and a program a shorter one (`PROGRAM_ENV`), plus the `papp-env` names. On Linux a tag may not open `/tmp` or `/var/tmp` whole, or anything at or under `/run`, and a page may not sit in one (`PRIVATE`).
 
 **Own folder.** The page's folder, unless that is `/`, `~`, Desktop, Documents or Downloads, or the page has full Node.
 
 - To see only, with its subfolders, hidden files left out. Writes need `papp-write`.
-- With no tags: granted without asking, wherever the page came from.
+- With no tags: granted without asking for a page made here. A downloaded page is asked once, so its site is seen.
 - With tags: listed in the popup.
 
 **Pages are not writable by default.** A `papp-write` pattern reaches a `.papp` only if it ends in `.papp`, which the popup marks red. Otherwise a page could rewrite another approved for more. `PAGE_SOURCE` in `src/permissions/patterns.ts` is the rule for both Seatbelt and papp's checks.
@@ -56,7 +56,7 @@ Declared `localhost` and `127.0.0.1` ports skip the proxy. On macOS the sandbox 
 
 **Offline process.** The sandboxed copy. Before it opens the window, it checks that it is offline. If it is not, or cannot tell, it refuses. `test/refuse.ts` proves this.
 
-- macOS: it must fail to bind a loopback port (`canBindLoopback`).
+- macOS: it must fail to bind a loopback port with `EPERM` (`canBindLoopback`); any other failure refuses too.
 - Linux: `bwrap` gives it a loopback it may bind, so it asks the kernel instead. Its network must hold only `lo` and differ from the trampoline's, which arrives on fd 4 (`inEmptyNetwork`).
 
 On Linux it then relays its own loopback ports to the trampoline's socket files. The page reaches the proxy and the declared ports at the same addresses as on macOS.
@@ -80,7 +80,7 @@ On Linux it then relays its own loopback ports to the trampoline's socket files.
 2. `refuse.ts`: the offline check.
 3. `daemons.ts` (macOS only): builds `test/leak` with `swiftc` and checks that system services fetch for it outside the sandbox.
 4. `selftest.papp` (only writes, for its results), `selftest-node.papp`, `selftest-net.papp`.
-5. `check.ts`: fails if any result is not `true`.
+5. `check.ts`: fails if any result is not `true`, is missing, or is not in its list for the platform. A new check goes in that list.
 
 On Linux, `daemons.ts` and the checks marked macOS skip. From source on Ubuntu 23.10 and later, the sandbox needs the setup in the README's Develop section. `docs/verification.md` tests the installed `.deb` instead.
 
@@ -127,7 +127,7 @@ That dialog means the offline check worked. Find out why the process is not in t
 
 **The fence**
 
-- Keep it strict. A change to any of these must keep `pnpm test` green and add no way to skip the offline check: `sandbox/macos.sb`, `seatbeltProfile`, `bwrapArgs`, `PRIVATE`, `canBindLoopback`, `inEmptyNetwork`, `startProxy`, `relay`, `declaredPermissions`, `socketPath`, `patternSource`, `PAGE_SOURCE`, `changeableSources`, `pageAccess`, `pageApi`, `SECRETS`, `PROGRAM_ENV`.
+- Keep it strict. A change to any of these must keep `pnpm test` green and add no way to skip the offline check: `sandbox/macos.sb`, `seatbeltProfile`, `bwrapArgs`, `PRIVATE`, `canBindLoopback`, `inEmptyNetwork`, `startProxy`, `privateNetwork`, `relay`, `declaredPermissions`, `socketPath`, `patternSource`, `PAGE_SOURCE`, `changeableSources`, `pageAccess`, `pageApi`, `SECRETS`, `PROGRAM_ENV`, `PAGE_ENV`.
 - `patternSource` and `PAGE_SOURCE` are the one pattern source for Seatbelt and for papp's checks. Do not write a second matcher.
 - The window shows only the page. A link to another file or to a declared host does not navigate, a frame does not load another file, and no new windows open: another file would run with the page's permissions.
 - The app's one network call of its own is the update check, from the trampoline, never from the page process. No crash reporter or telemetry.
@@ -138,7 +138,9 @@ That dialog means the offline check worked. Find out why the process is not in t
 - It says in plain words what each tag allows. The tags as written sit folded below the lines, for checking them.
 - Red marks broad requests; yellow marks other wildcards.
 - The colour depends on how a value is written, not on guesses about where it leads.
-- A page marked as downloaded leads with its site and with what its lines allow together (`worstCase`), and must be trusted with a checkbox. A page made here is the user's code: no checkbox.
+- Above the lines, what they allow together (`worstCase`), when that is more than any one line says. A page marked as downloaded leads with its site and is held to its content.
+- A red line, or a `worstCase`, needs a checkbox wherever the page came from: `git clone`, `curl` and USB sticks leave no download mark.
+- A declared server on the local network (`privateNetwork`) is refused before the popup; one named by a public address is red.
 
 **Tag values**
 

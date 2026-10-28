@@ -1,270 +1,327 @@
 # Security model
 
-A page asks for what it needs in `<meta>` tags.
+## In short
 
-| Page      | May use                                                             |
-| --------- | ------------------------------------------------------------------- |
-| no tags   | to see its own folder; no changes, no programs, no network          |
-| with tags | what the tags list, after the user allows the whole list in a popup |
+| Page             | Network                        | Files                              | Keys and logins      |
+| ---------------- | ------------------------------ | ---------------------------------- | -------------------- |
+| no tags          | none                           | its own folder, to see             | hidden               |
+| with tags        | the declared hosts and sockets | the folders the tags list          | hidden, unless named |
+| with `papp-node` | the declared hosts and sockets | all yours, but Apargon's approvals | all yours            |
 
-The guarantees below hold for any page **without** `papp-node`, whoever wrote it.
+- The OS blocks every connection. Only Apargon's proxy, declared `localhost` ports and declared socket files get through.
+- The proxy forwards only to the declared hosts.
+- This holds for every page without `papp-node`, whoever wrote it.
+- A page with `papp-node` runs as you. Trust it as you would a script.
 
-A page **with** `papp-node` runs with your permissions, like a script. Open it only if you trust it.
+"Not enforced" lists what this does not cover.
 
 ## Enforced
 
 ### The sandbox
 
-- The page's process and every process it starts run in an OS network sandbox:
-  - macOS: Seatbelt (`sandbox-exec`, with `sandbox/macos.sb` plus rules for each page);
-  - Linux: `bwrap --unshare-net --unshare-pid --unshare-user --disable-userns --new-session`, which gives the process a network of its own, holding only a loopback, a process list of its own, and a user namespace in which no further namespace can be made: most Linux privilege escalations need one to reach the vulnerable kernel code, and root would ignore the sandbox; and detaches it from the terminal Apargon was started from. Its `/dev` holds the devices `bwrap` makes and the GPU (`/dev/dri`), not the disks. The camera (`/dev/video*`) comes back only with `papp-use camera`, and the sound devices (`/dev/snd`) only with `papp-use sound` or `microphone`.
-- Connections, binds and DNS lookups fail in the kernel. The only exceptions are the proxy port and declared `localhost` ports. On Linux the sandbox's own loopback works but leads nowhere. Apargon relays the proxy and each declared `localhost` port into it through socket files.
-- macOS: three system services fetch for a process from outside its sandbox: background downloads (`nsurlsessiond`), WebKit's network process, and `trustd`, which fetches the issuer URL a certificate names. The page and its children cannot reach them.
-  - `test/daemons.ts` checks that all three answer outside the sandbox.
-  - `selftest-node` checks that all three fail inside it.
-  - Without `trustd`, a program that checks a certificate through macOS gets an error, not a pass. Chromium checks the page's certificates without it.
-- The sandboxed process checks that it is offline before it opens a page, and refuses if it cannot tell. No flag skips this check; `test/refuse.ts` tests it.
-  - macOS: it must fail to bind a loopback port with `EPERM`, the sandbox's answer. Any other failure refuses too.
-  - Linux: its network must hold only `lo`, plus the tunnel stubs the kernel adds to every network, and must not be the trampoline's.
-- Linux: `--unshare-net` stops IP, not socket files, and each socket leads to a program outside the sandbox. The folders where they live, `/run`, `/tmp` and `/var/tmp`, are replaced by empty ones. That removes the session and system D-Bus, through which `systemd-run --user` runs a command and the portal opens a link; `systemd-resolved` and nscd, which carry data out in a name lookup; the sound server, which can stream to a server; tmux and screen, which type into a shell that has network; and Docker, which acts as root. Only the display's socket (Wayland or X11) and what the tags name come back: the page's own folder, its `papp-read` and `papp-write` folders, and its `papp-socket` files. `selftest-node` checks that those folders hold no socket but the display's, that the process sees only its own processes, and that its session started inside the sandbox.
-- Linux: `bwrap` opens folders, not patterns, so a `papp-read` or `papp-write` that would open `/tmp`, `/var/tmp`, any folder at or under `/run` (sockets also sit below its top: `/run/user/<uid>/bus`, `/run/dbus`, `/run/docker.sock`) or a folder holding one, such as `/` or `/var`, and a page that sits in one of them, are refused before the popup: the folder would come back with its sockets, and a read-only mount does not stop a connection to a socket.
-- Linux: the socket files that carry the proxy and the declared `localhost` ports into a sandbox are in a folder of that page's. A page sees its own folder and no other page's, so two pages open at once cannot use each other's servers. `selftest-net` checks that a page sees one folder, `selftest-node` that a page without servers sees none.
+The page's process and every process it starts run in an OS sandbox.
+
+| OS    | Sandbox                                                                           |
+| ----- | --------------------------------------------------------------------------------- |
+| macOS | Seatbelt: `sandbox-exec`, `sandbox/macos.sb`, plus rules for each page            |
+| Linux | `bwrap --unshare-net --unshare-pid --unshare-user --disable-userns --new-session` |
+
+- Connections and DNS lookups fail in the kernel. On macOS binds fail too; on Linux they succeed, but only on the sandbox's own loopback, which leads nowhere.
+- Linux: the sandbox has its own network (only a loopback) and its own process list. It cannot make more namespaces, and it is cut off from the terminal Apargon started from.
+- Linux: `/dev` holds the GPU, not the disks. The camera needs `papp-use camera`. Sound devices need `papp-use sound` or `microphone`.
+
+### The offline check
+
+Before it opens a page, the sandboxed process checks that it is offline. If it is not, or cannot tell, it refuses. No flag skips this. `test/refuse.ts` tests it.
+
+| OS    | Check                                                                             |
+| ----- | --------------------------------------------------------------------------------- |
+| macOS | binding a loopback port must fail with `EPERM`; any other result refuses          |
+| Linux | its network holds only `lo` (and kernel tunnel stubs) and is not the trampoline's |
+
+### System services that fetch (macOS)
+
+Three services fetch for a process from outside its sandbox: `nsurlsessiond`, WebKit's network process and `trustd`. The sandbox blocks all three.
+
+- `test/daemons.ts` checks that they work outside the sandbox.
+- `selftest-node` checks that they fail inside.
+- Without `trustd`, a program that checks a certificate through macOS gets an error, not a pass.
+
+### Socket files (Linux)
+
+`--unshare-net` stops IP, not socket files. So Apargon replaces `/run`, `/tmp` and `/var/tmp` with empty folders. That removes:
+
+- D-Bus, which can start commands and open links;
+- `systemd-resolved` and nscd, which can carry data out in a name lookup;
+- the sound server, which can stream to another computer;
+- tmux and screen, which can type into a shell that has network;
+- Docker, which acts as root.
+
+What comes back: the display's socket and X authority file, the page's folders, its `papp-socket` files, the folder with its own relay sockets, and the sound server's sockets with `papp-use sound` or `microphone`.
+
+- A `papp-read`, `papp-write` or `papp-socket` folder that would open `/tmp`, `/var/tmp`, anything under `/run`, or a folder above them (`/`, `/var`) is refused before the popup. So is a page directly in `/tmp` or `/var/tmp`, or anywhere under `/run`. A `papp-socket` file under `/run`, such as Docker's, is allowed: that is what the tag is for.
+- `selftest-node` checks that `/run`, `/tmp` and `/var/tmp` hold no socket but the display's, and that the page sees only its own processes.
+
+### The proxy (`papp-net`)
+
+The proxy runs in the trampoline, outside the sandbox. It:
+
+- forwards only to the declared `host:port` patterns, and answers 403 to the rest;
+- looks up names itself;
+- refuses any name that leads to this computer or the local network (`privateNetwork` in `src/permissions/tags.ts`);
+- forwards to the local network only an IPv4 address declared in numbers with its port;
+- refuses a `CONNECT` with no port;
+- logs every request, allowed or refused, to `egress.log`;
+- stops taking connections if it cannot write the log.
+
+Refused as local: loopback, `0/8`, `10/8`, `172.16/12`, `192.168/16`, `100.64/10` (VPNs such as Tailscale), `169.254/16` (cloud metadata), `fc00::/7`, `fe80::/10`, NAT64 (`64:ff9b::/96`), and this machine's own addresses.
+
+- Refused before the popup: loopback other than `127.0.0.1`, `0/8`, `169.254/16`, this machine's own addresses, and `.local` names.
+- `selftest-net` checks the refusals and that a declared local address is forwarded.
+
+Declared `localhost` and `127.0.0.1` ports skip the proxy and are not logged.
+
+- Linux: they need a port number; `localhost:*` is refused.
+- Linux: they reach the sandbox through socket files in a folder only that page sees. Two open pages cannot use each other's servers. `selftest-net` checks this.
 
 ### Tags
 
-- Apargon reads the tags from the file on disk before the page runs. A running page cannot add tags.
-- Only `<head>` up to the first `<script`, `<body` or `</head` counts, with HTML comments skipped. A tag found anywhere else, or commented out, is not asked for and not granted.
-- An unknown `papp-*` tag or a bad value stops the page from opening.
-- So does a line break or another invisible character in a value, in a tag, or in the path of the page or anything it names: it could make one permission look like two in the popup, which also shows the tags as written.
-- `papp-socket` names one socket file, or one folder of them, that exists when the page opens. The page and its programs may connect to it and to nothing else of the kind: on macOS Seatbelt allows that path, on Linux `bwrap` binds it back. The popup marks the line red: what answers there runs outside the sandbox.
+- Read from the file on disk before the page runs. A running page cannot add any.
+- Only the text before the first `<script`, `<body` or `</head` counts, comments skipped.
+- An unknown tag or a bad value stops the page from opening.
+- So does an invisible character (such as a line break) in a value or a path. It could make one line look like two in the popup.
 
 ### Files
 
 - A page without full Node has no Node. Its only way out is `window.papp`.
-- `window.papp` checks every call against the granted folders, on real paths with symlinks resolved.
-- Every `file:` request gets the same check, including the page's own scripts and images.
-- Hidden files and folders (names that start with a dot) are outside every grant unless a tag names them. A `*` never matches one.
-- The own folder is to see only, with its subfolders. A page changes only what `papp-write` lists.
-- A page (`.papp`) can be changed only through a `papp-write` pattern that ends in `.papp`, such as `./*.papp`, which the popup marks red. Any other pattern skips pages, so a page cannot rewrite another page that was approved for more.
-- Deleting or moving a folder needs every file in it to be changeable, hidden files and pages included.
+- `window.papp` checks every call against the grants, on real paths with symlinks resolved.
+- Every `file:` request gets the same check, the page's own scripts and images included.
+- Hidden files are outside every grant unless a tag names them. A `*` never matches one.
+- The own folder is to see only. Changes need `papp-write`.
+- A page (`.papp`) is writable only through a `papp-write` pattern that ends in `.papp`, shown red. So a page cannot rewrite another page approved for more.
+- Deleting or moving a folder needs every file in it to be writable.
+
+The OS also limits where the page and its programs write:
+
+| Writable                           | Why                 |
+| ---------------------------------- | ------------------- |
+| `papp-write` folders               | granted             |
+| the temp folder                    | Electron needs it   |
+| `/dev`                             | the system needs it |
+| `pages/`, the pages' Electron data | Electron needs it   |
+
+- macOS: by pattern, the same patterns Apargon checks. Pages stay out of every pattern that does not name them.
+- macOS: programs cannot open other apps (`open`), script them (Apple Events) or write app settings (`defaults write`).
+- Linux: by folder, which is looser (see "Not enforced").
 
 ### Keys and logins
 
-- For a page without full Node, the OS hides a fixed list of folders and files that hold keys and logins from the page and from every program it runs: `~/.ssh`, `~/.gnupg`, `~/.aws`, cloud and GitHub CLI logins, saved passwords, browser profiles. `SECRETS` in `src/permissions/tags.ts` is the list.
-  - macOS: Seatbelt denies reading and writing them, at their real paths.
-  - Linux: `bwrap` lays an empty folder, or an empty file, over each.
-- Apargon's own checks refuse them too, so `~/Library` does not reach a browser profile.
-- A `papp-read` or `papp-write` that starts inside one opens it. The line shows red and says what it holds. A tag above one, such as `~` or `~/Library`, does not open it.
+The OS hides a fixed list from the page and every program it runs: `~/.ssh`, `~/.gnupg`, `~/.aws`, cloud and GitHub CLI logins, saved passwords, browser profiles. `SECRETS` in `src/permissions/tags.ts` is the list.
+
+| OS    | How                                                              |
+| ----- | ---------------------------------------------------------------- |
+| macOS | Seatbelt denies them at their real paths, made later too         |
+| Linux | `bwrap` covers folders with an empty one, files with `/dev/null` |
+
+- Apargon's own checks refuse them too. `~/Library` does not reach a browser profile.
+- Only a tag that starts inside one opens it. That line is red.
 - `selftest-net` checks that a program cannot list `~/.ssh`.
 
-### Programs' environment
+### Environment
 
-- A program gets a short list of variables (`PROGRAM_ENV` in `src/permissions/tags.ts`), Apargon's proxy settings, and the variables `papp-env` names. Nothing else of the environment Apargon was started with.
-- A `papp-env` name that reads like a secret (`KEY`, `TOKEN` and the like) shows red.
-- The page's own process holds the same list and what the window needs to open (`PAGE_ENV` in `src/permissions/tags.ts`): the display and desktop settings on Linux, the text encoding on macOS. On Linux a program the page runs could otherwise read the rest off it (`/proc/<pid>/environ`); macOS lets no process read another's environment. `selftest-net` checks on Linux that an unnamed variable is not in it.
-- A full-Node page sees the whole environment, and so do the programs it starts.
+| Process          | Gets                                                        |
+| ---------------- | ----------------------------------------------------------- |
+| a program        | `PROGRAM_ENV`, the proxy settings, and the `papp-env` names |
+| the page         | the same, plus what the window needs (`PAGE_ENV`)           |
+| a full-Node page | the whole environment, and so do its programs               |
+
+- A `papp-env` name that reads like a secret (`KEY`, `TOKEN`) is red.
 - `selftest-net` checks that a named variable arrives and an unnamed one does not.
-
-### Writes
-
-For a page without full Node, the OS also limits where the page and its programs may write:
-
-| Writable                     | Why                 |
-| ---------------------------- | ------------------- |
-| its `papp-write` folders     | granted             |
-| the temp folder              | Electron needs it   |
-| `/dev`                       | the system needs it |
-| the page's own Electron data | Electron needs it   |
-
-- macOS: the OS and Apargon's checks use the same patterns, and the OS also keeps pages out of every pattern that does not name them.
-- macOS: the programs cannot open other apps (`open`, LaunchServices) or script them (`osascript`, Apple Events).
-- macOS: they cannot write app settings (`defaults write`). `cfprefsd` would otherwise write them from outside the sandbox.
-- Linux: `bwrap` makes the disk read-only and each of these folders writable. It takes folders, not patterns, so the limit is looser than on macOS (see "Not enforced").
-
-### Network
-
-For a page with `papp-net`, a proxy in the trampoline:
-
-- forwards requests only to the declared `host:port` patterns;
-- looks up names itself;
-- refuses any name that points at this computer or the local network: loopback and `0.0.0.0/8`; the private ranges `10/8`, `172.16/12` and `192.168/16`; `100.64/10`, which VPNs such as Tailscale use; link-local `169.254/16`, where cloud machines keep their metadata service and its keys; IPv6's `fc00::/7` and `fe80::/10`; and the current addresses of its network interfaces. `privateNetwork` in `src/permissions/tags.ts` is the list. A tag that names loopback other than `127.0.0.1`, `0.0.0.0/8` or `169.254/16` is refused before the popup, and `selftest-net` checks that the proxy refuses them;
-- forwards to the local network only an IPv4 address in numbers declared with its port, such as `192.168.1.5:8123`, which the popup marks red. A name that resolves there stays refused, so a server cannot point a declared name at the local network after the popup. `selftest-net` checks that a declared address is forwarded;
-- refuses a `CONNECT` that names no port, rather than failing on it;
-- answers 403 to everything else;
-- sends the requested name as `Host` for plain http;
-- appends every request, allowed or refused, to `egress.log`;
-- stops taking new connections if it cannot write the log.
-
-Declared `localhost` and `127.0.0.1` ports bypass the proxy, so they are not logged.
-
-### Apargon's own files
-
-- A page without full Node cannot write Apargon's approvals (`grants.json`).
-- No page can write them, not even a full-Node page. On macOS, no page can write the packaged app either.
-- A page's own Electron data lives apart, in `pages/`, and apart from every other page's: `localStorage`, IndexedDB and the cache are in a partition named by the page's path. To Chromium every `file:` page is one origin, so in a shared profile a page would read what another kept. `selftest-node` checks that it finds nothing `selftest` kept.
-- The Permissions menu asks the trampoline to revoke approvals. Nothing a page sends can add one.
 
 ### Approvals
 
-- The popup is Apargon's own static page, in a window of its own, before the page runs. Its policy allows no network, and it shows every value as text, never as HTML.
-- An approval covers one file path and one exact list of permissions. For a page marked as downloaded, it also covers the page's exact content.
-- If the list changes, Apargon asks again and marks what is new. If a downloaded page changes, Apargon asks again and says it changed.
-- A downloaded page that changes while open does not reload into the new content: the window says it changed, and reopening it asks again.
-- **Permissions → Approved Pages** revokes one page; **Revoke All Approvals** revokes them all.
+- The popup is Apargon's own static page, in its own window. It allows no network and shows values as text, never HTML.
+- It says what each tag allows in plain words, and above that what they allow together.
+- A red line, or lines that together can send something out (files, the clipboard, the screen), need a checkbox.
+- An approval covers one path and one exact list. A new list asks again and marks what is new.
+- A page marked as downloaded leads with its site and is held to its content. If it changes, Apargon asks again. If it changes while open, the window reloads into a refusal and says so.
+- A downloaded page with no tags is asked about once.
+- No page can write the approvals (`grants.json`), not even a full-Node page. Nothing a page sends adds one.
+- **Permissions** revokes one approval or all.
 
 ### The window
 
-- It shows only the page. A link to another file or to a declared host does not navigate, a frame does not load another file, and a new window opens only on the page itself, under another hash or query. Another file would run with the page's permissions instead of its own tags. `selftest` checks the frame and the window.
-- A frame from a declared host cannot reach `window.papp`. With `papp-net`, CORS is off for the page, but Chromium still keeps a frame of another origin out of the page's window: tested 2026-10-26 with a frame that tried `parent.papp.readFile` and was blocked as cross-origin.
-- A page with a favicon shows it as its icon in the Dock and the app switcher (macOS) or as its window icon (Linux). Apargon reads the icon only from a file the page may see, draws it in a window of its own that loads nothing but the image, and always puts its badge over the corner.
-- On macOS the trampoline also sets that icon as the page file's custom icon in Finder, for a page made here and only on that file. A downloaded page keeps Apargon's icon in Finder: with one of its own it could pass for a document or another app's file there. It writes Finder's metadata (`com.apple.ResourceFork`, `com.apple.FinderInfo`) and a hash of the icon (`com.apargon.icon`), not the page's content. iCloud Drive and AirDrop carry the icon along.
-- A page gets three web permissions: clipboard writing, fullscreen and pointer lock. The web Notification API is denied, for full-Node pages too. Clipboard reading needs `papp-use clipboard`, location `papp-use location`, the camera `papp-use camera` and the microphone `papp-use microphone`, each a yellow line; with `papp-net`, the summary above the lines says the page can send what you copy, where you are, what the camera sees or what the microphone hears. A request for both camera and microphone needs both tags. On macOS the system also asks before Apargon first uses either. A paste the user makes reaches the page without a tag, as in any app.
-- Screen capture needs `papp-use screen`, a red line. Then `getDisplayMedia` returns the whole main screen, with no picker and without sound, whatever the page asks for. Without the tag Apargon sets no capture handler and denies the permission; `selftest` checks the refusal. On macOS the system also asks for Screen Recording the first time.
-- Notifications go through `window.papp.notify`, which needs `papp-use notifications`. It is shown under Apargon's name. On Linux the trampoline shows it, since the sandbox hides D-Bus.
-- A page's window plays sound only with `papp-use sound`. On macOS the window is muted without it, though a program it runs can still play sound, with `afplay` for one. On Linux the tag also binds the sound server's socket (`pipewire-0`, `pulse`) and `/dev/snd` back into the sandbox, and the line is yellow: the sound server can stream to another computer.
-- A `papp-shortcut` is a key combination the page answers in every app. It needs two modifiers, or one with a function key, so a page cannot take `Ctrl+C` or `Cmd+V` from the app in front. Modifiers that only type characters do not count: Option and Shift on macOS, AltGr and Shift elsewhere. The popup names the keys. It is registered by the page's process and ends with it.
-- The tray icon (`window.papp.tray`) is Apargon's own, never the page's: in the menu bar there is no room for the badge. The trampoline shows it, since on Linux the tray talks over D-Bus, which the sandbox hides. The page sends it only a text, cut to 24 characters, and hears back only that the icon was clicked. One icon per page; it ends with the page's process. On Linux the text does not show, since Electron sets it only on macOS; the icon's tooltip names the page file.
-- The popup leads with what the lines allow together, when that is more than any one line says. Wherever the page came from, it must be trusted with a checkbox if a line is red or its lines together can send files out: `git clone`, `curl` and USB sticks leave no download mark, so a page from elsewhere can look made here.
-- A page marked as downloaded also leads with the site and is held to its content. With no tags it is asked about once, so the site is seen before it reads the folder it landed in; a page made here with no tags opens without asking. The mark stays, so a later change of tags is asked about the same way.
-  - macOS: the quarantine attribute, which browsers, Mail, Messages and AirDrop set; Spotlight keeps the site.
-  - Linux: `user.xdg.origin.url`, which Chrome sets, read with `getfattr`.
+- It shows only the page. A link does not navigate, a frame does not load another file, and a new window opens only on the page itself. `selftest` checks the frame and the window.
+- A frame from a declared host cannot reach `window.papp`. Tested by hand on 2026-10-26: Chromium blocks it as cross-origin.
+- Each page keeps its own `localStorage`, IndexedDB and cache. `selftest-node` checks that one page cannot read another's `localStorage`.
+- The favicon is read only from a file the page may see, and always gets Apargon's badge on the corner.
+- On macOS, only a page made here gets its icon in Finder.
+
+### Devices and the desktop
+
+| Needs                                       | Tag                      | Colour                 |
+| ------------------------------------------- | ------------------------ | ---------------------- |
+| clipboard writing, fullscreen, pointer lock | none                     | —                      |
+| a paste the user makes                      | none                     | —                      |
+| clipboard reading                           | `papp-use clipboard`     | yellow                 |
+| location (macOS only)                       | `papp-use location`      | yellow                 |
+| camera                                      | `papp-use camera`        | yellow                 |
+| microphone                                  | `papp-use microphone`    | yellow                 |
+| sound                                       | `papp-use sound`         | plain; yellow on Linux |
+| notifications                               | `papp-use notifications` | plain                  |
+| screen capture                              | `papp-use screen`        | red                    |
+| a global key combination                    | `papp-shortcut`          | yellow                 |
+
+- With `papp-net`, the popup says that what these pick up can be sent.
+- Camera and microphone together need both tags. macOS also asks the first time.
+- Screen capture gives the whole main screen, with no picker and no sound. Without the tag it is denied; `selftest` checks that.
+- The web Notification API is denied to every page.
+- A shortcut needs two modifiers, or one with a function key, so a page cannot take `Ctrl+C`. Modifiers that only type characters do not count.
+- The tray icon is always Apargon's. The page sends it up to 24 characters of text and hears back only a click. It ends with the page.
 
 ### The packaged app
 
-- It cannot run as plain Node (`ELECTRON_RUN_AS_NODE`).
-- It ignores `NODE_OPTIONS` and the inspector flags.
-- It loads code only from `app.asar`, and refuses to start if `app.asar` does not match the hash recorded at build time (Electron fuses).
-- Its one network call of its own is the update check: once a day at most, when a page opens, the trampoline fetches one file from GitHub. On macOS it then downloads the new version and installs it on the next start; macOS takes only a build signed with the same Developer ID. On Linux it shows a notice with a link. Permissions → Check for Updates Automatically turns it off. The page process never has network, update or not.
-- No telemetry and no crash reports.
-- It installs no background service and does not start at login.
+- It cannot run as plain Node, and ignores `NODE_OPTIONS` and inspector flags.
+- It loads code only from `app.asar` (Electron fuse). On macOS it also refuses to start if `app.asar` does not match its build hash; Electron has no such check on Linux.
+- Its one network call is the update check: from the trampoline, at most once a day. **Permissions → Check for Updates Automatically** turns it off.
+- macOS installs only a build signed with the same Developer ID. Linux only shows a notice.
+- No telemetry, no crash reports, no background service, nothing at login.
 
 ## Not enforced
 
-### For a page without full Node
+### Reading
 
-**Reading**
+- Apargon enforces read grants, not the OS. Chromium's own sandbox cannot start inside `sandbox-exec` or `bwrap`.
+- So a page that exploits a Chromium bug could read any file but keys and logins. It would still have no network beyond its hosts, and the same write limits.
+- Listing a folder above a wildcard (`~/git` for `~/git/*/docs`) shows every name in it. Names only, not files.
+- `papp.pick` lets the page see what the user picks in the dialog, until it reloads; a folder with its subfolders, hidden files left out. Keys and logins stay refused, and so do a link and a folder that holds the whole home folder (`/`, `~`). Apargon draws the dialog in the page's process, outside the renderer, but nothing asks for a click first: a page can open the dialog again after a cancel.
 
-- Apargon enforces read grants, not the OS. Chromium's own sandbox cannot start inside `sandbox-exec` or `bwrap`, so the page's renderer runs without it.
-- A page that exploits a Chromium bug could read any file but keys and logins. It would still have no sockets beyond its declared hosts, and the same write limits.
-- Listing a folder above a wildcard (`~/git` for `~/git/*/docs`) shows every name in it, not only the names that lead to a match. The page sees the names, not the files.
+### Saving (`papp.saveAs`)
 
-**Programs**
+- Apargon's first process, outside the sandbox, writes the files: the page's own process cannot write where the user picks.
+- It writes only into the folder the user picks in that process's own dialog, so a page that breaks out of its sandbox can write nowhere else. It remembers nothing between saves.
+- The page names the files, not the folder. Names with a folder or a leading dot, and pages, are refused. So is a folder that is reached through a link, holds keys and logins, or is Apargon's own.
+- It only adds new files: a taken name gets a number, and nothing is written through a link.
+- Any page may open the dialog, with no tag, and open it again after a cancel.
+- A saved file carries no download mark. A file that runs when opened, such as a `.terminal` file on macOS, opens without the system's warning for downloaded files.
+- A program the page runs (`papp-run`, red) could swap the picked folder for a link between Apargon's check and its write, and so add files elsewhere. It cannot replace one.
+- Refusing a folder reached through a link relies on the dialog returning the link's path. Linux's does; macOS's is asked to and is untested.
 
-- A program allowed by `papp-run` can read every file but keys and logins, and takes any arguments.
-- A variable `papp-env` names reaches the program, and through it the page and any declared host.
-- Some programs run others (`git -c core.sshCommand=…`).
-- Its network and its writes are limited like the page's, more loosely on Linux. That is why the popup marks it red.
+### The papp skill
 
-**Writable folders**
+- Apargon offers the skill on its first run, and each time it opens without a page until the skill is there. **Help → Install the papp Skill for Agents…** offers it too. Yes writes `SKILL.md` into `~/.claude/skills/papp/` and `~/.agents/skills/papp/`, creating the folders. Apargon's first process writes it, after the user confirms in that process's own dialog. The file is the one inside `app.asar`; the page cannot change what is written.
+- It replaces whatever `SKILL.md` is there, edits included. The rename replaces a link at `SKILL.md` rather than the file it leads to, but links in the folders above it are followed.
+- The menu belongs to the page's process, so any page, or a page that breaks out of its renderer, can open the dialog, with no tag. Only one is open at a time.
 
-- A program the page runs can move a folder that holds pages, or make a hard link to a page. The OS checks the paths it names, not what is inside them or what they point to.
-- A writable folder can hold files other tools later run without asking: `package.json` scripts, a `Makefile`. Hidden ones (`.git/hooks`, `.envrc`, `.vscode`) are excluded unless named. On Linux that holds for the page only, not for the programs it runs.
-- If iCloud Drive, Dropbox, OneDrive or a git auto-push syncs a writable folder, what the page writes there leaves the machine.
-- The temp folder is writable, because Electron needs it.
+### Programs (`papp-run`, always red)
 
-**Keys and logins**
+- A program can read every file but keys and logins.
+- It takes any arguments, and may run others (`git -c core.sshCommand=…`).
+- A `papp-env` variable reaches it, and through it the page and the declared hosts.
+- It can read and change every page's Electron data in `pages/`: another page's `localStorage` or IndexedDB too.
+- It can move a folder that holds pages, or hard-link to a page.
+- Linux: its writes are limited by folder, not pattern. For `~/notes/*.md` it may change anything in `~/notes`, hidden files and pages included. The popup names those folders.
+- macOS: once Apargon has camera, microphone or Screen Recording access, a program (`ffmpeg`, `screencapture`) can likely use it without the tag. A program can also play sound (`afplay`) without `papp-use sound`. Untested: a test would trigger the system prompts.
 
-- The list is fixed. A key kept elsewhere, such as `~/keys/id_rsa` or a project's `.env`, is not hidden.
-- Naming part of one, such as `~/.ssh/config`, opens all of it to the programs the page runs. The OS hides whole folders; Apargon holds the page itself to the pattern.
-- Linux: only those that exist when the page opens are hidden. macOS hides one made later too.
-- macOS: the Keychain is reached through a system service, not its files. The list does not cover it; macOS asks before it hands out another app's password.
+### Writable folders
 
-**Network**
+- They can hold files other tools run later: `package.json` scripts, a `Makefile`.
+- Hidden ones (`.git/hooks`, `.envrc`) are excluded unless named. On Linux, for the page only, not its programs.
+- A synced folder (iCloud Drive, Dropbox, git auto-push) carries what the page writes off the machine.
+- The temp folder is writable.
 
-- The popup judges wildcard hosts by how they are written: `*.github.io` shows yellow, though anyone can publish under it.
-- A declared local-network address opens whatever answers there: a router, a NAS, a printer or a machine that took the address later. Apargon cannot tell what it is, and says so in the popup.
-- The local network is told apart by address range. A machine reached at a public address, through a VPN or a tunnel that hands out public addresses, counts as the internet.
-- For https, the proxy sees only `host:port`. A program the page runs can ask a declared server that hosts many sites, such as a CDN, for another site inside the encrypted connection (domain fronting). Whether that works depends on the server.
-- If `egress.log` stops being writable, connections already open keep forwarding, unlogged.
+### Keys and logins
 
-**macOS**
+- The list is fixed. A key elsewhere (`~/keys/id_rsa`, a project's `.env`) is not hidden.
+- Naming part of one (`~/.ssh/config`) opens all of it to programs.
+- Linux: only those that exist when the page opens are hidden.
+- macOS: the Keychain is a service, not a file. macOS asks before it hands out another app's password.
 
-- The profile allows Mach messages to system services, because the GUI needs them.
-- It blocks the three services known to fetch for a process, not every service that might. Another such service would be a way out for a program the page runs, or for a page that exploits Chromium.
+### Network
 
-**Linux**
+- Wildcard hosts are coloured by how they are written: `*.github.io` is yellow, though anyone can publish there.
+- A declared local-network address reaches whatever answers there. The popup says so.
+- The local network is told apart by address range. A VPN that hands out public addresses counts as the internet.
+- For https the proxy sees only `host:port`. A program may reach another site on the same CDN (domain fronting).
+- If `egress.log` stops being writable, open connections keep forwarding, unlogged.
+- A `papp-socket` reaches whatever answers there. A folder opens every socket in it. The line is red.
 
-- The OS limits a program's writes by folder, not by pattern. A program the page runs may change any file in the page's writable folders: for `~/notes/*.md` or `~/notes/todo.md`, all of `~/notes`, hidden files (`.git/hooks`, `.envrc`) and pages too. The popup's `papp-run` line names those folders. Apargon's own checks still hold the page itself to the patterns.
-- `--unshare-net` isolates IP networking only. A socket file outside `/run` and `/tmp` remains, and can be a way out for a program the page runs, or for a page that exploits Chromium: tmux, screen or Docker started with a socket elsewhere (`tmux -S ~/some/socket`, Docker with `-H`), or any server listening in a folder the page may see.
-- `--unshare-net` does not cover `vsock`, which is not IP. In a virtual machine, a program the page runs can reach the host through it.
-- On X11, the display's socket comes back, because the window needs it. Through it a program can type into another window, such as a terminal. Wayland does not allow that.
-- A `papp-socket` opens whatever answers there. Apargon cannot tell what that is, so the line is red and says so, and nothing more.
-- A declared `localhost` port must be a number. Apargon relays each port on its own, so it refuses `localhost:*`.
+**Ways out for a program, or for a page that exploits Chromium:**
 
-**Everywhere**
+| OS    | Way out                                                                                                                              |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| macOS | Mach messages to system services are allowed (the GUI needs them). Only the three known fetch services and Apple Events are blocked. |
+| Linux | a socket file outside `/run` and `/tmp`: `tmux -S ~/sock`, Docker with `-H`, any server in a folder the page sees                    |
+| Linux | `vsock`, in a virtual machine                                                                                                        |
+| Linux | the X11 display socket, to type into another window. Wayland does not allow this.                                                    |
 
-- A page chooses its own icon, so in the Dock and the app switcher it can look like another app's. Apargon's badge on the corner, and the app name in the menu bar, are the only marks that it is an Apargon page. In Finder, only a page made here gets its icon.
-- Clipboard writing, printing, and files the user picks or drops into the page.
-- With `papp-use clipboard`, whatever is on the clipboard, a password manager's copy included. With `papp-use location`, where you are. With `papp-use camera` and `papp-use microphone`, what they pick up while the page is open. All are yellow, and with `papp-net` the summary says they can be sent.
-- Apargon shows no sign that the camera or the microphone is on. macOS asks once for Apargon, not for each page: after one page is allowed, another with the tag is not asked again by the system. A program a page runs counts as Apargon too, so once Apargon has the camera, the microphone or Screen Recording, a page with `papp-run` can likely reach them through a program (`ffmpeg`, `screencapture`) without the `papp-use` tag. Untested: a test would trigger the system's prompts. `papp-run` is red, and its summary already says the page may send anything out.
-- With `papp-use screen`, every window on the main screen, passwords and messages included, for as long as the page keeps capturing. The line is red, and with `papp-net` the summary says what is on your screen can be sent. On Wayland capture fails: it needs the desktop portal over D-Bus, which the sandbox hides. Capture itself has not been tested, on either platform: a test would trigger macOS's Screen Recording prompt.
-- A `papp-shortcut` is heard in every app, and two modifiers do not make a combination no app uses: `Cmd+Shift+Z` is redo, and `Ctrl+Shift+V` pastes in a Linux terminal. The popup names the keys. On Wayland the display refuses global shortcuts and the tag does nothing.
-- A notification's text is the page's. It is shown under Apargon's name, so it cannot pass for another app's, but it can say anything.
-- Where a page came from is read from a mark that not every route leaves: `git clone`, `curl`, USB sticks and Firefox on Linux leave none, and Linux needs `getfattr` installed. Such a page gets the popup for a page made here: no site named, no content hold, and no popup at all with no tags. Its red lines still need the checkbox. A page can also drop its own mark by rewriting itself, as in "Approvals of pages made here follow the path".
+### Devices and the desktop
 
-### For a page with full Node
+- With `papp-use`, the page gets what the device picks up: the clipboard (a password manager's copy too), location, camera, microphone, the whole screen.
+- Apargon shows no sign that the camera or microphone is on.
+- macOS asks once for Apargon, not for each page.
+- Screen capture is untested on both platforms. It fails on Wayland.
+- Linux: `papp-use sound` or `microphone` binds the sound server. A program can then play and record, and the server can stream over the network. Untested on a desktop.
+- A shortcut is heard in every app and can still clash (`Cmd+Shift+Z`). It does nothing on Wayland.
+- A notification's text is the page's. It shows under Apargon's name.
+- A page's icon can look like another app's. Only the badge and the menu-bar name show it is an Apargon page.
+- Clipboard writing, printing, and files you pick or drop into the page need no tag.
 
-The sandbox blocks sockets, writes to Apargon's own files and, on macOS, the three fetch services. Nothing else.
+### Where a page came from
 
-With `child_process` and your files, the page can:
+- Apargon reads the download mark browsers set. `git clone`, `curl`, USB sticks and Firefox on Linux leave none. Linux also needs `getfattr`.
+- Without a mark, a page is treated as made here: no site, no content hold, and no popup if it has no tags. Red lines still need the checkbox.
+- Rewriting the page in place keeps its mark. Replacing the file, as a program or a `papp-write` on pages could, drops it.
+- An approval of a page made here follows its path, not its content: it is yours to edit.
+- A downloaded page is held to its own content, not to the `.js` and `.css` it loads.
+- A page with `papp-write` can change `.js` and `.css` in those folders. An approved page that loads them runs the new code with its permissions, at once.
 
-- launch another app that has network (`open`, `osascript`, `launchctl`; on Linux, through X11 or a socket file outside `/run` and `/tmp`);
-- write to a synced folder, or to shell startup files and launch agents that run later;
-- ask another app to write Apargon's approvals (Apple Events to Terminal; on Linux, a shell startup file);
-- read other pages' browser storage, which lives on disk in `pages/`;
-- ask a local daemon or another process to act for it.
+So keep approved pages where only you write, and a page that asks for servers or programs in a folder of its own.
 
-### Approvals of pages made here follow the path
+### Full-Node pages
 
-For a page made here, Apargon remembers an approval by file path and permission list, not content: it is your page to edit. Editing it without changing its tags does not ask again. A downloaded page is held to its content too, but not to the `.js` and `.css` files it loads.
+The sandbox blocks their sockets and their writes to Apargon's data and app. On macOS it also blocks the three fetch services; on Linux it also empties `/run`, `/tmp` and `/var/tmp` and hides other processes. Nothing else. Such a page can:
 
-This matters because pages can change each other:
+- launch an app that has network (`open`, `osascript`, `launchctl`; on Linux through X11 or a socket file);
+- write startup files and launch agents that run later, or to a synced folder;
+- ask another app to write `grants.json` (Apple Events to Terminal; a shell startup file);
+- read other pages' storage in `pages/`;
+- ask any local daemon to act for it;
+- send the trampoline any message the page process can: turn off the update check, revoke approvals, open another page, show notifications or a tray icon without the tag, set a file icon;
+- macOS: rewrite or erase `egress.log`, which sits in `~/Library/Logs`, outside the protected folder;
+- macOS: change the downloaded update in `~/Library/Caches`. A changed build fails the signature check and is not installed.
 
-- No page without full Node can change a page unless a `papp-write` pattern names pages.
-- A page with `papp-write` can still change the `.js` and `.css` files in those folders. If an approved page loads them, its new code runs with the approved permissions.
-- An open page reloads when its files change, so new code runs at once.
-
-So:
-
-- keep approved pages where only you can write;
-- keep a page that asks for servers or programs in a folder of its own.
+Untested: whether a full-Node page can rename a folder above Apargon's data and plant its own `grants.json`.
 
 ### The update check
 
-- Once a day, GitHub learns your IP address and that Apargon ran. Turning the check off stops that.
-- Whoever controls the GitHub repository can tell Linux users a new version is out. They cannot ship one to macOS users without Apargon's Developer ID: Squirrel refuses a build signed by anyone else.
-- On macOS the downloaded update waits in Apargon's cache folder under `~/Library/Caches`, which a full-Node page could change. A changed build fails the signature check and is not installed.
+- Once a day, GitHub learns your IP address and that Apargon ran. Turning the check off stops it.
+- Whoever controls the GitHub repository can tell Linux users a new version is out. Without the Developer ID, they cannot ship one to macOS.
 
-### No hard guarantee
+### The packaged app
 
-A firm "nothing leaves" guarantee needs a VM with no network card, no shared folders and no shared clipboard. This version has none.
+- macOS: the `app.asar` hash sits in `Info.plist`, which only the code signature protects. Without a Developer ID signature, anyone can edit the app and update the hash.
+- macOS: `sandbox/macos.sb` is not hash-checked. Pages cannot write it.
+- macOS: the profile starts from `(allow default)`, because the GUI needs Mach IPC and the WindowServer.
+- macOS: `sandbox-exec` is deprecated, but it is still the way to sandbox a process tree.
+- Linux from source: on Ubuntu 23.10 and later `bwrap` fails without the AppArmor profile the `.deb` installs, and Apargon refuses to open pages.
+- Linux: the `.deb` needs `bubblewrap` 0.8.0 or later, so Ubuntu 22.04 is refused at install.
 
-## Platform notes
+### Scope
 
-**macOS**
-
-- The profile starts from `(allow default)` on purpose. The GUI needs Mach IPC and the WindowServer.
-- Apple Events travel through a Mach service, so for a page without full Node the profile denies the lookup of `com.apple.coreservices.appleevents`; `appleevent-send` alone does not stop `osascript`. `selftest-net` checks it.
-- `sandbox-exec` is deprecated, but it is still the way to apply a profile to a process tree.
-- The `app.asar` hash lives in the app's `Info.plist`, which only the code signature protects. Without a Developer ID signature, anyone can edit the app and update the hash.
-- `sandbox/macos.sb` sits outside `app.asar` and is not hash-checked. Pages cannot write it, as they cannot write the app.
-
-**Linux**
-
-- The sandbox's network has its own loopback, so it cannot reach the trampoline's proxy or your real `localhost`. The trampoline listens on socket files in Apargon's data, which the page can see but not change. The sandboxed process relays a port on its own loopback to each.
-- On Ubuntu 23.10 and later, an unprivileged `bwrap` may create a user namespace but not use it (`bwrap: loopback: Failed RTM_NEWADDR`). The `.deb` installs an AppArmor profile that lets Apargon, and the `bwrap` it starts, use one. From source there is no profile: `bwrap` fails, and Apargon shows "Could not start the sandbox".
-- The `.deb` depends on `bubblewrap (>= 0.8.0)`, the first with `--disable-userns`, so installing it installs a `bwrap` that takes every flag Apargon passes. Ubuntu 22.04 ships 0.6.1 and is refused at install.
-- Hiding the runtime folder also hides the sound server, and `/dev/snd` is not in the sandbox's `/dev`, so a page plays no sound unless it declares `papp-use sound`, which binds `pipewire-0`, `pulse` and `/dev/snd` back. `papp-use microphone` binds the same, so a page with it can also play sound through the sound server, though its window stays muted. `papp-use sound` binds the same, so a program the page runs, or a full-Node page, can record from the microphone without `papp-use microphone`; the line says so. PulseAudio and PipeWire can be set to stream over the network, so the line is yellow. Untested on a desktop.
+Apargon is not a VM. A hard "nothing leaves" guarantee needs a VM with no network card, no shared folders and no shared clipboard.
 
 ## Verification
 
 `pnpm test` runs every check in the real app and fails if one fails. `test/check.ts` lists the checks for each platform. [AGENTS.md](AGENTS.md#the-installed-deb) has the Linux run on the installed `.deb`.
 
-| Platform      | Last verified                                                                                                                                                           |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| macOS         | 2026-10-27, `pnpm test`: every check                                                                                                                                    |
-| Linux         | 2026-10-27, the installed `.deb` built from `c9fab4c` on a headless Ubuntu 24.04 server with the AppArmor limit on: every Linux check, and the refusal with its control |
-| Linux desktop | not yet: no run with a real display and a double-click                                                                                                                  |
+| Platform      | Last verified                                                                                                                                                                                                                      |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS         | 2026-10-27, `pnpm test`: every check                                                                                                                                                                                               |
+| Linux         | 2026-10-28, the installed `.deb` built from `5cb6150` with the uncommitted `pick`, `saveAs` and file calls, on a headless Ubuntu 24.04 server with the AppArmor limit on: every Linux check (83), and the refusal with its control |
+| Linux desktop | not yet: no run with a real display and a double-click                                                                                                                                                                             |
+
+Not yet run on Linux: the `papp-socket` folder refusal and the NAT64 range, added after `c9fab4c`.
 
 ## Reporting
 

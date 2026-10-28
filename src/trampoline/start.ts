@@ -75,7 +75,7 @@ function handleChildMessage(child: ChildProcess, page: string, hidden: string[],
   } else if ('tray' in message) {
     setTray(child, page, message.tray);
   } else if ('installSkill' in message) {
-    offerSkill('The papp skill for coding agents');
+    offerSkill('The papp skill for coding agents', null);
   } else if ('saveAs' in message) {
     const { id, files } = message.saveAs;
     saveFiles(files, hidden).then(

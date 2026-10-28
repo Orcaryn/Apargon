@@ -1,0 +1,169 @@
+<!doctype html>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+<title>Apargon</title>
+<style>
+  :root {
+    --surface: #ffffff;
+    --well: #f5f5f7;
+    --ink: #1d1d1f;
+    --muted: #6e6e73;
+    --rule: #e5e5ea;
+    --button: #ebebef;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --surface: #1e1e20;
+      --well: #28282b;
+      --ink: #f5f5f7;
+      --muted: #98989d;
+      --rule: #38383b;
+      --button: #3a3a3d;
+    }
+  }
+  * {
+    box-sizing: border-box;
+    margin: 0;
+  }
+  [hidden] {
+    display: none;
+  }
+  body {
+    background: var(--surface);
+    color: var(--ink);
+    font: 13px/1.45 system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -webkit-app-region: drag;
+    user-select: none;
+  }
+  main {
+    padding: 20px 22px 16px;
+  }
+  h1 {
+    font-size: 17px;
+    font-weight: 650;
+    line-height: 1.25;
+    letter-spacing: -0.015em;
+  }
+  .subtitle {
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 11.5px;
+  }
+  .lead {
+    margin-top: 12px;
+  }
+  ol {
+    margin-top: 8px;
+    padding: 0;
+    list-style: none;
+  }
+  li {
+    display: flex;
+    gap: 10px;
+    padding: 4px 0;
+    font: 12px/1.45 ui-monospace, monospace;
+  }
+  li svg {
+    flex: none;
+    margin-top: 1px;
+    fill: none;
+    stroke: var(--muted);
+    stroke-width: 1.3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .note {
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 11.5px;
+  }
+  pre {
+    margin-top: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--well);
+    font: 11.5px/1.5 ui-monospace, monospace;
+    white-space: pre-wrap;
+    user-select: text;
+    -webkit-app-region: no-drag;
+  }
+  footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 22px;
+    border-top: 1px solid var(--rule);
+    background: var(--well);
+  }
+  button {
+    min-width: 96px;
+    height: 30px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 7px;
+    background: var(--button);
+    color: var(--ink);
+    font: inherit;
+    font-weight: 500;
+    -webkit-app-region: no-drag;
+  }
+  #allow {
+    background: var(--ink);
+    color: var(--surface);
+  }
+  button:active {
+    filter: brightness(0.92);
+  }
+  button:focus-visible {
+    outline: 3px solid -webkit-focus-ring-color;
+    outline-offset: 1px;
+  }
+</style>
+
+<main>
+  <h1 id="title"></h1>
+  <p class="subtitle" id="subtitle"></p>
+  <div id="offer">
+    <p class="lead">Install the papp skill? With it, coding agents such as Claude Code build apps for Apargon when you ask. It goes in:</p>
+    <ol>
+      <li>
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+          <path d="M1.5 4.2c0-.7.5-1.2 1.2-1.2h3.4l1.4 1.5h5.8c.7 0 1.2.5 1.2 1.2v6.4c0 .7-.5 1.2-1.2 1.2H2.7c-.7 0-1.2-.5-1.2-1.2z" /></svg
+        >~/.claude/skills/papp
+      </li>
+      <li>
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+          <path d="M1.5 4.2c0-.7.5-1.2 1.2-1.2h3.4l1.4 1.5h5.8c.7 0 1.2.5 1.2 1.2v6.4c0 .7-.5 1.2-1.2 1.2H2.7c-.7 0-1.2-.5-1.2-1.2z" /></svg
+        >~/.agents/skills/papp
+      </li>
+    </ol>
+    <p class="note">Replaces any older copy.</p>
+  </div>
+  <div id="done">
+    <p class="lead">Ask your agent for an app, for example:</p>
+    <pre>Make me a papp that lists the Markdown notes in ~/notes and lets me edit them.</pre>
+  </div>
+</main>
+<footer>
+  <button id="deny">Not Now</button>
+  <button id="allow">Install the Skill</button>
+</footer>
+
+<script>
+  function render(skill) {
+    title.textContent = skill.title;
+    subtitle.textContent = skill.subtitle;
+    subtitle.hidden = skill.subtitle === null;
+    offer.hidden = skill.installed;
+    done.hidden = !skill.installed;
+    deny.hidden = skill.installed;
+    allow.textContent = skill.installed ? 'Done' : 'Install the Skill';
+    allow.focus();
+  }
+
+  deny.onclick = () => (location.hash = 'deny');
+  allow.onclick = () => (location.hash = 'allow');
+  onkeydown = event => event.key === 'Escape' && (location.hash = 'deny');
+</script>

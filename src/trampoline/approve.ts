@@ -43,7 +43,7 @@ export async function approve(file: string) {
     console.log(['Apargon: allowed for the test:', popup.source, popup.name, popup.changed ?? [], worst ?? [], popup.lines.map(line => `${line.level}: ${line.text}`)].flat().join('\n  '));
 
     return approved;
-  } else if (!(await ask(popup))) {
+  } else if (!(await ask('popup.html', popup))) {
     return null;
   }
 
@@ -53,7 +53,8 @@ export async function approve(file: string) {
   return approved;
 }
 
-async function ask(popup: object) {
+// Shows one of this folder's HTML windows, filled in by its render(); true when the user picks #allow.
+export async function ask(file: string, content: object) {
   const width = 460;
   const win = new BrowserWindow({
     width,
@@ -68,8 +69,8 @@ async function ask(popup: object) {
   });
   const fit = async () => win.setContentSize(width, await win.webContents.executeJavaScript('document.body.offsetHeight'));
   win.webContents.on('will-navigate', event => event.preventDefault());
-  await win.loadFile(path.join(import.meta.dirname, 'popup.html'));
-  await win.webContents.executeJavaScript(`render(${JSON.stringify(popup)})`);
+  await win.loadFile(path.join(import.meta.dirname, file));
+  await win.webContents.executeJavaScript(`render(${JSON.stringify(content)})`);
   await fit();
   app.focus({ steal: true });
   win.show();

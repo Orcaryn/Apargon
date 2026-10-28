@@ -4,6 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { DATA, readJson, writeJson } from '../shared.ts';
+import { ask } from './approve.ts';
 
 // Inside app.asar, so on macOS the build hash covers it.
 const SKILL = path.join(app.getAppPath(), 'skills/papp/SKILL.md');
@@ -26,18 +27,18 @@ export async function welcome(withPage: boolean) {
   }
 
   writeJson(WELCOME_FILE, { welcomed: true });
-  // Started from a terminal, the app is not in front, and a dialog with no window opens behind the others.
-  app.focus({ steal: true });
+  const title = withPage ? 'Welcome to Apargon.' : 'Apargon is ready.';
+  const subtitle = withPage ? null : 'Double-click a .papp file to open it.';
 
   if (installed) {
-    await dialog.showMessageBox({ type: 'info', message: 'Apargon is ready.', detail: 'Double-click a .papp file to open it.\n\nThe papp skill for coding agents is installed.' });
+    await ask('skill.html', { title, subtitle: [subtitle, 'The papp skill is installed.'].filter(Boolean).join(' '), installed });
   } else {
-    await offerSkill(withPage ? 'Welcome to Apargon.' : 'Apargon is ready. Double-click a .papp file to open it.');
+    await offerSkill(title, subtitle);
   }
 }
 
 // From the menu, the page only asks; the user says yes in this process's dialog, and the file is the one Apargon ships. A page that breaks out of its sandbox can do no more than show the dialog.
-export async function offerSkill(message: string) {
+export async function offerSkill(title: string, subtitle: string | null) {
   if (asking) {
     return;
   }
@@ -45,18 +46,7 @@ export async function offerSkill(message: string) {
   asking = true;
 
   try {
-    // This process has no window of its own: without this, its dialog opens behind the page.
-    app.focus({ steal: true });
-    const { response } = await dialog.showMessageBox({
-      type: 'question',
-      message,
-      detail: `Install the papp skill? With it, coding agents such as Claude Code build apps for Apargon when you ask. It goes in, replacing any older copy:\n\n${FOLDERS.map(folder => `~/${folder}`).join('\n')}\n\nLater: Help → Install the papp Skill for Agents…`,
-      buttons: ['Install the Skill', 'Not Now'],
-      defaultId: 0,
-      cancelId: 1,
-    });
-
-    if (response === 1) {
+    if (!(await ask('skill.html', { title, subtitle, installed: false }))) {
       return;
     }
 
@@ -70,7 +60,7 @@ export async function offerSkill(message: string) {
       fs.renameSync(temporary, path.join(folder, 'SKILL.md'));
     }
 
-    await dialog.showMessageBox({ type: 'info', message: 'The papp skill is installed.', detail: 'Ask your agent for an app, for example: "Make me a papp that lists the Markdown notes in ~/notes and lets me edit them."' });
+    await ask('skill.html', { title: 'The papp skill is installed.', subtitle: null, installed: true });
   } catch (err) {
     dialog.showErrorBox('Apargon', `Could not install the skill: ${(err as Error).message}`);
   } finally {

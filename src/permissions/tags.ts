@@ -98,14 +98,15 @@ export function declaredPermissions(page: string, html = fs.readFileSync(page, '
   }
 
   if (permissions.node && (permissions.read.length || permissions.write.length || Object.keys(permissions.run).length || permissions.env.length)) {
-    throw new Error('papp-node already allows every folder, program and variable. Keep papp-node, papp-net and papp-socket only.');
+    throw new Error('papp-node already allows every folder, program and variable. Remove papp-read, papp-write, papp-run and papp-env.');
   } else if (permissions.env.length && !Object.keys(permissions.run).length) {
     throw new Error('papp-env passes a variable to the programs a page runs, and this page runs none. Add papp-run, or remove papp-env.');
   }
 
   const { read, write, run, sockets, tags } = permissions;
   const quoted = [...write, ...sockets].find(folder => folder.includes('"'));
-  const reopened = [dir, ...[...read, ...write].map(patternFolder)].find(
+  const socketFolders = sockets.filter(socket => fs.statSync(socket).isDirectory());
+  const reopened = [dir, ...[...read, ...write].map(patternFolder), ...socketFolders].find(
     folder => folder.startsWith('/run/') || PRIVATE.some(emptied => emptied === folder || emptied.startsWith(path.join(folder, '/')))
   );
   const invisible = [page, ...read, ...write, ...Object.values(run), ...sockets, ...tags].find(text => /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(text));
@@ -264,6 +265,7 @@ export function privateNetwork() {
   addresses.addAddress('::1', 'ipv6');
   addresses.addSubnet('fc00::', 7, 'ipv6');
   addresses.addSubnet('fe80::', 10, 'ipv6');
+  addresses.addSubnet('64:ff9b::', 96, 'ipv6');
 
   return addresses;
 }

@@ -7,8 +7,9 @@ import { declaredPermissions } from '../src/permissions/tags.ts';
 
 if (process.platform === 'linux') {
   const page = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'apargon-popup-')), 'case.papp');
-  const opened = ['/', '/var', '/var/tmp', '/tmp', '/tmp/*', '/run'].filter(folder => {
-    fs.writeFileSync(page, `<meta name="papp-read" content="${folder}">`);
+  const cases = [...['/', '/var', '/var/tmp', '/tmp', '/tmp/*', '/run'].map(folder => ['papp-read', folder]), ...['/', '/tmp', '/run'].map(folder => ['papp-socket', folder])];
+  const opened = cases.filter(([tag, folder]) => {
+    fs.writeFileSync(page, `<meta name="${tag}" content="${folder}">`);
 
     try {
       declaredPermissions(page);
@@ -18,7 +19,7 @@ if (process.platform === 'linux') {
       return !(err as Error).message.includes('cannot open');
     }
   });
-  console.log(opened.length ? `popup: FAIL, opened ${opened.join(' ')}` : 'popup: ok, every emptied folder refused');
+  console.log(opened.length ? `popup: FAIL, opened ${opened.map(([tag, folder]) => `${tag} ${folder}`).join(', ')}` : 'popup: ok, every emptied folder refused');
   process.exit(opened.length ? 1 : 0);
 }
 

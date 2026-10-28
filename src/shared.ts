@@ -8,7 +8,7 @@ import type { Permissions } from './permissions/tags.ts';
 export type Bridge = { port: number; socket: string };
 export type ChildConfig = { page: string; permissions: Permissions; pageHash: string | null; proxy: string | null; bridges: Bridge[] };
 export type SavedFile = { name: string; data: string };
-export type ChildMessage = { open: string } | { revoke: string[] } | { showEgressLog: true } | { automaticUpdates: boolean } | { fileIcon: string } | { notify: { title: string; body: string } } | { tray: string | null } | { saveAs: { id: string; files: SavedFile[] } };
+export type ChildMessage = { open: string } | { revoke: string[] } | { showEgressLog: true } | { automaticUpdates: boolean } | { fileIcon: string } | { notify: { title: string; body: string } } | { tray: string | null } | { saveAs: { id: string; files: SavedFile[] } } | { installSkill: true };
 export type ParentMessage = { trayClick: true } | { saved: string; paths: string[] } | { saved: string; error: string };
 export type Grants = Record<string, string[]>;
 export type UpdateState = { automatic?: boolean; checked?: string; noticed?: string };

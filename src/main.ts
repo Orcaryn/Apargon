@@ -5,6 +5,7 @@ import { showPage } from './page/start.ts';
 import { PAGE_FILE } from './permissions/patterns.ts';
 import { PAGE_DATA, tellTrampoline, type ChildConfig } from './shared.ts';
 import { SANDBOX } from './trampoline/platform.ts';
+import { welcome } from './trampoline/skill.ts';
 import { openPage } from './trampoline/start.ts';
 import { checkForUpdates } from './trampoline/update.ts';
 
@@ -34,7 +35,7 @@ app.on('open-file', (event, file) => {
 
 app.whenReady().then(async () => {
   if (!pages.length) {
-    dialog.showErrorBox('Apargon', 'Open a .papp page.');
+    await welcome(false);
     app.quit();
   } else if (childConfig && !(PAGE_PLATFORM && (await PAGE_PLATFORM.isOffline()))) {
     const refusal = 'This process can still open sockets, so it is not in the sandbox. Refusing to open the page. If APARGON is set in your environment, unset it.';
@@ -47,6 +48,7 @@ app.whenReady().then(async () => {
     dialog.showErrorBox('Apargon', `No offline mode for ${process.platform} yet. Apargon opens pages on macOS and Linux.`);
     app.quit();
   } else {
+    await welcome(true);
     pages.forEach(openPage);
     checkForUpdates();
   }

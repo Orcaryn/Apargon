@@ -54,6 +54,10 @@ export function installMenu(page: string, lines: Line[], approved: string[]) {
           },
         ],
       },
+      {
+        role: 'help',
+        submenu: [{ label: 'Install the papp Skill for Agents…', click: () => tellTrampoline({ installSkill: true }) }],
+      },
     ])
   );
 }

@@ -10,6 +10,7 @@ import { PAGE_ENV } from '../permissions/tags.ts';
 import { APP_BUNDLE, APP_ROOT, DATA, EGRESS_LOG, GRANTS_FILE, MESSAGE_FD, PARENT_FD, readJson, realPath, UPDATE_FILE, writeJson, type ChildConfig, type ChildMessage, type Grants, type ParentMessage, type SavedFile, type UpdateState } from '../shared.ts';
 import { approve } from './approve.ts';
 import { SANDBOX } from './platform.ts';
+import { offerSkill } from './skill.ts';
 
 let openPages = 0;
 const trays = new Map<ChildProcess, Tray>();
@@ -73,6 +74,8 @@ function handleChildMessage(child: ChildProcess, page: string, hidden: string[],
     new Notification(message.notify).show();
   } else if ('tray' in message) {
     setTray(child, page, message.tray);
+  } else if ('installSkill' in message) {
+    offerSkill('The papp skill for coding agents');
   } else if ('saveAs' in message) {
     const { id, files } = message.saveAs;
     saveFiles(files, hidden).then(

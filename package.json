@@ -34,7 +34,8 @@
     "appId": "com.hammer.apargon",
     "productName": "Apargon",
     "files": [
-      "src/**"
+      "src/**",
+      "skills/**"
     ],
     "extraResources": [
       "sandbox/"

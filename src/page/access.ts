@@ -1,5 +1,3 @@
-import fs from 'fs';
-import path from 'path';
 import { PAGE_FILE, patternSource } from '../permissions/patterns.ts';
 import { changeableSources, type Permissions } from '../permissions/tags.ts';
 import { APP_BUNDLE, DATA } from '../shared.ts';
@@ -20,16 +18,9 @@ export function pageAccess(permissions: Permissions) {
   const canSee = (file: string) => visible.some(pattern => pattern.test(file)) && !isSecret(file);
 
   return {
+    isSecret,
     canSee,
     canList: (file: string) => canSee(file) || listable.some(pattern => pattern.test(file)),
     canChange: (file: string) => (PAGE_FILE.test(file) ? changeablePages : changeable).some(pattern => pattern.test(file)) && !isSecret(file) && !apargonFolders.some(dir => file === dir || file.startsWith(dir + '/')),
   };
-}
-
-export function realPath(file: string): string {
-  if (fs.lstatSync(file, { throwIfNoEntry: false })) {
-    return fs.realpathSync.native(file);
-  }
-
-  return path.dirname(file) === file ? file : path.join(realPath(path.dirname(file)), path.basename(file));
 }

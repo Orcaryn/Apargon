@@ -29,7 +29,7 @@
   win.setAlwaysOnTop(false);
 
   try {
-    const data = process.platform === 'darwin' ? 'Library/Application Support/Apargon' : '.config/Apargon';
+    const data = process.platform === 'darwin' ? 'Library/Application Support/apargon' : '.config/apargon';
     fs.appendFileSync(path.join(os.homedir(), data, 'grants.json'), '');
     result.grants_protected = false;
   } catch {
@@ -58,7 +58,7 @@
     const display = [process.env.WAYLAND_DISPLAY && path.resolve(runtime, process.env.WAYLAND_DISPLAY), x11 && `/tmp/.X11-unix/X${x11[1]}`].filter(Boolean);
     const sockets = ['/run', '/tmp', '/var/tmp'].flatMap((folder) => fs.readdirSync(folder, { recursive: true, withFileTypes: true }).filter((entry) => entry.isSocket()).map((entry) => path.join(entry.parentPath, entry.name)));
     result.socket_folders_hidden = sockets.every((socket) => display.includes(socket));
-    result.other_pages_sockets_hidden = fs.readdirSync(path.join(os.homedir(), '.config/Apargon/net')).length === 0;
+    result.other_pages_sockets_hidden = fs.readdirSync(path.join(os.homedir(), '.config/apargon/net')).length === 0;
   }
 
   const fetched = fetch('https://example.com', { cache: 'no-store', signal: AbortSignal.timeout(3000) })

@@ -7,8 +7,9 @@ import type { Permissions } from './permissions/tags.ts';
 
 export type Bridge = { port: number; socket: string };
 export type ChildConfig = { page: string; permissions: Permissions; pageHash: string | null; proxy: string | null; bridges: Bridge[] };
-export type ChildMessage = { open: string } | { revoke: string[] } | { showEgressLog: true } | { automaticUpdates: boolean } | { fileIcon: string } | { notify: { title: string; body: string } } | { tray: string | null };
-export type ParentMessage = { trayClick: true };
+export type SavedFile = { name: string; data: string };
+export type ChildMessage = { open: string } | { revoke: string[] } | { showEgressLog: true } | { automaticUpdates: boolean } | { fileIcon: string } | { notify: { title: string; body: string } } | { tray: string | null } | { saveAs: { id: string; files: SavedFile[] } };
+export type ParentMessage = { trayClick: true } | { saved: string; paths: string[] } | { saved: string; error: string };
 export type Grants = Record<string, string[]>;
 export type UpdateState = { automatic?: boolean; checked?: string; noticed?: string };
 
@@ -33,8 +34,21 @@ export function writeJson(file: string, value: object) {
   fs.renameSync(`${file}.tmp`, file);
 }
 
+export function realPath(file: string): string {
+  if (fs.lstatSync(file, { throwIfNoEntry: false })) {
+    return fs.realpathSync.native(file);
+  }
+
+  return path.dirname(file) === file ? file : path.join(realPath(path.dirname(file)), path.basename(file));
+}
+
 export function tellTrampoline(message: ChildMessage) {
-  fs.writeSync(MESSAGE_FD, JSON.stringify(message) + '\n');
+  const line = Buffer.from(JSON.stringify(message) + '\n');
+
+  // A large message, such as a save, can go out in more than one write.
+  for (let written = 0; written < line.length; ) {
+    written += fs.writeSync(MESSAGE_FD, line, written);
+  }
 }
 
 export async function relay(from: net.ListenOptions, to: net.NetConnectOpts) {

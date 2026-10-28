@@ -15,9 +15,9 @@
   const refused = async (call) => {
     try { await call(); return false; } catch { return true; }
   };
-  const changeSeen = async (watching, change) => {
+  const changeSeen = async (watching, change, options) => {
     let seen = null;
-    const stop = await papp.watch(watching, (file) => { seen ??= file; });
+    const stop = await papp.watch(watching, (file, kind) => { seen ??= `${file} ${kind}`; }, options);
     await change();
     await new Promise((done) => setTimeout(done, 1000));
     await stop();
@@ -60,21 +60,47 @@
     result.page_rename_refused = await refused(() => papp.rename('scratch.txt', 'scratch.papp')) && await refused(() => papp.rename('selftest-node.papp', 'scratch.txt'));
     result.options_refused = await refused(() => papp.readFile('scratch.txt', { flag: 'w' })) && await papp.readFile('scratch.txt') === 'hi';
 
-    result.watch_folder = await changeSeen('.', () => papp.writeFile('scratch.txt', 'again')) === 'scratch.txt';
+    result.watch_folder = await changeSeen('.', () => papp.writeFile('scratch.txt', 'again')) === 'scratch.txt changed';
     await papp.writeFile('scratch.new', 'new');
-    result.watch_file_renamed_over = await changeSeen('scratch.txt', () => papp.rename('scratch.new', 'scratch.txt')) === 'scratch.txt';
+    result.watch_file_renamed_over = await changeSeen('scratch.txt', () => papp.rename('scratch.new', 'scratch.txt')) === 'scratch.txt changed';
     result.watch_survives_second_window = await changeSeen('.', async () => {
       const second = window.open('#second');
       await new Promise((done) => setTimeout(done, 1500));
       await papp.writeFile('scratch.txt', 'seen from the first window');
       second.close();
-    }) === 'scratch.txt';
+    }) === 'scratch.txt changed';
+    result.watch_removed = await changeSeen('scratch.txt', () => papp.rm('scratch.txt')) === 'scratch.txt removed';
+    await papp.mkdir('scratch-dir');
+    const deep = [];
+    const stopDeep = await papp.watch('.', (file, kind) => deep.push(`${file} ${kind}`), { recursive: true });
+    await papp.writeFile('scratch-dir/deep.txt', 'x');
+    await new Promise((done) => setTimeout(done, 1000));
+    await stopDeep();
+    result.watch_recursive = deep.includes('scratch-dir/deep.txt changed');
+    await papp.rm('scratch-dir');
+    await papp.writeFile('scratch.txt', 'again');
     result.watch_outside_refused = await refused(() => papp.watch('..', () => {}));
     result.watch_hidden_refused = await refused(() => papp.watch('.hidden', () => {}));
     await papp.rm('scratch.txt');
     await papp.mkdir('scratch-dir');
     result.hidden_below_match_refused = await refused(() => papp.writeFile('scratch-dir/.hidden', 'x'));
     await papp.rm('scratch-dir');
+
+    const listed = await papp.readdir('.', { stats: true });
+    const entry = (name) => listed.find((item) => item.name === name);
+    result.readdir_stats = entry('subfolder')?.isDirectory === true && entry('selftest.papp')?.isFile === true && entry('selftest.papp').size > 0 && !listed.some((item) => item.name.startsWith('.'));
+    const note = await papp.readFile('subfolder/note.txt');
+    result.read_range = await papp.readFile('subfolder/note.txt', 'utf8', { offset: 2, length: 4 }) === note.slice(2, 6) && (await papp.readFile('subfolder/note.txt', null, { offset: 1 })).length === note.length - 1;
+    await papp.writeFile('scratch.txt', 'a');
+    await papp.appendFile('scratch.txt', 'b');
+    result.append = await papp.readFile('scratch.txt') === 'ab';
+    result.append_refused = await refused(() => papp.appendFile('own.txt', 'x')) && await refused(() => papp.appendFile('selftest-node.papp', 'x'));
+    await papp.copyFile('subfolder/note.txt', 'scratch-copy.txt');
+    result.copy = await papp.readFile('scratch-copy.txt') === note;
+    await papp.rm('scratch-copy.txt');
+    result.copy_refused = await refused(() => papp.copyFile('../package.json', 'scratch-copy.txt')) && await refused(() => papp.copyFile('subfolder/note.txt', 'own.txt')) && await refused(() => papp.copyFile('selftest.papp', 'scratch.papp'));
+    await papp.rm('scratch.txt');
+    result.save_names_refused = (await Promise.all([{}, { '../out.txt': 'x' }, { 'sub/out.txt': 'x' }, { '.zshrc': 'x' }, { 'ok.txt': 'x', 'page.papp': 'x' }, { 'ok.txt': 'x', '': 'x' }].map((files) => refused(() => papp.saveAs(files))))).every(Boolean);
 
     result.outside_read_refused = await refused(() => papp.readFile('../package.json'));
     result.outside_write_refused = await refused(() => papp.writeFile('../outside.txt', 'x'));

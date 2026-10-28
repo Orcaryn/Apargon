@@ -61,6 +61,11 @@
     }
 
     result.program_input = (await papp.run('cat', [], { input: 'piped' })).stdout === 'piped';
+    const bytes = (await papp.run('cat', [], { input: new Uint8Array([0, 255, 10, 1]), encoding: null })).stdout;
+    result.program_bytes = bytes instanceof Uint8Array && bytes.join() === '0,255,10,1';
+    const started = Date.now();
+    const timedOut = await papp.run('sh', ['-c', 'sleep 30; echo late'], { timeout: 500 });
+    result.program_timeout = timedOut.signal === 'SIGTERM' && timedOut.stdout === '' && Date.now() - started < 5000;
 
     const chunks = [];
     const lines = await papp.spawn('sh', ['-c', 'echo one; sleep 1; echo two'], { onOutput: (_stream, text) => chunks.push(text) });
@@ -85,7 +90,7 @@
     result.undeclared_program_refused = await refused(() => papp.run('ls'));
 
     if (!mac) {
-      const folders = (await papp.run('sh', ['-c', 'ls -A "$HOME/.config/Apargon/net"'])).stdout.trim().split('\n');
+      const folders = (await papp.run('sh', ['-c', 'ls -A "$HOME/.config/apargon/net"'])).stdout.trim().split('\n');
       result.own_sockets_only = folders.length === 1 && folders[0].startsWith('page-');
       result.page_process_env_unnamed_left_out = (await papp.run('sh', ['-c', 'tr "\\0" "\\n" < /proc/$PPID/environ 2>/dev/null | grep -c "^APARGON_TEST_ALLOW="'])).stdout.trim() === '0';
     }

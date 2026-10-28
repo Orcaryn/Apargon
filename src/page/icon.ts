@@ -2,8 +2,7 @@ import { app, BrowserWindow, nativeImage } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { tellTrampoline } from '../shared.ts';
-import { realPath } from './access.ts';
+import { realPath, tellTrampoline } from '../shared.ts';
 
 const IMAGE_TYPES: Record<string, string> = {
   '.svg': 'image/svg+xml',

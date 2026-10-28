@@ -1,6 +1,6 @@
 import { app, BrowserWindow, desktopCapturer, globalShortcut, ipcMain, net as electronNet, session } from 'electron';
 import remote from '@electron/remote/main/index.js';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import fs from 'fs';
 import net from 'net';
 import path from 'path';
@@ -8,8 +8,8 @@ import readline from 'readline';
 import { describe } from '../permissions/describe.ts';
 import { HOME, type Use } from '../permissions/tags.ts';
 import { PAGE_FILE } from '../permissions/patterns.ts';
-import { APP_ROOT, GRANTS_FILE, PARENT_FD, readJson, relay, type ChildConfig, type Grants, type ParentMessage } from '../shared.ts';
-import { pageAccess, realPath } from './access.ts';
+import { APP_ROOT, GRANTS_FILE, PARENT_FD, readJson, realPath, relay, tellTrampoline, type ChildConfig, type Grants, type ParentMessage } from '../shared.ts';
+import { pageAccess } from './access.ts';
 import { pageApi } from './api.ts';
 import { followFavicon } from './icon.ts';
 import { installMenu } from './menu.ts';
@@ -76,6 +76,15 @@ export async function showPage({ page, permissions, pageHash, bridges }: ChildCo
     front?.focus();
   };
 
+  // The trampoline shows the dialog and writes: this process may not write where the user picks.
+  const savesWaiting = new Map<string, { resolve: (paths: string[]) => void; reject: (err: Error) => void }>();
+  const saveAs = (files: Record<string, string | Uint8Array>) =>
+    new Promise<string[]>((resolve, reject) => {
+      const id = randomUUID();
+      const encoded = Object.entries(files).map(([name, data]) => ({ name, data: Buffer.from(data).toString('base64') }));
+      savesWaiting.set(id, { resolve, reject });
+      tellTrampoline({ saveAs: { id, files: encoded } });
+    });
   const apiBySender = new Map<number, Record<string, (...args: unknown[]) => unknown>>();
 
   if (access) {
@@ -124,7 +133,7 @@ export async function showPage({ page, permissions, pageHash, bridges }: ChildCo
     }
 
     if (access) {
-      const api = pageApi(dir, permissions, access, opened, toFront);
+      const api = pageApi(dir, permissions, access, opened, toFront, saveAs);
       const id = opened.webContents.id;
       apiBySender.set(id, api as Record<string, (...args: unknown[]) => unknown>);
       opened.on('closed', () => {
@@ -148,8 +157,19 @@ export async function showPage({ page, permissions, pageHash, bridges }: ChildCo
   }
 
   readline.createInterface({ input: new net.Socket({ fd: PARENT_FD, writable: false }) }).on('line', line => {
-    if ((JSON.parse(line) as ParentMessage).trayClick) {
+    const message = JSON.parse(line) as ParentMessage;
+
+    if ('trayClick' in message) {
       toFront();
+    } else {
+      const { resolve, reject } = savesWaiting.get(message.saved)!;
+      savesWaiting.delete(message.saved);
+
+      if ('paths' in message) {
+        resolve(message.paths);
+      } else {
+        reject(new Error(message.error));
+      }
     }
   });
 

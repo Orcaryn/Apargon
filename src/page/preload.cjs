@@ -15,7 +15,7 @@ call('reset');
 const watchCallbacks = new Map();
 const shortcutCallbacks = new Set();
 const jobs = new Map();
-ipcRenderer.on('apargon-change', (_event, id, file) => watchCallbacks.get(id)?.(file));
+ipcRenderer.on('apargon-change', (_event, id, file, kind) => watchCallbacks.get(id)?.(file, kind));
 ipcRenderer.on('apargon-output', (_event, id, stream, text) => jobs.get(id)?.onOutput?.(stream, text));
 ipcRenderer.on('apargon-exit', (_event, id, exit) => {
   jobs.get(id)?.resolve(exit);
@@ -25,9 +25,11 @@ ipcRenderer.on('apargon-shortcut', (_event, keys) => shortcutCallbacks.forEach(c
 
 contextBridge.exposeInMainWorld('papp', {
   dir: ipcRenderer.sendSync('apargon-dir'),
-  readFile: (file, encoding = 'utf8') => call('readFile', file, encoding),
+  readFile: (file, encoding = 'utf8', range) => call('readFile', file, encoding, range),
   writeFile: (file, data) => call('writeFile', file, data),
-  readdir: file => call('readdir', file),
+  appendFile: (file, data) => call('appendFile', file, data),
+  copyFile: (from, to) => call('copyFile', from, to),
+  readdir: (file, options) => call('readdir', file, options),
   stat: file => call('stat', file),
   exists: file => call('exists', file),
   mkdir: file => call('mkdir', file),
@@ -44,9 +46,9 @@ contextBridge.exposeInMainWorld('papp', {
 
     return { done, write: data => call('write', id, data), end: () => call('endInput', id), kill: () => call('kill', id) };
   },
-  watch: async (file, callback) => {
+  watch: async (file, callback, options) => {
     const id = crypto.randomUUID();
-    await call('watch', id, file);
+    await call('watch', id, file, options);
     watchCallbacks.set(id, callback);
 
     return () => {
@@ -55,6 +57,8 @@ contextBridge.exposeInMainWorld('papp', {
       return call('unwatch', id);
     };
   },
+  pick: options => call('pick', options),
+  saveAs: files => call('saveAs', files),
   notify: (title, body) => call('notify', title, body),
   tray: title => call('tray', title),
   onShortcut: callback => {

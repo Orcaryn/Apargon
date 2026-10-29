@@ -1,6 +1,12 @@
 # Apargon
 
-Apargon runs a `.papp` file, one HTML file, as a desktop app on macOS or Linux. The page gets exactly what its tags ask for: files, servers, programs, devices. Everything else is blocked; the network by the OS itself.
+Apargon is a desktop app for macOS and Linux that runs papps.
+
+A papp is a single `.papp` file: an HTML file with extra `<meta>` tags. It works like a desktop app, without the setup a desktop app needs: no installer, no server, no build step. You double-click it, and Apargon opens it in a sandboxed window.
+
+The sandbox blocks everything the tags don't allow, and a popup shows what they ask for before the page runs. 
+
+A coding agent can write a papp from one prompt.
 
 ## Install
 

@@ -144,7 +144,7 @@ export function declaredPermissions(page: string, html = fs.readFileSync(page, '
 function readAttributes(attrs: string) {
   const attributes = new Map<string, { value: string; quoted: boolean }>();
 
-  for (const [, key, equals, double, single, bare] of attrs.matchAll(/([^\s"'>\/=]+)(?:(\s*=\s*)(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g)) {
+  for (const [, key, equals, double, single, bare] of attrs.matchAll(/([^\s"'>/=]+)(?:(\s*=\s*)(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g)) {
     if (!attributes.has(key.toLowerCase())) {
       attributes.set(key.toLowerCase(), { value: double ?? single ?? bare ?? '', quoted: (double ?? single) !== undefined && equals === '=' });
     }

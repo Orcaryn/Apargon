@@ -1,6 +1,6 @@
 {
   "name": "apargon",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A local page runner: a page asks for folders, servers and programs in <meta> tags; the OS denies everything else on the network.",
   "type": "module",
   "main": "src/main.ts",

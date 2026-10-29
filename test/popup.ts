@@ -61,6 +61,13 @@ const refusals = [
   ...(ownAddress ? [{ tag: `<meta name="papp-net" content="${ownAddress}:80">`, reason: 'own addresses' }] : []),
   { tag: '<meta name="papp-read" content=./data>', reason: 'quoted name and content' },
   { tag: '<meta name=papp-read content="./data">', reason: 'quoted name and content' },
+  { tag: '<meta name = "papp-net" content="*">', reason: 'quoted name and content' },
+  { tag: '<meta NAME="papp-net" content\t="*">', reason: 'quoted name and content' },
+  { tag: '<meta name="papp-run" content="/bin/ls">\n<meta name="papp-run" content="ls">', reason: 'Two papp-run' },
+  { tag: '<meta name="papp-run" content="/usr/bin/../../bin/sh">', reason: 'without ..' },
+  { tag: '<meta name="papp-run" content="/usr/bin">', reason: 'or is a folder' },
+  { tag: '<meta name="papp-run" content="/nonexistent/prog">', reason: 'was not found' },
+  { tag: '<meta name="papp-net" content="example.com:0443">', reason: 'Bad papp-net value' },
 ].map(({ tag, reason }) => {
   fs.writeFileSync(page, tag);
 
@@ -133,6 +140,8 @@ fs.writeFileSync(
 );
 const head = declaredPermissions(page);
 const headOnly = head.tags.length === 1 && head.read[0].endsWith("/Jon's notes") && !head.net.length && !head.write.length && !head.node;
+fs.writeFileSync(page, `<meta data-name="papp-net" name="description" content="*">\n<meta name="x" lang=' name="papp-node" content="full" '>`);
+const smuggled = declaredPermissions(page).tags;
 listener.close();
 fs.rmSync(dir, { recursive: true });
 
@@ -154,6 +163,7 @@ for (const { tags, ok, said } of secrets) {
 
 console.log(`${tagsAsWritten ? 'ok  ' : 'FAIL'} popup shows the tags as written: ${JSON.stringify(written)}`);
 console.log(`${headOnly ? 'ok  ' : 'FAIL'} popup reads the head before any script, outside comments: ${JSON.stringify(head.tags)}`);
+console.log(`${smuggled.length ? 'FAIL' : 'ok  '} popup reads papp- only from a name attribute: ${JSON.stringify(smuggled)}`);
 
 process.exit(
   (
@@ -162,7 +172,8 @@ process.exit(
       worst.every(({ expected, said }) => said === expected) &&
       secrets.every(({ ok }) => ok) &&
       tagsAsWritten &&
-      headOnly
+      headOnly &&
+      !smuggled.length
   ) ?
     0
   : 1

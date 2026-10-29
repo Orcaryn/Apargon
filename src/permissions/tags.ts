@@ -29,6 +29,7 @@ export const PAGE_ENV = [
   ...'DISPLAY WAYLAND_DISPLAY XAUTHORITY XDG_RUNTIME_DIR XDG_SESSION_TYPE XDG_CURRENT_DESKTOP XDG_DATA_DIRS XDG_DATA_HOME XDG_CONFIG_HOME XDG_CACHE_HOME GDK_BACKEND GDK_SCALE GDK_DPI_SCALE GTK_IM_MODULE XMODIFIERS LANGUAGE ELECTRON_OZONE_PLATFORM_HINT __CF_USER_TEXT_ENCODING'.split(' '),
 ];
 export const PRIVATE = ['/run', '/tmp', '/var/tmp'];
+const INVISIBLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 export const USES = ['notifications', 'clipboard', 'location', 'sound', 'camera', 'microphone', 'screen'] as const;
 const MODIFIERS: Partial<Record<string, string>> = { commandorcontrol: 'CommandOrControl', cmdorctrl: 'CommandOrControl', command: 'Command', cmd: 'Command', control: 'Control', ctrl: 'Control', alt: 'Alt', option: 'Alt', altgr: 'AltGr', shift: 'Shift', super: 'Super', meta: 'Super' };
 const SAME_KEY: Partial<Record<string, string>> = process.platform === 'darwin' ? { CommandOrControl: 'Command', Super: 'Command' } : { CommandOrControl: 'Control' };
@@ -60,40 +61,52 @@ export function declaredPermissions(page: string, html = fs.readFileSync(page, '
   const head = html.replace(/<!--[\s\S]*?-->/g, '').split(/<script\b|<body\b|<\/head\b/i)[0];
 
   for (const [, attrs] of head.matchAll(/<meta\s+([^>]*)>/gi)) {
-    if (!/\bname=["']?papp-/i.test(attrs)) {
+    const attributes = readAttributes(attrs);
+    const name = attributes.get('name');
+    const content = attributes.get('content');
+
+    if (!name?.value.toLowerCase().startsWith('papp-')) {
       continue;
     }
 
     const tag = `<meta ${attrs.replace(/\s+/g, ' ').trim()}>`;
-    const name = /\bname=(["'])papp-(.*?)\1/is.exec(attrs)?.[2].toLowerCase();
-    const value = /\bcontent=(["'])(.*?)\1/is.exec(attrs)?.[2].trim();
 
-    if (name === undefined || value === undefined) {
+    if (!name.quoted || !content?.quoted) {
       throw new Error(`${tag} needs a quoted name and content, as in <meta name="papp-read" content="./data">.`);
     }
 
-    permissions.tags.push(tag);
+    const value = content.value.trim();
+    const invisible = [tag, value].find(text => INVISIBLE.test(text));
 
-    if (name === 'read' || name === 'write') {
-      permissions[name].push(folderPattern(value, dir));
-    } else if (name === 'net') {
+    if (invisible) {
+      throw new Error(`${JSON.stringify(invisible)} has a line break or another invisible character, which the popup cannot show. Write the value on one line.`);
+    }
+
+    permissions.tags.push(tag);
+    const kind = name.value.slice('papp-'.length).toLowerCase();
+
+    if (kind === 'read' || kind === 'write') {
+      permissions[kind].push(folderPattern(value, dir));
+    } else if (kind === 'net') {
       permissions.net.push(hostPattern(value));
-    } else if (name === 'run') {
+    } else if (kind === 'run' && Object.hasOwn(permissions.run, path.basename(value))) {
+      throw new Error(`Two papp-run tags name a program ${path.basename(value)}. The page runs programs by name, so keep one.`);
+    } else if (kind === 'run') {
       permissions.run[path.basename(value)] = findProgram(value);
-    } else if (name === 'env') {
+    } else if (kind === 'env') {
       permissions.env.push(envName(value));
-    } else if (name === 'socket') {
+    } else if (kind === 'socket') {
       permissions.sockets.push(socketPath(value, dir));
-    } else if (name === 'node' && value === 'full') {
+    } else if (kind === 'node' && value === 'full') {
       permissions.node = true;
-    } else if (name === 'node') {
+    } else if (kind === 'node') {
       throw new Error(`Bad papp-node value "${value}". The only value is "full".`);
-    } else if (name === 'use') {
+    } else if (kind === 'use') {
       permissions.use.push(useName(value));
-    } else if (name === 'shortcut') {
+    } else if (kind === 'shortcut') {
       permissions.shortcuts.push(shortcut(value));
     } else {
-      throw new Error(`Unknown tag papp-${name}. The tags are papp-read, papp-write, papp-net, papp-run, papp-env, papp-socket, papp-use, papp-shortcut and papp-node.`);
+      throw new Error(`Unknown tag papp-${kind}. The tags are papp-read, papp-write, papp-net, papp-run, papp-env, papp-socket, papp-use, papp-shortcut and papp-node.`);
     }
   }
 
@@ -103,20 +116,20 @@ export function declaredPermissions(page: string, html = fs.readFileSync(page, '
     throw new Error('papp-env passes a variable to the programs a page runs, and this page runs none. Add papp-run, or remove papp-env.');
   }
 
-  const { read, write, run, sockets, tags } = permissions;
+  const { read, write, run, sockets } = permissions;
   const quoted = [...write, ...sockets].find(folder => folder.includes('"'));
   const socketFolders = sockets.filter(socket => fs.statSync(socket).isDirectory());
   const reopened = [dir, ...[...read, ...write].map(patternFolder), ...socketFolders].find(
     folder => folder.startsWith('/run/') || PRIVATE.some(emptied => emptied === folder || emptied.startsWith(path.join(folder, '/')))
   );
-  const invisible = [page, ...read, ...write, ...Object.values(run), ...sockets, ...tags].find(text => /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(text));
+  const invisible = [page, ...read, ...write, ...Object.values(run), ...sockets].find(text => INVISIBLE.test(text));
 
   if (quoted) {
     throw new Error(`${quoted} has a " in its path, which the sandbox cannot take. Rename it.`);
   } else if (process.platform === 'linux' && reopened) {
     throw new Error(`On Linux Apargon cannot open ${reopened}: it would bring back sockets to programs outside the sandbox. Use a folder of its own, such as /tmp/apargon.`);
   } else if (invisible) {
-    throw new Error(`${JSON.stringify(invisible)} has a line break or another invisible character, which the popup cannot show. Write the value on one line, or rename the file.`);
+    throw new Error(`${JSON.stringify(invisible)} has a line break or another invisible character, which the popup cannot show. Rename the file.`);
   }
 
   const named = [...[...read, ...write].map(literalBase), ...sockets];
@@ -125,6 +138,19 @@ export function declaredPermissions(page: string, html = fs.readFileSync(page, '
   permissions.hidden = permissions.node ? [] : secrets.filter(secret => !named.some(base => base === secret || base.startsWith(secret + '/')));
 
   return permissions;
+}
+
+// As the browser reads them: the first of each name wins, in any case. Quoted means name="value", no spaces around the =.
+function readAttributes(attrs: string) {
+  const attributes = new Map<string, { value: string; quoted: boolean }>();
+
+  for (const [, key, equals, double, single, bare] of attrs.matchAll(/([^\s"'>\/=]+)(?:(\s*=\s*)(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g)) {
+    if (!attributes.has(key.toLowerCase())) {
+      attributes.set(key.toLowerCase(), { value: double ?? single ?? bare ?? '', quoted: (double ?? single) !== undefined && equals === '=' });
+    }
+  }
+
+  return attributes;
 }
 
 function folderPattern(value: string, dir: string) {
@@ -152,7 +178,7 @@ function hostPattern(value: string) {
   const pattern = value === '*' ? '*:*' : value.toLowerCase();
   const [host, port] = pattern.split(':');
 
-  if (!/^(\*|(\*\.)?[a-z0-9][a-z0-9.-]*):(\*|\d+)$/.test(pattern) || +port < 1 || +port > 65535) {
+  if (!/^(\*|(\*\.)?[a-z0-9][a-z0-9.-]*):(\*|[1-9]\d*)$/.test(pattern) || +port < 1 || +port > 65535) {
     throw new Error(`Bad papp-net value "${value}". One host:port per <meta>, such as api.example.com:443 or *.example.com:443.`);
   } else if (host !== '127.0.0.1' && /^(0|127|169\.254)\./.test(host)) {
     throw new Error(`Apargon never reaches ${host}, which is this computer or a link-local address, where cloud machines keep their keys. For a program on this computer, declare localhost:<port>.`);
@@ -172,6 +198,10 @@ function hostPattern(value: string) {
 function findProgram(value: string) {
   if (value.includes('*')) {
     throw new Error('papp-run takes one program, no wildcards. For any program, use papp-node.');
+  } else if (path.isAbsolute(value) && path.normalize(value) !== value) {
+    throw new Error(`Bad papp-run value "${value}". Write the path without .., . or //, as in ${path.normalize(value)}.`);
+  } else if (path.isAbsolute(value) && !fs.statSync(value, { throwIfNoEntry: false })?.isFile()) {
+    throw new Error(`Program ${value} was not found, or is a folder.`);
   } else if (path.isAbsolute(value)) {
     return value;
   } else if (!/^[\w.+-]+$/.test(value)) {

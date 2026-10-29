@@ -315,11 +315,11 @@ Apargon is not a VM. A hard "nothing leaves" guarantee needs a VM with no networ
 
 `pnpm test` runs every check in the real app and fails if one fails. `test/check.ts` lists the checks for each platform. [AGENTS.md](AGENTS.md#the-installed-deb) has the Linux run on the installed `.deb`.
 
-| Platform      | Last verified                                                                                                                                                                                                  |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| macOS         | 2026-10-29, `pnpm test`: every check                                                                                                                                                                           |
-| Linux         | 2026-10-29, the installed `.deb` built from the 0.3.0 tree (sha256 `98c1f4a1…4ae1288`), on a headless Ubuntu 24.04 server with the AppArmor limit on: every Linux check (83), and the refusal with its control |
-| Linux desktop | not yet: no run with a real display and a double-click                                                                                                                                                         |
+| Platform      | Last verified                                                                                                                                                                                                                                    |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| macOS         | 2026-10-29, `pnpm test`: every check                                                                                                                                                                                                             |
+| Linux         | 2026-10-29, the published 0.3.0 `.deb` from the GitHub release (sha256 `b458e617…60821cf`, as in `SHA256SUMS`), installed on a headless Ubuntu 24.04 server with the AppArmor limit on: every Linux check (83), and the refusal with its control |
+| Linux desktop | not yet: no run with a real display and a double-click                                                                                                                                                                                           |
 
 Not covered by the Linux run: the `papp-socket` folder refusal and the NAT64 range. No check on the installed `.deb` tests them; `pnpm test` on Linux does.
 

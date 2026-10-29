@@ -4,6 +4,7 @@ set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
 
 REPO="Orcaryn/Apargon"
+TAP="Orcaryn/homebrew-tap"
 TEAM_ID="PURHNJF27S"
 SIGNING_IDENTITY="Developer ID Application"
 NOTARY_PROFILE="notarize"
@@ -15,7 +16,7 @@ Usage: ./release.sh --major | --minor | --patch
 
 Runs the checks, bumps the version, builds a notarized .dmg and .zip for Apple silicon and
 Intel and a .deb for Linux, commits and tags the version, pushes, then publishes a GitHub
-release with the update feeds installed copies read.
+release with the update feeds installed copies read and points the Homebrew cask at it.
 Requires main up to date with its remote, a clean working tree, and committed release notes
 at release-notes/<version>.md.
 EOF
@@ -54,6 +55,7 @@ EOF
   git tag -a "v$VERSION" -m "Apargon $VERSION"
 
   publish
+  update_cask
 }
 
 refuse_unless_ready() {
@@ -68,6 +70,7 @@ refuse_unless_ready() {
   security find-identity -v -p codesigning | grep "\"$SIGNING_IDENTITY: .*($TEAM_ID)\"" >/dev/null || problems+=("Signing identity '$SIGNING_IDENTITY' for team $TEAM_ID is missing.")
   xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 || problems+=("Keychain profile '$NOTARY_PROFILE' for notarytool is missing or invalid.")
   [[ "$(gh api "repos/$REPO" --jq .permissions.push)" == true ]] || problems+=("The gh account cannot publish to $REPO. Run: gh auth switch")
+  [[ "$(gh api "repos/$TAP" --jq .permissions.push)" == true ]] || problems+=("The gh account cannot push to $TAP. Run: gh auth switch")
 
   if ((${#problems[@]})); then
     echo "Cannot release $VERSION:" >&2
@@ -118,6 +121,45 @@ publish() {
   gh release create "v$VERSION" --repo "$REPO" --verify-tag --title "Apargon $VERSION" --notes-file dist/release-notes.md "${DMGS[@]}" "${ZIPS[@]}" "$DEB" dist/SHA256SUMS "${feeds[@]}"
 
   echo "==> https://github.com/$REPO/releases/tag/v$VERSION"
+}
+
+update_cask() {
+  local arm intel
+  arm="$(shasum -a 256 "dist/Apargon-$VERSION-arm64.zip" | cut -d ' ' -f 1)"
+  intel="$(shasum -a 256 "dist/Apargon-$VERSION-x64.zip" | cut -d ' ' -f 1)"
+
+  gh repo clone "$TAP" dist/tap -- --quiet --depth 1
+  cat > dist/tap/Casks/apargon.rb <<EOF
+cask "apargon" do
+  arch arm: "arm64", intel: "x64"
+
+  version "$VERSION"
+  sha256 arm:   "$arm",
+         intel: "$intel"
+
+  url "https://github.com/$REPO/releases/download/v#{version}/Apargon-#{version}-#{arch}.zip"
+  name "Apargon"
+  desc "Runs an HTML file as a desktop app with only the access its tags ask for"
+  homepage "https://github.com/$REPO"
+
+  auto_updates true
+  depends_on macos: :ventura
+
+  app "Apargon.app"
+
+  zap trash: [
+    "~/Library/Application Support/apargon",
+    "~/Library/Caches/com.hammer.apargon",
+    "~/Library/Caches/com.hammer.apargon.ShipIt",
+    "~/Library/HTTPStorages/com.hammer.apargon",
+    "~/Library/HTTPStorages/com.hammer.apargon.binarycookies",
+    "~/Library/Logs/apargon",
+    "~/Library/Preferences/com.hammer.apargon.plist",
+  ]
+end
+EOF
+  git -C dist/tap commit --quiet -am "apargon $VERSION"
+  git -C dist/tap push --quiet
 }
 
 write_feed() {

@@ -17,6 +17,13 @@ Publishing is public and cannot be taken back. Installed copies read the feeds o
 4. **Propose the version, write the notes and get approval.**
 5. **Commit the notes.** That commit holds only `release-notes/<new-version>.md`. It is the one commit you make without being asked. The script pushes it.
 6. **Run the release** in the background. Notarization takes several minutes per file.
+7. **Check the download links.** apargon.com's Worker (`../apargon-landing/worker/index.ts`) reads the version from the latest release's `update-linux-x64.json` and builds each file's name, so a release changes nothing on the site. Within five minutes each of these must redirect to the new version's file, and that file must answer 200:
+
+   ```sh
+   for t in mac-arm64 mac-x64 linux; do curl -sIL -o /dev/null -w "%{http_code} %{url_effective}\n" "https://apargon.com/download/$t"; done
+   ```
+
+   If a link still leads to the old version, the feeds are missing from the release (see Failure recovery). If `release.sh` named a file differently, update `FILES` in the Worker and deploy it with `pnpm deploy` in `../apargon-landing`, after the user says yes.
 
 ## Version
 
@@ -43,6 +50,7 @@ The new version is `version` in `package.json`, bumped. Before 1.0: `--minor` fo
 - **The script refuses before the bump:** nothing changed. Relay the whole list, fix what you can, rerun once.
 - **It fails before `Release <version>` is committed:** the trap puts `package.json` back. Fix the cause and rerun.
 - **It fails after the tag:** never rerun `release.sh`; it would bump again. Run the rest of `publish` by hand, with `VERSION`, `DMGS`, `ZIPS` and `DEB` set as in `main`. The built files are in `dist/`. A release without its `update-*.json` feeds reaches no one.
+- **It fails in `update_cask`:** the release is out; only the cask is stale. Fix the cause and run `update_cask`'s steps by hand with `VERSION`, `REPO` and `TAP` set.
 - **The release is broken:** macOS copies install it on their own, so ship a newer version soon. Don't delete a published release or tag.
 
 ## Never

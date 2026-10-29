@@ -56,7 +56,8 @@
       result.program_own_folder_write_blocked = (await papp.run('touch', ['own.tmp'])).status !== 0;
       result.program_page_write_blocked = (await papp.run('touch', ['touched.papp'])).status !== 0;
       result.program_open_app_blocked = (await papp.run('open', ['-g', '-a', 'Finder'])).status !== 0;
-      result.program_apple_event_blocked = (await papp.run('osascript', ['-e', 'tell application "Finder" to get name of home'])).status !== 0;
+      // activate, not a query: a query also fails without the sandbox, on the Automation permission, so it would not notice the rule gone.
+      result.program_apple_event_blocked = (await papp.run('osascript', ['-e', 'tell application "Finder" to activate'])).status !== 0;
       result.program_preference_write_blocked = (await papp.run('defaults', ['write', 'com.apargon.selftest', 'leaked', '-bool', 'true'])).status !== 0;
     }
 

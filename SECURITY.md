@@ -248,12 +248,12 @@ The OS hides a fixed list from the page and every program it runs: `~/.ssh`, `~/
 
 **Ways out for a program, or for a page that exploits Chromium:**
 
-| OS    | Way out                                                                                                                              |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| macOS | Mach messages to system services are allowed (the GUI needs them). Only the three known fetch services and Apple Events are blocked. |
-| Linux | a socket file outside `/run` and `/tmp`: `tmux -S ~/sock`, Docker with `-H`, any server in a folder the page sees                    |
-| Linux | `vsock`, in a virtual machine                                                                                                        |
-| Linux | the X11 display socket, to type into another window. Wayland does not allow this.                                                    |
+| OS    | Way out                                                                                                                                                                                                                                                                                                                                         |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS | Mach messages to system services are allowed (the GUI needs them). Only the three known fetch services are blocked, and sending Apple Events (`appleevent-send`, the rule App Sandbox uses; the Apple Events daemon enforces it, not the kernel). The page's process still receives them: Dock > Quit, logout, and a page opened while it runs. |
+| Linux | a socket file outside `/run` and `/tmp`: `tmux -S ~/sock`, Docker with `-H`, any server in a folder the page sees                                                                                                                                                                                                                               |
+| Linux | `vsock`, in a virtual machine                                                                                                                                                                                                                                                                                                                   |
+| Linux | the X11 display socket, to type into another window. Wayland does not allow this.                                                                                                                                                                                                                                                               |
 
 ### Devices and the desktop
 
@@ -315,11 +315,11 @@ Apargon is not a VM. A hard "nothing leaves" guarantee needs a VM with no networ
 
 `pnpm test` runs every check in the real app and fails if one fails. `test/check.ts` lists the checks for each platform. [AGENTS.md](AGENTS.md#the-installed-deb) has the Linux run on the installed `.deb`.
 
-| Platform      | Last verified                                                                                                                                                                                       |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| macOS         | 2026-10-27, `pnpm test`: every check                                                                                                                                                                |
-| Linux         | 2026-10-28, the installed `.deb` built from the tree committed as `fc245fd`, on a headless Ubuntu 24.04 server with the AppArmor limit on: every Linux check (83), and the refusal with its control |
-| Linux desktop | not yet: no run with a real display and a double-click                                                                                                                                              |
+| Platform      | Last verified                                                                                                                                                                                                  |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS         | 2026-10-29, `pnpm test`: every check                                                                                                                                                                           |
+| Linux         | 2026-10-29, the installed `.deb` built from the 0.3.0 tree (sha256 `98c1f4a1…4ae1288`), on a headless Ubuntu 24.04 server with the AppArmor limit on: every Linux check (83), and the refusal with its control |
+| Linux desktop | not yet: no run with a real display and a double-click                                                                                                                                                         |
 
 Not covered by the Linux run: the `papp-socket` folder refusal and the NAT64 range. No check on the installed `.deb` tests them; `pnpm test` on Linux does.
 

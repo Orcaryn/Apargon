@@ -30,7 +30,8 @@ function seatbeltProfile(permissions: Permissions, proxyPort: number | null) {
     const { files, pages } = changeableSources(permissions);
     rules.push(
       '(deny lsopen)',
-      '(deny mach-lookup (global-name "com.apple.coreservices.appleevents"))',
+      // Sending only. The page's process must still receive Apple Events: Dock > Quit, logout, and a page opened while it runs.
+      '(deny appleevent-send)',
       '(deny user-preference-write)',
       '(deny file-write*)',
       `(allow file-write* (subpath "/dev") (subpath "${fs.realpathSync(app.getPath('temp'))}"))`,

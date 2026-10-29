@@ -4,7 +4,20 @@ Apargon runs a `.papp` file, one HTML file, as a desktop app on macOS or Linux. 
 
 ## Install
 
-From the [latest release](https://github.com/Orcaryn/Apargon/releases/latest): the `.dmg` for macOS (`arm64` or `x64`), the `.deb` for Ubuntu 24.04. Windows is not supported yet.
+On macOS or Ubuntu 24.04, with the papp skill for agents (`sh -s -- --no-skill` without it):
+
+```sh
+curl -fsSL https://apargon.com/install.sh | sh
+```
+
+[`install.sh`](install.sh) checks the app's notarization on macOS, and the `.deb` against the release's `SHA256SUMS` on Linux, before it installs it. Or download from the [latest release](https://github.com/Orcaryn/Apargon/releases/latest): the `.dmg` for macOS (`arm64` or `x64`), the `.deb` for Ubuntu 24.04. Windows is not supported yet.
+
+Or with Homebrew on macOS:
+
+```sh
+brew trust --cask orcaryn/tap/apargon
+brew install --cask orcaryn/tap/apargon
+```
 
 Then double-click a `.papp`, or run `open page.papp` (macOS) or `apargon page.papp` (Linux).
 
@@ -37,8 +50,10 @@ A `papp-node` page runs as you, with only the network blocked: open one only if 
 Give it [`skills/papp/SKILL.md`](skills/papp/SKILL.md). Apargon installs it to `~/.claude/skills/papp/` and `~/.agents/skills/papp/` if you say yes: on its first run, each time you open it without a page until the skill is there, and from **Help → Install the papp Skill for Agents…**. Without Apargon:
 
 ```sh
-mkdir -p ~/.claude/skills/papp
-curl -fsSL https://raw.githubusercontent.com/Orcaryn/Apargon/main/skills/papp/SKILL.md -o ~/.claude/skills/papp/SKILL.md
+for dir in ~/.claude/skills/papp ~/.agents/skills/papp; do
+  mkdir -p "$dir"
+  curl -fsSL https://apargon.com/.well-known/agent-skills/papp/SKILL.md -o "$dir/SKILL.md"
+done
 ```
 
 Then ask for an app: "Make me a papp that lists the Markdown notes in ~/notes and lets me edit them."

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, nativeTheme } from 'electron';
+import { app, BrowserWindow, nativeTheme, screen } from 'electron';
 import { spawnSync } from 'child_process';
 import { createHash } from 'crypto';
 import fs from 'fs';
@@ -53,9 +53,9 @@ export async function approve(file: string) {
   return approved;
 }
 
-// Shows one of this folder's HTML windows, filled in by its render(); true when the user picks #allow.
+// Shows one of this folder's HTML windows, filled in by its render(), as tall as it needs up to the screen, where its <main> scrolls; true when the user picks #allow.
 export async function ask(file: string, content: object) {
-  const width = 460;
+  const width = 480;
   const win = new BrowserWindow({
     width,
     show: false,
@@ -67,7 +67,13 @@ export async function ask(file: string, content: object) {
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#1e1e20' : '#ffffff',
     webPreferences: { sandbox: true, contextIsolation: true },
   });
-  const fit = async () => win.setContentSize(width, await win.webContents.executeJavaScript('document.body.offsetHeight'));
+
+  const fit = async () => {
+    const height = await win.webContents.executeJavaScript(`document.body.offsetHeight + document.querySelector('main').scrollHeight - document.querySelector('main').clientHeight`);
+    win.setContentSize(width, Math.min(height, screen.getDisplayMatching(win.getBounds()).workArea.height - 80));
+    win.center();
+  };
+
   win.webContents.on('will-navigate', event => event.preventDefault());
   await win.loadFile(path.join(import.meta.dirname, file));
   await win.webContents.executeJavaScript(`render(${JSON.stringify(content)})`);

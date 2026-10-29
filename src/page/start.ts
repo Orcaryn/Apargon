@@ -125,13 +125,6 @@ export async function showPage({ page, permissions, pageHash, bridges }: ChildCo
     opened.webContents.on('did-create-window', setUpWindow);
     opened.webContents.setAudioMuted(!permissions.use.includes('sound'));
 
-    if (permissions.net.length) {
-      opened.on('page-title-updated', (event, title) => {
-        event.preventDefault();
-        opened.setTitle(`${title} · ${permissions.net.join(' ')}`);
-      });
-    }
-
     if (access) {
       const api = pageApi(dir, permissions, access, opened, toFront, saveAs);
       const id = opened.webContents.id;

@@ -161,13 +161,6 @@ fs.writeFileSync(page, `<meta data-name="papp-net" name="description" content="*
 const smuggled = declaredPermissions(page).tags;
 fs.writeFileSync(page, '<meta name="papp-open" content="X.com">\n<meta name="papp-open" content="*.example.com">');
 const { open } = declaredPermissions(page);
-
-const declared = (href: string) => {
-  const host = linkHost(href);
-
-  return host !== null && declaredLink(host, open);
-};
-
 const links = [
   { href: 'https://x.com/jack', opens: true },
   { href: 'http://x.com/jack', opens: true },
@@ -179,7 +172,11 @@ const links = [
   { href: 'file:///etc/passwd', opens: false },
   { href: 'vscode://file/etc/passwd', opens: false },
   { href: 'not a url', opens: false },
-].map(link => ({ ...link, ok: declared(link.href) === link.opens }));
+].map(link => {
+  const host = linkHost(link.href);
+
+  return { ...link, ok: (host !== null && declaredLink(host, open)) === link.opens };
+});
 const anyLink = declaredLink('anything.example', ['*']) && linkHost('ssh://host') === null && linkHost('javascript:1') === null;
 const viewers =
   ['a.PNG', 'b.pdf', 'c.md', 'd.mov'].every(name => OPENABLE.test(name)) &&

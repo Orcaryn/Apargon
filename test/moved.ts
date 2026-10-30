@@ -7,11 +7,10 @@ import { followMove, noteContent } from '../src/storage.ts';
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apargon-moved-'));
 const pageData = path.join(root, 'data');
 const seenFile = path.join(root, 'seen.json');
-let n = 0;
 
 // A page opened at one path, with storage, then the file is moved or copied to another.
 function setUp(content: string) {
-  const dir = path.join(root, `case-${n++}`);
+  const dir = path.join(root, content);
   fs.mkdirSync(dir);
   const [old, moved] = [path.join(dir, 'old.papp'), path.join(dir, 'new.papp')];
   fs.writeFileSync(old, content);

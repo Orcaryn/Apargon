@@ -26,9 +26,12 @@ Further reading and code: https://github.com/Orcaryn/Apargon
 </script>
 ```
 
-- The user opens it by double-click, or `open page.papp` (macOS), `apargon page.papp` (Linux). With tags, a popup asks first.
-- Saving a `.papp`, `.css` or `.js` in its folder reloads the window. New tags need the page reopened.
-- A link (`<a target="_blank">`, `window.open`, `papp.open`) opens in the browser. Apargon asks first, address shown, unless the page names the site with `papp-open`.
+- Open it with `open page.papp` (macOS) or `apargon page.papp` (Linux). A popup asks first, unless the page has no tags and was not downloaded.
+- Saving a `.papp`, `.css` or `.js` in its folder reloads the window. New tags need the page reopened. A downloaded page is approved with its content: after an edit, it must be reopened and approved again.
+- A web link (`<a target="_blank">`, `window.open`, `papp.open`) opens in the browser. Apargon asks first, address shown, unless the page names the site with `papp-open`. `window.open` on the page's own file opens a second window.
+- The window is 1200×800 with a frame. `<title>` names it; the favicon becomes the app icon.
+- `localStorage` and IndexedDB persist, tied to the page's path. They follow the page when it is moved or renamed, if its content is the same as when it was last open: after an edit, open the page once before moving it. A copy starts empty.
+- On Linux, a page cannot sit in `/tmp`, `/var/tmp`, under `/run`, or a folder holding them. Use a folder of its own, such as `/tmp/apargon`.
 
 ### `window.papp`
 
@@ -77,13 +80,13 @@ declare const papp: {
   notify(title: string, body?: string): Promise<void>;
   // a menu-bar icon with a title of up to 24 characters, no menu; a click brings the window forward; null removes it
   tray(title: string | null): Promise<void>;
-  // runs on a papp-shortcut; returns a stop function right away
+  // runs on a papp-shortcut, after bringing the window forward; returns a stop function right away
   onShortcut(callback: (keys: string) => void): () => void;
 };
 // A call the tags do not allow rejects with an Error naming the tag to add. File errors carry Node's code, such as 'ENOENT'.
 ```
 
-With `papp-node`, the page has Node (`require`, `process`) instead of `papp`. It runs as you, with no file limits; the network stays blocked. `require('@electron/remote')` is Electron's main process, for what `papp` cannot do: windows that float above others, show on every Space or have no frame (`BrowserWindow`), a menu-bar menu (`Tray`, `Menu`), other displays (`screen`), notifications (`Notification`).
+With `papp-node`, the page has Node (`require`, `process`) instead of `papp`. It runs as you, with no file limits; the network stays blocked. `require('@electron/remote')` is Electron's main process, for what `papp` cannot do: windows that float above others, show on every Space or have no frame (`BrowserWindow`), a menu-bar menu (`Tray`, `Menu`), other displays (`screen`), notifications (`Notification`). `require` looks in the page's folder first, so `npm install` next to it works. A `new BrowserWindow` uses the default session and skips the page's navigation limits.
 
 ```js
 require('@electron/remote').getCurrentWindow().setAlwaysOnTop(true, 'floating');
@@ -116,7 +119,9 @@ One value per tag, in `<head>` before any `<script>`. Each tag is a line in the 
 | use Node, many programs, or what `papp` cannot do | `papp-node` `full`                                              |
 
 - **Folders:** relative to the page, `~/…` or absolute; subfolders are included. `*` matches within one name, and the part before it must exist.
-- **Hosts:** `papp-net` takes `host:port`, no scheme. `papp-open` takes the host alone.
+- **Hosts:** `papp-net` takes `host:port`, no scheme. `papp-open` takes the host alone. Scripts, fonts and images from another site need its host in `papp-net`. With any `papp-net` tag, `fetch` to a declared host skips CORS.
+- **Sound:** without `papp-use sound`, the page plays muted, with no error.
+- **No tag needed** to write to the clipboard, go fullscreen or lock the pointer.
 - **Programs** the page runs keep its network and write limits, but can read every file except keys and logins.
 - **Shortcuts:** two different modifiers, or one modifier with a function key.
 - **`papp-node`** already allows every folder, program and variable; do not add `papp-read`, `papp-write`, `papp-run` or `papp-env`.
@@ -130,6 +135,6 @@ These show red in the popup:
 - `papp-open` for `*`, `*.com`, `localhost` or an IPv4 address
 - `papp-run` on Linux, if the page also has `papp-write`
 
-The user must tick "I trust this page" when any line is red, when the page has `papp-run`, or when it names a host and can see files, the clipboard, location, camera, microphone or screen. Almost every page sees its own folder, so in practice any `papp-net` or `papp-open` asks for the tick.
+A red line, `papp-run`, or any `papp-net` or `papp-open` host makes the popup demand an extra "I trust this page" tick.
 
 Use `papp-node` when the tags and `papp` cannot do what the app needs, never just to avoid writing tags. If a dialog says the process can still open sockets, do not work around it: that is the safety check working.

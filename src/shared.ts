@@ -6,7 +6,8 @@ import path from 'path';
 import type { Permissions } from './permissions/tags.ts';
 
 export type Bridge = { port: number; socket: string };
-export type ChildConfig = { page: string; permissions: Permissions; pageHash: string | null; proxy: string | null; bridges: Bridge[] };
+// replies: on Windows, the file the trampoline writes the page's ParentMessages to; elsewhere they come on PARENT_FD.
+export type ChildConfig = { page: string; permissions: Permissions; pageHash: string | null; proxy: string | null; bridges: Bridge[]; replies: string | null };
 export type SavedFile = { name: string; data: string };
 export type ChildMessage = { open: string } | { revoke: string[] } | { showEgressLog: true } | { automaticUpdates: boolean } | { fileIcon: string } | { notify: { title: string; body: string } } | { tray: string | null } | { saveAs: { id: string; files: SavedFile[] } } | { installSkill: true } | { openLink: string } | { openFile: string };
 export type ParentMessage = { trayClick: true } | { saved: string; paths: string[] } | { saved: string; error: string };
@@ -23,8 +24,11 @@ export const LINKS_FILE = path.join(DATA, 'links.json');
 export const SEEN_FILE = path.join(DATA, 'seen.json');
 export const NET_DATA = path.join(DATA, 'net');
 export const UPDATE_FILE = path.join(DATA, 'update.json');
+// Pages may read Apargon's data, not write it, so no page can forge another's replies.
+export const REPLIES_DATA = path.join(DATA, 'replies');
 export const EGRESS_LOG = path.join(app.getPath('logs'), 'egress.log');
-export const MESSAGE_FD = 3;
+// On Windows, standard output: MXC's executor passes the page only standard input, output and error, and input only once it closes.
+export const MESSAGE_FD = process.platform === 'win32' ? 1 : 3;
 export const TRAMPOLINE_NETWORK_FD = 4;
 export const PARENT_FD = 5;
 export const APP_BUNDLE = app.isPackaged && process.platform === 'darwin' ? path.resolve(process.execPath, '../../..') : null;
@@ -39,7 +43,10 @@ export function writeJson(file: string, value: object) {
 }
 
 export function realPath(file: string): string {
-  if (fs.lstatSync(file, { throwIfNoEntry: false })) {
+  // Windows looks up the server of a network path itself, outside the sandbox, before anyone can refuse it.
+  if (process.platform === 'win32' && /^[\\/]{2}/.test(file)) {
+    throw new Error(`Apargon: ${file} is a network path, which Apargon never opens.`);
+  } else if (fs.lstatSync(file, { throwIfNoEntry: false })) {
     return fs.realpathSync.native(file);
   }
 

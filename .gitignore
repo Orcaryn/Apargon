@@ -6,6 +6,7 @@ test/pages/result.json
 test/pages/result-net.json
 test/pages/result-mac.json
 test/pages/result-node.json
+test/pages/result-win.json
 test/pages/leak
 test/pages/leak.der
 examples/electron-latest.json

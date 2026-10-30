@@ -1,3 +1,5 @@
 allowBuilds:
   electron: true
   electron-winstaller: false
+  koffi: false
+  node-pty: false

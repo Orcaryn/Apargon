@@ -35,12 +35,12 @@ export async function approve(file: string) {
     lines: lines.map(line => ({
       level: line.level,
       id: line.id,
-      short: line.short.replaceAll(HOME + '/', '~/'),
-      text: line.text.replaceAll(HOME + '/', '~/'),
+      short: line.short.replaceAll(HOME + path.sep, `~${path.sep}`),
+      text: line.text.replaceAll(HOME + path.sep, `~${path.sep}`),
       isNew: previous !== undefined && !previous.includes(line.id),
     })),
     note: seesFiles ? `Hidden files (names starting with a dot), keys and logins (~/.ssh and others) are left out unless named.${permissions.write.length ? ' Pages (.papp) can be changed only if named.' : ''}` : null,
-    folder: (path.dirname(page) + '/').replaceAll(HOME + '/', '~/'),
+    folder: (path.dirname(page) + path.sep).replaceAll(HOME + path.sep, `~${path.sep}`),
     tags: permissions.tags,
     trust: worst !== null || lines.some(line => line.level === 'red'),
   };
@@ -105,6 +105,17 @@ export async function ask(file: string, content: object) {
 }
 
 function cameFrom(page: string) {
+  if (process.platform === 'win32') {
+    // Windows marks a download in a stream beside the file, with the address it came from.
+    try {
+      const site = URL.parse(/^(?:HostUrl|ReferrerUrl)=(.+)$/m.exec(fs.readFileSync(`${page}:Zone.Identifier`, 'utf8'))?.[1].trim() ?? '')?.hostname ?? '';
+
+      return site === '' ? 'another computer' : site;
+    } catch {
+      return null;
+    }
+  }
+
   const mac = process.platform === 'darwin';
   const mark = mac
     ? spawnSync('/usr/bin/xattr', ['-p', 'com.apple.quarantine', page], { encoding: 'utf8' })

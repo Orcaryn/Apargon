@@ -17,6 +17,12 @@ if (childConfig) {
   if (childConfig.proxy) {
     app.commandLine.appendSwitch('proxy-server', childConfig.proxy);
   }
+
+  // On Windows the GPU process cannot run in the sandbox, and a name Chromium looks up leaves through Windows' own resolver: names go only to the proxy.
+  if (process.platform === 'win32') {
+    app.disableHardwareAcceleration();
+    app.commandLine.appendSwitch('host-resolver-rules', 'MAP * ~NOTFOUND, EXCLUDE 127.0.0.1');
+  }
 }
 
 const pages = process.argv.filter(arg => PAGE_FILE.test(arg)).map(arg => path.resolve(arg));
@@ -45,7 +51,7 @@ app.whenReady().then(async () => {
   } else if (childConfig) {
     await showPage(childConfig);
   } else if (!SANDBOX) {
-    dialog.showErrorBox('Apargon', `No offline mode for ${process.platform} yet. Apargon opens pages on macOS and Linux.`);
+    dialog.showErrorBox('Apargon', `No offline mode for ${process.platform} yet. Apargon opens pages on macOS, Linux and Windows.`);
     app.quit();
   } else {
     await welcome(true);

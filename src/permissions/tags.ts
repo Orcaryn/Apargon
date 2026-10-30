@@ -2,7 +2,7 @@ import fs from 'fs';
 import net from 'net';
 import os from 'os';
 import path from 'path';
-import { literalBase, PAGE_FILE, patternFolder, patternSource } from './patterns.ts';
+import { isInside, literalBase, PAGE_FILE, patternFolder, patternSource } from './patterns.ts';
 
 export type Permissions = {
   own: string | null;
@@ -21,13 +21,16 @@ export type Permissions = {
 };
 export type Use = (typeof USES)[number];
 
-export const HOME = fs.realpathSync(os.homedir());
+// The real path as on disk, as every pattern is: on Windows, in the folder's own case.
+export const HOME = fs.realpathSync.native(os.homedir());
 export const BIG_FOLDERS = ['Desktop', 'Documents', 'Downloads'].map(name => path.join(HOME, name));
 export const LOCAL_HOSTS = ['localhost', '127.0.0.1'];
 export const PROGRAM_ENV = ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'TERM', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TZ', 'http_proxy', 'https_proxy', 'no_proxy'];
 export const PAGE_ENV = [
   ...PROGRAM_ENV,
   ...'DISPLAY WAYLAND_DISPLAY XAUTHORITY XDG_RUNTIME_DIR XDG_SESSION_TYPE XDG_CURRENT_DESKTOP XDG_DATA_DIRS XDG_DATA_HOME XDG_CONFIG_HOME XDG_CACHE_HOME GDK_BACKEND GDK_SCALE GDK_DPI_SCALE GTK_IM_MODULE XMODIFIERS LANGUAGE ELECTRON_OZONE_PLATFORM_HINT __CF_USER_TEXT_ENCODING'.split(' '),
+  // Windows: names in capitals, as Windows ignores case in them.
+  ...'SYSTEMROOT WINDIR SYSTEMDRIVE USERPROFILE HOMEDRIVE HOMEPATH USERNAME APPDATA LOCALAPPDATA TEMP TMP PROGRAMDATA PROGRAMFILES PATHEXT COMSPEC PROCESSOR_ARCHITECTURE NUMBER_OF_PROCESSORS'.split(' '),
 ];
 export const PRIVATE = ['/run', '/tmp', '/var/tmp'];
 const INVISIBLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
@@ -38,6 +41,22 @@ const TYPING_MODIFIERS = process.platform === 'darwin' ? ['Alt', 'Shift'] : ['Al
 const KEYS = [...Array.from({ length: 24 }, (_, i) => `F${i + 1}`), 'Space', 'Tab', 'Backspace', 'Delete', 'Insert', 'Return', 'Enter', 'Up', 'Down', 'Left', 'Right', 'Home', 'End', 'PageUp', 'PageDown', 'Escape', 'Esc'];
 const MAC_BROWSERS = ['Google/Chrome', 'Chromium', 'BraveSoftware', 'Microsoft Edge', 'Arc', 'Firefox'].map(name => `Library/Application Support/${name}`);
 const LINUX_BROWSERS = ['.config/google-chrome', '.config/chromium', '.config/BraveSoftware', '.config/microsoft-edge', '.mozilla', 'snap/firefox'];
+const WINDOWS_BROWSERS = ['AppData/Local/Google/Chrome', 'AppData/Local/Chromium', 'AppData/Local/BraveSoftware', 'AppData/Local/Microsoft/Edge', 'AppData/Roaming/Mozilla'];
+const WINDOWS_SECRETS = {
+  'AppData/Roaming/Microsoft/Protect': 'Windows keys for saved passwords',
+  'AppData/Roaming/Microsoft/Credentials': 'Windows saved passwords',
+  'AppData/Local/Microsoft/Credentials': 'Windows saved passwords',
+  'AppData/Local/Microsoft/Vault': 'Windows saved passwords',
+  'AppData/Roaming/gcloud': 'Google Cloud logins',
+  'AppData/Roaming/GitHub CLI': 'GitHub CLI logins',
+  // Not secrets, but they run outside the sandbox: PowerShell's startup scripts, and what starts when you log in.
+  'Documents/PowerShell': 'PowerShell startup scripts',
+  'Documents/WindowsPowerShell': 'PowerShell startup scripts',
+  'AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup': 'programs that start when you log in',
+  ...Object.fromEntries(WINDOWS_BROWSERS.map(name => [name, 'browser logins and cookies'])),
+};
+// Windows has no way to keep a page's programs offline: a program can still send data out through Windows itself.
+const WINDOWS_REFUSED = ['run', 'node', 'env', 'socket'];
 export const SECRETS = Object.entries({
   '.ssh': 'SSH keys',
   '.gnupg': 'GPG keys',
@@ -54,6 +73,7 @@ export const SECRETS = Object.entries({
   '.password-store': 'pass passwords',
   '.local/share/keyrings': 'keyrings',
   ...Object.fromEntries([...MAC_BROWSERS, ...LINUX_BROWSERS].map(name => [name, 'browser logins and cookies'])),
+  ...(process.platform === 'win32' ? WINDOWS_SECRETS : {}),
 }).map(([name, holds]) => ({ path: path.join(HOME, name), holds }));
 
 export function declaredPermissions(page: string, html = fs.readFileSync(page, 'utf8')) {
@@ -86,7 +106,9 @@ export function declaredPermissions(page: string, html = fs.readFileSync(page, '
     permissions.tags.push(tag);
     const kind = name.value.slice('papp-'.length).toLowerCase();
 
-    if (kind === 'read' || kind === 'write') {
+    if (process.platform === 'win32' && WINDOWS_REFUSED.includes(kind)) {
+      throw new Error(`On Windows Apargon cannot give a page papp-${kind}: Windows lets programs send data out past the sandbox. Apargon opens pages there without programs.`);
+    } else if (kind === 'read' || kind === 'write') {
       permissions[kind].push(folderPattern(value, dir));
     } else if (kind === 'net') {
       permissions.net.push(hostPattern(value));
@@ -137,8 +159,8 @@ export function declaredPermissions(page: string, html = fs.readFileSync(page, '
 
   const named = [...[...read, ...write].map(literalBase), ...sockets];
   const secrets = SECRETS.map(secret => (fs.existsSync(secret.path) ? fs.realpathSync.native(secret.path) : secret.path));
-  permissions.own = permissions.node || ['/', HOME, ...BIG_FOLDERS].includes(dir) ? null : dir;
-  permissions.hidden = permissions.node ? [] : secrets.filter(secret => !named.some(base => base === secret || base.startsWith(secret + '/')));
+  permissions.own = permissions.node || [path.parse(dir).root, HOME, ...BIG_FOLDERS].includes(dir) ? null : dir;
+  permissions.hidden = permissions.node ? [] : secrets.filter(secret => !named.some(base => isInside(base, secret)));
 
   return permissions;
 }
@@ -174,7 +196,14 @@ function folderPattern(value: string, dir: string) {
 }
 
 export function absolutePath(value: string, dir: string) {
-  return path.resolve(dir, value === '~' ? HOME : value.replace(/^~\//, HOME + '/'));
+  const absolute = path.resolve(dir, value === '~' ? HOME : value.replace(/^~\//, HOME + '/'));
+
+  // Windows looks up the server of a network path itself, outside the sandbox, before anyone can refuse it. A colon after the drive names a stream of a file, as page.papp::$DATA is the page, and Windows drops a name's trailing dots and spaces: either reaches a file under a name the checks do not see.
+  if (process.platform === 'win32' && (/^[\\/]{2}/.test(absolute) || absolute.includes(':', 2) || /[. ]([\\/]|$)/.test(absolute))) {
+    throw new Error(`Apargon: Windows reads ${value} as a network path or as another file's name, so Apargon never opens it.`);
+  }
+
+  return absolute;
 }
 
 function hostPattern(value: string) {
@@ -183,6 +212,8 @@ function hostPattern(value: string) {
 
   if (!/^(\*|(\*\.)?[a-z0-9][a-z0-9.-]*):(\*|[1-9]\d*)$/.test(pattern) || +port < 1 || +port > 65535) {
     throw new Error(`Bad papp-net value "${value}". One host:port per <meta>, such as api.example.com:443 or *.example.com:443.`);
+  } else if (process.platform === 'win32' && LOCAL_HOSTS.includes(host)) {
+    throw new Error('On Windows a page reaches only the servers it names, through Apargon, not programs on this computer.');
   } else if (host !== '127.0.0.1' && /^(0|127|169\.254)\./.test(host)) {
     throw new Error(`Apargon never reaches ${host}, which is this computer or a link-local address, where cloud machines keep their keys. For a program on this computer, declare localhost:<port>.`);
   } else if (net.isIPv4(host) && Object.values(os.networkInterfaces()).flat().some(own => own?.address === host && !own.internal)) {

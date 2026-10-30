@@ -5,6 +5,7 @@ import fs from 'fs';
 import net from 'net';
 import path from 'path';
 import readline from 'readline';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { describe } from '../permissions/describe.ts';
 import { HOME, type Use } from '../permissions/tags.ts';
 import { PAGE_FILE } from '../permissions/patterns.ts';
@@ -14,7 +15,7 @@ import { pageApi } from './api.ts';
 import { followFavicon } from './icon.ts';
 import { installMenu } from './menu.ts';
 
-export async function showPage({ page, permissions, pageHash, bridges }: ChildConfig) {
+export async function showPage({ page, permissions, pageHash, bridges, replies }: ChildConfig) {
   await Promise.all(bridges.map(({ port, socket }) => relay({ port, host: '127.0.0.1' }, { path: socket })));
 
   const dir = path.dirname(page);
@@ -23,7 +24,14 @@ export async function showPage({ page, permissions, pageHash, bridges }: ChildCo
   const pageSession = session.fromPartition(`persist:${createHash('sha256').update(page).digest('hex')}`);
 
   pageSession.protocol.handle('file', request => {
-    const file = realPath(decodeURIComponent(new URL(request.url).pathname));
+    const url = new URL(request.url);
+
+    // A file URL with a host is a network path on Windows, and no file elsewhere.
+    if (url.host) {
+      return new Response(`Apargon: this page may not load files from ${url.host}\n`, { status: 403 });
+    }
+
+    const file = realPath(fileURLToPath(url));
 
     if (!canSee(file)) {
       return new Response(`Apargon: this page may not see ${file}\n`, { status: 403 });
@@ -106,10 +114,12 @@ export async function showPage({ page, permissions, pageHash, bridges }: ChildCo
     remote.initialize();
   }
 
+  const pageUrl = pathToFileURL(page);
+
   const isPage = (href: string) => {
     const url = new URL(href);
 
-    return url.protocol === 'file:' && decodeURIComponent(url.pathname) === page;
+    return url.protocol === 'file:' && !url.host && decodeURIComponent(url.pathname) === decodeURIComponent(pageUrl.pathname);
   };
 
   const stayOnPage = (event: Electron.Event<{ url: string; isMainFrame: boolean }>) => {
@@ -162,7 +172,7 @@ export async function showPage({ page, permissions, pageHash, bridges }: ChildCo
     });
   }
 
-  readline.createInterface({ input: new net.Socket({ fd: PARENT_FD, writable: false }) }).on('line', line => {
+  const onReply = (line: string) => {
     const message = JSON.parse(line) as ParentMessage;
 
     if ('trayClick' in message) {
@@ -177,11 +187,23 @@ export async function showPage({ page, permissions, pageHash, bridges }: ChildCo
         reject(new Error(message.error));
       }
     }
-  });
+  };
+
+  if (replies) {
+    // The trampoline only appends. A last line without its newline is still being written: it is read next time.
+    let read = 0;
+    fs.watchFile(replies, { interval: 100 }, () => {
+      const text = fs.readFileSync(replies, 'utf8');
+      text.slice(read).split('\n').slice(0, -1).forEach(onReply);
+      read = text.lastIndexOf('\n') + 1;
+    });
+  } else {
+    readline.createInterface({ input: new net.Socket({ fd: PARENT_FD, writable: false }) }).on('line', onReply);
+  }
 
   let pendingReload: NodeJS.Timeout | undefined = undefined;
-  fs.watch(dir, { recursive: dir !== HOME && dir !== '/' }, (_event, name) => {
-    if (!name || !/\.(papp|css|js)$/.test(name) || /(^|\/)(\.[^/]*|node_modules)(\/|$)/.test(name)) {
+  fs.watch(dir, { recursive: dir !== HOME && dir !== path.parse(dir).root }, (_event, name) => {
+    if (!name || !/\.(papp|css|js)$/.test(name) || /(^|[\\/])(\.[^\\/]*|node_modules)([\\/]|$)/.test(name)) {
       return;
     }
 

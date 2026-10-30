@@ -1,6 +1,6 @@
 import net from 'net';
 import path from 'path';
-import { literalBase, PAGE_FILE, patternFolder } from './patterns.ts';
+import { isInside, literalBase, PAGE_FILE, patternFolder } from './patterns.ts';
 import { BIG_FOLDERS, HOME, LOCAL_HOSTS, privateNetwork, SECRETS, type Permissions, type Use } from './tags.ts';
 
 // The popup shows short, with text as its tip. Red is a way to send data somewhere the tags do not name.
@@ -70,7 +70,7 @@ export function worstCase({ node, run, sockets, net, open, own, read, write, use
 }
 
 function socketLine(socket: string): Line {
-  const secret = SECRETS.find(secret => socket === secret.path || socket.startsWith(secret.path + '/'));
+  const secret = SECRETS.find(secret => isInside(socket, secret.path));
 
   return { id: `socket:${socket}`, level: 'red', text: secret ? `Talk to the program that holds your ${secret.holds}` : 'Talk to the program behind it', short: socket };
 }
@@ -84,20 +84,21 @@ function envLine(name: string): Line {
 function folderLine(kind: 'read' | 'write', pattern: string): Line {
   const text = kind === 'read' ? 'See files' : 'See, change and delete files';
   const base = literalBase(pattern);
-  const library = path.join(HOME, 'Library');
-  const hidden = pattern.split('/').some(name => name.startsWith('.'));
-  const reachesLibrary = base === library || library.startsWith(base + '/') || base.startsWith(library + '/');
+  // Where files run outside the sandbox: launch agents on macOS, the Startup folder on Windows.
+  const library = path.join(HOME, process.platform === 'win32' ? 'AppData' : 'Library');
+  const hidden = pattern.split(path.sep).some(name => name.startsWith('.'));
+  const reachesLibrary = isInside(library, base) || isInside(base, library);
   // Files that run outside the sandbox: a shell's startup file, a git hook, a launch agent, a page.
   const red = kind === 'write' && (hidden || reachesLibrary || PAGE_FILE.test(pattern));
   const yellow =
     hidden ||
     reachesLibrary ||
     pattern.includes('*') ||
-    SECRETS.some(secret => base === secret.path || base.startsWith(secret.path + '/')) ||
-    path.dirname(pattern) === '/' ||
+    SECRETS.some(secret => isInside(base, secret.path)) ||
+    path.dirname(pattern) === path.parse(pattern).root ||
     BIG_FOLDERS.includes(pattern);
   const level = red ? 'red' : yellow ? 'yellow' : 'plain';
-  const short = pattern === '/' ? 'All your files' : pattern === HOME ? 'Your home folder' : pattern;
+  const short = pattern === path.parse(pattern).root ? 'All your files' : pattern === HOME ? 'Your home folder' : pattern;
 
   return { id: `${kind}:${pattern}`, level, text, short };
 }

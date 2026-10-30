@@ -12,8 +12,9 @@ export const seatbelt: Sandbox = {
   async prepare(_page, permissions) {
     const proxy = permissions.net.length ? await startProxy(permissions.net, null) : null;
     const proxyPort = proxy && (proxy.address() as AddressInfo).port;
+    const profile = seatbeltProfile(permissions, proxyPort);
 
-    return { command: ['sandbox-exec', '-p', seatbeltProfile(permissions, proxyPort)], proxyPort, bridges: [], networkFd: null, close: () => proxy?.close() };
+    return { command: apargon => ['sandbox-exec', '-p', profile, ...apargon], proxyPort, bridges: [], networkFd: null, close: () => proxy?.close() };
   },
   installHint: '',
 };

@@ -9,6 +9,7 @@
     "test": "rm -f test/pages/result*.json && node test/popup.ts && node test/moved.ts && node test/refuse.ts && node test/daemons.ts && APARGON_TEST_ALLOW=1 electron . test/pages/selftest.papp && APARGON_TEST_ALLOW=1 electron . test/pages/selftest-node.papp && APARGON_TEST_ALLOW=1 APARGON_TEST_ENV=passed electron . test/pages/selftest-net.papp && { [ $(uname) != Darwin ] || APARGON_TEST_ALLOW=1 electron . test/pages/selftest-mac.papp; } && node test/check.ts",
     "dist": "electron-builder --mac --arm64 --x64",
     "dist:linux": "electron-builder --linux --x64",
+    "dist:win": "electron-builder --win --x64 --arm64",
     "start:net": "APARGON_TEST_ALLOW=1 electron . examples/net.papp",
     "lint": "tsc && eslint .",
     "lint:fix": "eslint . --fix",
@@ -20,6 +21,7 @@
   "packageManager": "pnpm@11.1.2",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@microsoft/mxc-sdk": "1.0.1",
     "@stylistic/eslint-plugin": "^5.10.0",
     "@types/node": "^22.20.5",
     "electron": "^45.0.0",
@@ -101,6 +103,26 @@
       "category": "Development",
       "maintainer": "HaMMeR",
       "icon": "build/icon.png"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "icon": "build/icon.png",
+      "extraResources": [
+        {
+          "from": "node_modules/@microsoft/mxc-sdk/bin/${arch}",
+          "to": "mxc",
+          "filter": [
+            "wxc-exec.exe",
+            "wslcsdk.dll"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "perMachine": true
     }
   },
   "dependencies": {

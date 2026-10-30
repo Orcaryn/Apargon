@@ -23,6 +23,35 @@ if (process.platform === 'linux') {
   process.exit(opened.length ? 1 : 0);
 }
 
+if (process.platform === 'win32') {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apargon-popup-'));
+  const page = path.join(dir, 'case.papp');
+  fs.mkdirSync(path.join(dir, 'data'));
+  const cases = [
+    ['papp-run', 'cmd.exe', 'cannot give a page papp-run'],
+    ['papp-node', 'full', 'cannot give a page papp-node'],
+    ['papp-env', 'PATH', 'cannot give a page papp-env'],
+    ['papp-socket', './data', 'cannot give a page papp-socket'],
+    ['papp-net', 'localhost:11434', 'not programs on this computer'],
+    ['papp-read', '//apg-popup.example.com/share', 'network path'],
+    ['papp-write', './data/case.papp::$DATA', "another file's name"],
+    ['papp-write', './data/case.papp.', "another file's name"],
+  ];
+  const opened = cases.filter(([tag, value, reason]) => {
+    fs.writeFileSync(page, `<meta name="${tag}" content="${value}">`);
+
+    try {
+      declaredPermissions(page);
+
+      return true;
+    } catch (err) {
+      return !(err as Error).message.includes(reason);
+    }
+  });
+  console.log(opened.length ? `popup: FAIL, opened ${opened.map(([tag, value]) => `${tag} ${value}`).join(', ')}` : 'popup: ok, every tag Windows cannot fence refused');
+  process.exit(opened.length ? 1 : 0);
+}
+
 if (process.platform !== 'darwin') {
   console.log('popup: skipped, macOS only');
   process.exit(0);

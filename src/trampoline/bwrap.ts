@@ -22,7 +22,7 @@ export const bwrap: Sandbox = {
     const networkFd = fs.openSync('/proc/self/ns/net', 'r');
 
     return {
-      command: ['bwrap', ...bwrapArgs(page, permissions, socketFolder)],
+      command: apargon => ['bwrap', ...bwrapArgs(page, permissions, socketFolder), ...apargon],
       proxyPort: proxyBridge?.port ?? null,
       bridges: proxyBridge ? [proxyBridge, ...localBridges] : [],
       networkFd,

@@ -21,23 +21,27 @@
 
 The page's process and every process it starts run in an OS sandbox.
 
-| OS    | Sandbox                                                                           |
-| ----- | --------------------------------------------------------------------------------- |
-| macOS | Seatbelt: `sandbox-exec`, `sandbox/macos.sb`, plus rules for each page            |
-| Linux | `bwrap --unshare-net --unshare-pid --unshare-user --disable-userns --new-session` |
+| OS      | Sandbox                                                                                    |
+| ------- | ------------------------------------------------------------------------------------------ |
+| macOS   | Seatbelt: `sandbox-exec`, `sandbox/macos.sb`, plus rules for each page                     |
+| Linux   | `bwrap --unshare-net --unshare-pid --unshare-user --disable-userns --new-session`          |
+| Windows | MXC's ProcessContainer (an AppContainer), through `wxc-exec`, with outbound traffic denied |
 
 - Connections and DNS lookups fail in the kernel. On macOS binds fail too; on Linux they succeed, but only on the sandbox's own loopback, which leads nowhere.
 - Linux: the sandbox has its own network (only a loopback) and its own process list. It cannot make more namespaces, and it is cut off from the terminal Apargon started from.
+- Windows: every page asks MXC to deny outbound traffic. With `papp-net` the page may reach only the proxy, on loopback. Chromium looks up no names itself, and Apargon refuses network paths (`\\server\…`, `file://host/`) before any lookup.
+- Windows: pages run no programs. Apargon refuses `papp-run` and `papp-node`, and `papp-env`, which only passes variables to programs. A program in the sandbox can open a network path such as `\\data.example.com\x`; a Windows service outside the sandbox then looks the name up, and the DNS query carries the data out. It leaked in every MXC mode tested: no network, proxy, and least privilege. A page itself cannot start that lookup: Apargon refuses `\\` paths and `file://host/` URLs as text, before any lookup. `papp-socket` is refused too: Apargon has no socket bridge on Windows.
 - Linux: `/dev` holds the GPU, not the disks. The camera needs `papp-use camera`. Sound devices need `papp-use sound` or `microphone`.
 
 ### The offline check
 
 Before it opens a page, the sandboxed process checks that it is offline. If it is not, or cannot tell, it refuses. No flag skips this. `test/refuse.ts` tests it.
 
-| OS    | Check                                                                             |
-| ----- | --------------------------------------------------------------------------------- |
-| macOS | binding a loopback port must fail with `EPERM`; any other result refuses          |
-| Linux | its network holds only `lo` (and kernel tunnel stubs) and is not the trampoline's |
+| OS      | Check                                                                                     |
+| ------- | ----------------------------------------------------------------------------------------- |
+| macOS   | binding a loopback port must fail with `EPERM`; any other result refuses                  |
+| Linux   | its network holds only `lo` (and kernel tunnel stubs) and is not the trampoline's         |
+| Windows | connecting to a loopback port must fail with `EACCES`; this is weaker, see "Not enforced" |
 
 ### System services that fetch (macOS)
 
@@ -113,18 +117,21 @@ The OS also limits where the page and its programs write:
 - macOS: by pattern, the same patterns Apargon checks. Pages stay out of every pattern that does not name them.
 - macOS: programs cannot open other apps (`open`), script them (Apple Events) or write app settings (`defaults write`). `selftest-mac` checks these, and that the proxy refuses this Mac's own LAN address.
 - Linux: by folder, which is looser (see "Not enforced").
+- Windows: by folder too. A `papp-write` folder that holds Apargon's data, a whole drive included, is refused.
 
 ### Keys and logins
 
 The OS hides a fixed list from the page and every program it runs: `~/.ssh`, `~/.gnupg`, `~/.aws`, cloud and GitHub CLI logins, saved passwords, browser profiles. `SECRETS` in `src/permissions/tags.ts` is the list.
 
-| OS    | How                                                              |
-| ----- | ---------------------------------------------------------------- |
-| macOS | Seatbelt denies them at their real paths, made later too         |
-| Linux | `bwrap` covers folders with an empty one, files with `/dev/null` |
+| OS      | How                                                              |
+| ------- | ---------------------------------------------------------------- |
+| macOS   | Seatbelt denies them at their real paths, made later too         |
+| Linux   | `bwrap` covers folders with an empty one, files with `/dev/null` |
+| Windows | MXC denies the ones that exist when the page opens               |
 
 - Apargon's own checks refuse them too. `~/Library` does not reach a browser profile.
 - Only a tag that starts inside one opens it. That line is yellow.
+- Windows: the list also holds Windows' saved passwords, the PowerShell startup folders and the Startup folder, which run outside the sandbox.
 - `selftest-net` checks that a program cannot list `~/.ssh`.
 
 ### Environment
@@ -195,7 +202,7 @@ The OS hides a fixed list from the page and every program it runs: `~/.ssh`, `~/
 
 ### Reading
 
-- Apargon enforces read grants, not the OS. Chromium's own sandbox cannot start inside `sandbox-exec` or `bwrap`.
+- Apargon enforces read grants, not the OS. Chromium's own sandbox cannot start inside `sandbox-exec`, `bwrap` or MXC.
 - So a page that exploits a Chromium bug could read any file but keys and logins. It would still have no network beyond its hosts, and the same write limits.
 - Listing a folder above a wildcard (`~/git` for `~/git/*/docs`) shows every name in it. Names only, not files.
 - `papp.pick` lets the page see what the user picks in the dialog, until it reloads; a folder with its subfolders, hidden files left out. Keys and logins stay refused, and so do a link and a folder that holds the whole home folder (`/`, `~`). Apargon draws the dialog in the page's process, outside the renderer, but nothing asks for a click first: a page can open the dialog again after a cancel.
@@ -259,6 +266,15 @@ The OS hides a fixed list from the page and every program it runs: `~/.ssh`, `~/
 | Linux | a socket file outside `/run` and `/tmp`: `tmux -S ~/sock`, Docker with `-H`, any server in a folder the page sees                                                                                                                                                                                                                               |
 | Linux | `vsock`, in a virtual machine                                                                                                                                                                                                                                                                                                                   |
 | Linux | the X11 display socket, to type into another window. Wayland does not allow this.                                                                                                                                                                                                                                                               |
+
+### Windows
+
+- A page that exploits Chromium could open a network path itself and send data out through DNS, as a program could (see "The sandbox"). No MXC setting stops it.
+- The offline check proves only that loopback is refused. A Windows sandbox refuses loopback even when it may reach the internet, so the check cannot tell the two apart. What keeps the page offline is the deny Apargon sends MXC.
+- Keys and logins: the OS hides only those that exist when the page opens. Apargon's own checks refuse the rest.
+- The OS limits writes by folder, not pattern, and the whole temp folder (`%TEMP%`, shared with other apps) is writable. Without programs, this matters only for a page that exploits Chromium.
+- With OneDrive's folder backup, Documents lives in `~\OneDrive\Documents`. The PowerShell startup folders there are not on the list.
+- Apargon's replies to a page, such as where its files were saved, go through a file in Apargon's data folder while the page runs: MXC passes standard input only once it closes. Other open pages can read that file; none can write it.
 
 ### Links and files (`papp.open`, `papp-open`)
 
@@ -341,6 +357,7 @@ Apargon is not a VM. A hard "nothing leaves" guarantee needs a VM with no networ
 | macOS         | 2026-10-29, `pnpm test`: every check                                                                                                                                                                                                             |
 | Linux         | 2026-10-29, the published 0.3.0 `.deb` from the GitHub release (sha256 `b458e617…60821cf`, as in `SHA256SUMS`), installed on a headless Ubuntu 24.04 server with the AppArmor limit on: every Linux check (83), and the refusal with its control |
 | Linux desktop | not yet: no run with a real display and a double-click                                                                                                                                                                                           |
+| Windows       | 2026-10-30, Windows 11 on arm64: every Windows check (48), and no test name in the packet capture                                                                                                                                                |
 
 Not covered by the Linux run: the `papp-socket` folder refusal and the NAT64 range. No check on the installed `.deb` tests them; `pnpm test` on Linux does.
 

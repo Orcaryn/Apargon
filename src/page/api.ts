@@ -3,7 +3,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import { once } from 'events';
 import fs from 'fs';
 import path from 'path';
-import { patternSource } from '../permissions/patterns.ts';
+import { isInside, patternSource } from '../permissions/patterns.ts';
 import { absolutePath, HOME, linkHost, PROGRAM_ENV, viewable, type Permissions } from '../permissions/tags.ts';
 import { realPath, tellTrampoline } from '../shared.ts';
 import type { pageAccess } from './access.ts';
@@ -222,7 +222,7 @@ export function pageApi(dir: string, permissions: Permissions, access: ReturnTyp
         const file = name && path.join(watched, name);
 
         if (file && (isFolder ? canList(file) : file === target)) {
-          win.webContents.send('apargon-change', id, path.relative(dir, file), fs.existsSync(file) ? 'changed' : 'removed');
+          win.webContents.send('apargon-change', id, path.relative(dir, file).replaceAll(path.sep, '/'), fs.existsSync(file) ? 'changed' : 'removed');
         }
       });
       // A recursive watch can fail on a new subfolder, or when the system runs out of watches; it then stops.
@@ -240,7 +240,7 @@ export function pageApi(dir: string, permissions: Permissions, access: ReturnTyp
       const linked = filePaths.find(file => realPath(file) !== file);
       // patternSource reads * as a wildcard.
       const starred = filePaths.find(file => file.includes('*'));
-      const holdsHome = folder && filePaths.find(file => !path.relative(file, HOME).startsWith('..'));
+      const holdsHome = folder && filePaths.find(file => isInside(HOME, file));
 
       if (resets !== resetsBefore) {
         return [];

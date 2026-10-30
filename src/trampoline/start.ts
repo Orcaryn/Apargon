@@ -7,12 +7,15 @@ import readline from 'readline';
 import type { Readable, Writable } from 'stream';
 import { PAGE_FILE } from '../permissions/patterns.ts';
 import { declaredLink, linkHost, PAGE_ENV, viewable, type Permissions } from '../permissions/tags.ts';
-import { APP_BUNDLE, APP_ROOT, DATA, EGRESS_LOG, GRANTS_FILE, LINKS_FILE, MESSAGE_FD, PARENT_FD, readJson, realPath, UPDATE_FILE, writeJson, type ChildConfig, type ChildMessage, type Grants, type Links, type ParentMessage, type SavedFile, type UpdateState } from '../shared.ts';
+import { APP_BUNDLE, APP_ROOT, DATA, EGRESS_LOG, GRANTS_FILE, LINKS_FILE, MESSAGE_FD, PAGE_DATA, PARENT_FD, readJson, realPath, SEEN_FILE, UPDATE_FILE, writeJson, type ChildConfig, type ChildMessage, type Grants, type Links, type ParentMessage, type SavedFile, type UpdateState } from '../shared.ts';
+import { followMove, noteContent } from '../storage.ts';
 import { approve } from './approve.ts';
 import { SANDBOX } from './platform.ts';
 import { offerSkill } from './skill.ts';
 
 let openPages = 0;
+// The path of each page with a window, once per window.
+const running: string[] = [];
 const trays = new Map<ChildProcess, Tray>();
 
 export async function openPage(file: string) {
@@ -33,6 +36,8 @@ export async function openPage(file: string) {
 }
 
 async function startChild({ page, permissions, pageHash }: Pick<ChildConfig, 'page' | 'permissions' | 'pageHash'>) {
+  followMove(page, PAGE_DATA, SEEN_FILE, running);
+  noteContent(page, SEEN_FILE);
   const sandbox = await SANDBOX!.prepare(page, permissions);
   const proxy = sandbox.proxyPort === null ? null : `127.0.0.1:${sandbox.proxyPort}`;
   const inherited = Object.entries(process.env).filter(([name]) => permissions.node || PAGE_ENV.includes(name) || permissions.env.includes(name));
@@ -48,7 +53,10 @@ async function startChild({ page, permissions, pageHash }: Pick<ChildConfig, 'pa
   const child = spawn(command, args, { stdio: ['inherit', 'inherit', 'inherit', 'pipe', sandbox.networkFd ?? 'ignore', 'pipe'], env });
   readline.createInterface({ input: child.stdio[MESSAGE_FD] as Readable }).on('line', line => handleChildMessage(child, page, permissions, JSON.parse(line)));
   child.on('error', err => dialog.showErrorBox('Apargon', `Could not start the sandbox: ${err.message}${SANDBOX!.installHint}`));
+  running.push(page);
   child.on('close', () => {
+    running.splice(running.indexOf(page), 1);
+    noteContent(page, SEEN_FILE);
     setTray(child, page, null);
     sandbox.close();
   });

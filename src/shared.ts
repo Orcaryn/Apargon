@@ -20,6 +20,7 @@ export const DATA = app.getPath('userData');
 export const PAGE_DATA = path.join(DATA, 'pages');
 export const GRANTS_FILE = path.join(DATA, 'grants.json');
 export const LINKS_FILE = path.join(DATA, 'links.json');
+export const SEEN_FILE = path.join(DATA, 'seen.json');
 export const NET_DATA = path.join(DATA, 'net');
 export const UPDATE_FILE = path.join(DATA, 'update.json');
 export const EGRESS_LOG = path.join(app.getPath('logs'), 'egress.log');

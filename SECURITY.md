@@ -157,6 +157,7 @@ The OS hides a fixed list from the page and every program it runs: `~/.ssh`, `~/
 - `papp.open` hands a file to its default app only if the page may see it and it is a folder without an extension, so not an app or other bundle, or of a viewable type (`OPENABLE` in `src/permissions/tags.ts`): images, video, audio, PDF, plain text. Not a page, HTML, SVG, a script, or anything that runs when opened. The first process checks the type, and keys and logins, again. `selftest` checks the refusals.
 - A frame from a declared host cannot reach `window.papp`. Tested by hand on 2026-10-26: Chromium blocks it as cross-origin.
 - Each page keeps its own `localStorage`, IndexedDB and cache. `selftest-node` checks that one page cannot read another's `localStorage`.
+- A page's storage follows it when it moves. A page that opens from a new path with the exact content of a page whose file is gone gets that page's storage. Same content is the same page, so no other page can claim it. The first process moves it before the window starts, and records each page's content, on open and on close, in `seen.json`, which no page can write. A copy moves nothing, and a page whose old window is still open does not open. `test/moved.ts` checks the cases.
 - The favicon is read only from a file the page may see, and always gets Apargon's badge on the corner.
 - On macOS, only a page made here gets its icon in Finder.
 
@@ -279,6 +280,13 @@ The OS hides a fixed list from the page and every program it runs: `~/.ssh`, `~/
 - A notification's text is the page's. It shows under Apargon's name.
 - A page's icon can look like another app's. Only the badge and the menu-bar name show it is an Apargon page.
 - Clipboard writing, printing, and files you pick or drop into the page need no tag.
+
+### Storage after a move
+
+- Same content means the same `.papp`, not the `.js` and `.css` it loads. Whoever can write files can put a gone page's exact content next to other code; opened, it gets the gone page's storage. They can already replace a page at its own path.
+- A file on a drive that is not plugged in counts as gone: a copy of it, opened meanwhile, takes its storage.
+- A page edited and moved without being opened in between starts empty. The old storage stays on disk, out of reach.
+- Only windows of this Apargon process count as open. A window from another one (on Linux, each `apargon` command starts one) can lose what it writes after its storage moved.
 
 ### Where a page came from
 

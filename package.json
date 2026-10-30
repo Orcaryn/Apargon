@@ -6,7 +6,7 @@
   "main": "src/main.ts",
   "scripts": {
     "start": "electron . examples/hello.papp",
-    "test": "rm -f test/result*.json && node test/popup.ts && node test/refuse.ts && node test/daemons.ts && APARGON_TEST_ALLOW=1 electron . test/selftest.papp && APARGON_TEST_ALLOW=1 electron . test/selftest-node.papp && APARGON_TEST_ALLOW=1 APARGON_TEST_ENV=passed electron . test/selftest-net.papp && node test/check.ts",
+    "test": "rm -f test/result*.json && node test/popup.ts && node test/moved.ts && node test/refuse.ts && node test/daemons.ts && APARGON_TEST_ALLOW=1 electron . test/selftest.papp && APARGON_TEST_ALLOW=1 electron . test/selftest-node.papp && APARGON_TEST_ALLOW=1 APARGON_TEST_ENV=passed electron . test/selftest-net.papp && node test/check.ts",
     "dist": "electron-builder --mac --arm64 --x64",
     "dist:linux": "electron-builder --linux --x64",
     "start:net": "APARGON_TEST_ALLOW=1 electron . examples/net.papp",

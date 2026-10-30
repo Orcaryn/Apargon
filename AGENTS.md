@@ -19,10 +19,10 @@ Apargon runs a `.papp` file, one HTML file, as a desktop app. The page gets what
 `release.sh` does not run the Linux checks. Before a release, on Ubuntu 24.04:
 
 1. `pnpm dist:linux`, then `sudo apt install ./dist/*.deb xvfb xauth`.
-2. Approve the three `test/selftest*.papp` once at a display, or write `~/.config/apargon/grants.json` (lowercase: Electron names it after `package.json`'s `name`): each page's real path mapped to the sorted `id`s of `describe(declaredPermissions(page))`. Also write `~/.config/apargon/welcome.json` as `{"welcomed": true}`, or the first run waits on the skill offer.
-3. Delete `test/result*.json`; make sure `~/.ssh` exists.
-4. `xvfb-run -a apargon test/selftest.papp`, then `selftest-node.papp`, then `APARGON_TEST_ENV=passed xvfb-run -a apargon test/selftest-net.papp`, as `package.json`'s test line sets it; then `node test/check.ts`.
-5. Refusal, with a control: run `apargon test/selftest.papp` with `APARGON` set by hand to a `ChildConfig`; no `test/result.json` may appear. Run it normally; now one must.
+2. Approve `test/pages/selftest.papp`, `selftest-node.papp` and `selftest-net.papp` once (`selftest-mac.papp` is macOS only) at a display, or write `~/.config/apargon/grants.json` (lowercase: Electron names it after `package.json`'s `name`): each page's real path mapped to the sorted `id`s of `describe(declaredPermissions(page))`. Also write `~/.config/apargon/welcome.json` as `{"welcomed": true}`, or the first run waits on the skill offer.
+3. Delete `test/pages/result*.json`; make sure `~/.ssh` exists.
+4. `xvfb-run -a apargon test/pages/selftest.papp`, then `selftest-node.papp`, then `APARGON_TEST_ENV=passed xvfb-run -a apargon test/pages/selftest-net.papp`, as `package.json`'s test line sets it; then `node test/check.ts`.
+5. Refusal, with a control: run `apargon test/pages/selftest.papp` with `APARGON` set by hand to a `ChildConfig`; no `test/pages/result.json` may appear. Run it normally; now one must.
 6. Record date and result in `SECURITY.md` under "Verification".
 
 ## Releases

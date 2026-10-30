@@ -5,10 +5,10 @@ import path from 'path';
 import { declaredPermissions } from '../src/permissions/tags.ts';
 
 const electron: string = createRequire(import.meta.url)('electron');
-const result = path.join(import.meta.dirname, 'result.json');
+const result = path.join(import.meta.dirname, 'pages', 'result.json');
 fs.rmSync(result, { force: true });
 
-const page = path.join(import.meta.dirname, 'selftest.papp');
+const page = path.join(import.meta.dirname, 'pages', 'selftest.papp');
 const permissions = declaredPermissions(page);
 const child = spawn(electron, ['.', page], {
   env: { ...process.env, APARGON: JSON.stringify({ page, permissions, proxy: null, bridges: [] }) },

@@ -12,7 +12,7 @@ if (process.platform !== 'darwin') {
   process.exit(0);
 }
 
-const leak = path.join(import.meta.dirname, 'leak');
+const leak = path.join(import.meta.dirname, 'pages', 'leak');
 execFileSync('swiftc', ['-O', path.join(import.meta.dirname, 'leak.swift'), '-o', leak], { stdio: 'inherit' });
 const answers = [
   ...['download', 'webkit'].map(mode => ({ mode, answered: execFileSync(leak, [mode, 'https://example.com/'], { encoding: 'utf8' }).trim() === 'answered' })),
@@ -39,10 +39,10 @@ async function trustFetches() {
   openssl('req -x509 -newkey rsa:2048 -nodes -keyout ca.key -out ca.pem -subj /CN=apargon-leak-ca -days 1');
   openssl('req -newkey rsa:2048 -nodes -keyout leaf.key -out leaf.csr -subj /CN=apargon-leak');
   openssl('x509 -req -in leaf.csr -CA ca.pem -CAkey ca.key -CAcreateserial -out leaf.der -outform DER -days 1 -extfile leaf.cnf -extensions leaf');
-  fs.copyFileSync(path.join(dir, 'leaf.der'), path.join(import.meta.dirname, 'leak.der'));
+  fs.copyFileSync(path.join(dir, 'leaf.der'), path.join(import.meta.dirname, 'pages', 'leak.der'));
   fs.rmSync(dir, { recursive: true });
 
-  await promisify(execFile)(leak, ['trust', path.join(import.meta.dirname, 'leak.der')]);
+  await promisify(execFile)(leak, ['trust', path.join(import.meta.dirname, 'pages', 'leak.der')]);
   listener.close();
 
   return fetched;

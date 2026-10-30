@@ -1,0 +1,31 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="papp-net" content="example.com:443">
+<meta name="papp-run" content="curl">
+<meta name="papp-run" content="/usr/bin/open">
+<meta name="papp-run" content="/usr/bin/osascript">
+<meta name="papp-run" content="/usr/sbin/ipconfig">
+<meta name="papp-run" content="/usr/bin/defaults">
+<meta name="papp-write" content="./result-mac.json">
+<title>Apargon selftest (macOS programs)</title>
+<body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
+
+<script type="module">
+  // macOS only: Apargon refuses a papp-run path that does not exist, so on Linux these tags would refuse the whole page.
+  const result = {};
+
+  try {
+    const lan = (await papp.run('ipconfig', ['getifaddr', 'en0'])).stdout.trim();
+    result.proxy_refuses_own_lan_address = lan === '' || (await papp.run('curl', ['-s', '-o', '/dev/null', '-m', '5', '-w', '%{http_code}', `http://${lan}:9/`])).stdout === '403';
+    result.program_open_app_blocked = (await papp.run('open', ['-g', '-a', 'Finder'])).status !== 0;
+    // activate, not a query: a query also fails without the sandbox, on the Automation permission, so it would not notice the rule gone.
+    result.program_apple_event_blocked = (await papp.run('osascript', ['-e', 'tell application "Finder" to activate'])).status !== 0;
+    result.program_preference_write_blocked = (await papp.run('defaults', ['write', 'com.apargon.selftest', 'leaked', '-bool', 'true'])).status !== 0;
+  } catch (err) {
+    result.error = err.message;
+  }
+
+  document.body.textContent = JSON.stringify(result);
+  await papp.writeFile('result-mac.json', JSON.stringify(result, null, 2) + '\n');
+  setTimeout(() => window.close(), 200);
+</script>

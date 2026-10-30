@@ -111,7 +111,7 @@ The OS also limits where the page and its programs write:
 | `pages/`, the pages' Electron data | Electron needs it   |
 
 - macOS: by pattern, the same patterns Apargon checks. Pages stay out of every pattern that does not name them.
-- macOS: programs cannot open other apps (`open`), script them (Apple Events) or write app settings (`defaults write`).
+- macOS: programs cannot open other apps (`open`), script them (Apple Events) or write app settings (`defaults write`). `selftest-mac` checks these, and that the proxy refuses this Mac's own LAN address.
 - Linux: by folder, which is looser (see "Not enforced").
 
 ### Keys and logins

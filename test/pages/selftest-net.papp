@@ -11,11 +11,7 @@
 <meta name="papp-run" content="env">
 <meta name="papp-run" content="sh">
 <meta name="papp-env" content="APARGON_TEST_ENV">
-<meta name="papp-run" content="/usr/bin/open">
-<meta name="papp-run" content="/usr/bin/osascript">
-<meta name="papp-run" content="/usr/sbin/ipconfig">
-<meta name="papp-run" content="/usr/bin/defaults">
-<meta name="papp-read" content="../examples">
+<meta name="papp-read" content="../../examples">
 <meta name="papp-write" content="./result-net.json">
 <meta name="papp-write" content="./touched*">
 <meta name="papp-use" content="clipboard">
@@ -36,16 +32,15 @@
     result.curl_declared = await curl('https://example.com/') === '200';
     result.curl_undeclared_blocked = await curl('https://example.net/') !== '200';
     result.curl_direct_blocked = await curl('--noproxy', '*', 'https://example.com/') !== '200';
-    const lan = mac ? (await papp.run('ipconfig', ['getifaddr', 'en0'])).stdout.trim() : '';
-    result.proxy_refuses_this_computer = await curl('http://0.0.0.1:9/') === '403' && (lan === '' || await curl(`http://${lan}:9/`) === '403');
+    result.proxy_refuses_this_computer = await curl('http://0.0.0.1:9/') === '403';
     result.proxy_refuses_local_network = (await Promise.all(['10.255.255.1', '192.168.255.1', '172.31.255.1', '169.254.169.254', '100.64.0.1'].map((address) => curl(`http://${address}:9/`)))).every((code) => code === '403');
     result.proxy_allows_declared_lan_address = await curl('http://10.255.255.2:9/') !== '403';
     if (mac) {
       result.proxy_refuses_connect_without_port = (await papp.run('sh', ['-c', 'printf "CONNECT example.com HTTP/1.1\\r\\nHost: example.com\\r\\n\\r\\n" | nc -w 3 127.0.0.1 "${http_proxy##*:}" | head -1'])).stdout.includes('403');
     }
 
-    result.read_granted = (await papp.readFile('../examples/hello.papp')).includes('papp');
-    result.read_only = await refused(() => papp.writeFile('../examples/x.txt', 'x'));
+    result.read_granted = (await papp.readFile('../../examples/hello.papp')).includes('papp');
+    result.read_only = await refused(() => papp.writeFile('../../examples/x.txt', 'x'));
 
     result.program_writes_granted = (await papp.run('touch', ['touched.tmp'])).status === 0;
     await papp.rm('touched.tmp');
@@ -55,10 +50,6 @@
       result.program_hidden_write_blocked = (await papp.run('touch', ['.touched.tmp'])).status !== 0;
       result.program_own_folder_write_blocked = (await papp.run('touch', ['own.tmp'])).status !== 0;
       result.program_page_write_blocked = (await papp.run('touch', ['touched.papp'])).status !== 0;
-      result.program_open_app_blocked = (await papp.run('open', ['-g', '-a', 'Finder'])).status !== 0;
-      // activate, not a query: a query also fails without the sandbox, on the Automation permission, so it would not notice the rule gone.
-      result.program_apple_event_blocked = (await papp.run('osascript', ['-e', 'tell application "Finder" to activate'])).status !== 0;
-      result.program_preference_write_blocked = (await papp.run('defaults', ['write', 'com.apargon.selftest', 'leaked', '-bool', 'true'])).status !== 0;
     }
 
     result.program_input = (await papp.run('cat', [], { input: 'piped' })).stdout === 'piped';

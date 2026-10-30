@@ -98,11 +98,11 @@
     await papp.copyFile('subfolder/note.txt', 'scratch-copy.txt');
     result.copy = await papp.readFile('scratch-copy.txt') === note;
     await papp.rm('scratch-copy.txt');
-    result.copy_refused = await refused(() => papp.copyFile('../package.json', 'scratch-copy.txt')) && await refused(() => papp.copyFile('subfolder/note.txt', 'own.txt')) && await refused(() => papp.copyFile('selftest.papp', 'scratch.papp'));
+    result.copy_refused = await refused(() => papp.copyFile('../../package.json', 'scratch-copy.txt')) && await refused(() => papp.copyFile('subfolder/note.txt', 'own.txt')) && await refused(() => papp.copyFile('selftest.papp', 'scratch.papp'));
     await papp.rm('scratch.txt');
     result.save_names_refused = (await Promise.all([{}, { '../out.txt': 'x' }, { 'sub/out.txt': 'x' }, { '.zshrc': 'x' }, { 'ok.txt': 'x', 'page.papp': 'x' }, { 'ok.txt': 'x', '': 'x' }].map((files) => refused(() => papp.saveAs(files))))).every(Boolean);
 
-    result.outside_read_refused = await refused(() => papp.readFile('../package.json'));
+    result.outside_read_refused = await refused(() => papp.readFile('../../package.json'));
     result.outside_write_refused = await refused(() => papp.writeFile('../outside.txt', 'x'));
     result.home_read_refused = await refused(() => papp.readdir('~'));
     result.hidden_write_refused = await refused(() => papp.writeFile('.hidden', 'x'));
@@ -110,13 +110,13 @@
     result.spawn_refused = await refused(() => papp.spawn('ls'));
     result.use_refused = await refused(() => papp.notify('selftest', 'should not show'));
     result.open_type_refused = await refused(() => papp.open('selftest.papp')) && await refused(() => papp.open('subfolder/frame.html')) && await refused(() => papp.open('subfolder/bundle.app'));
-    result.open_outside_refused = await refused(() => papp.open('../package.json'));
+    result.open_outside_refused = await refused(() => papp.open('../../package.json'));
     result.open_scheme_refused = (await Promise.all(['vscode://file/etc/passwd', 'file:///etc/passwd', 'javascript:1'].map((href) => refused(() => papp.open(href))))).every(Boolean);
     result.screen_capture_refused = await refused(() => navigator.mediaDevices.getDisplayMedia({ video: true }));
     result.other_file_window_refused = window.open('subfolder/frame.html') === null;
 
     result.fetch_blocked = await fetched;
-    result.outside_file_url_refused = !(await loads('../package.json'));
+    result.outside_file_url_refused = !(await loads('../../package.json'));
     result.other_file_frame_refused = await new Promise((done) => {
       const frame = document.createElement('iframe');
       frame.src = 'subfolder/frame.html';

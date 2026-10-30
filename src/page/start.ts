@@ -8,7 +8,7 @@ import readline from 'readline';
 import { describe } from '../permissions/describe.ts';
 import { HOME, type Use } from '../permissions/tags.ts';
 import { PAGE_FILE } from '../permissions/patterns.ts';
-import { APP_ROOT, GRANTS_FILE, PARENT_FD, readJson, realPath, relay, tellTrampoline, type ChildConfig, type Grants, type ParentMessage } from '../shared.ts';
+import { APP_ROOT, GRANTS_FILE, LINKS_FILE, PARENT_FD, readJson, realPath, relay, tellTrampoline, type ChildConfig, type Grants, type Links, type ParentMessage } from '../shared.ts';
 import { pageAccess } from './access.ts';
 import { pageApi } from './api.ts';
 import { followFavicon } from './icon.ts';
@@ -55,7 +55,7 @@ export async function showPage({ page, permissions, pageHash, bridges }: ChildCo
     });
   }
 
-  installMenu(page, describe(permissions), Object.keys(readJson<Grants>(GRANTS_FILE)));
+  installMenu(page, describe(permissions), Object.keys({ ...readJson<Links>(LINKS_FILE), ...readJson<Grants>(GRANTS_FILE) }));
 
   const icon = app.isPackaged ? undefined : path.join(APP_ROOT, 'build/icon.png');
 
@@ -115,13 +115,26 @@ export async function showPage({ page, permissions, pageHash, bridges }: ChildCo
   const stayOnPage = (event: Electron.Event<{ url: string; isMainFrame: boolean }>) => {
     if (!isPage(event.url) && (event.isMainFrame || new URL(event.url).protocol === 'file:')) {
       event.preventDefault();
+
+      // The trampoline opens an http(s) link in the browser, or asks; the window stays on the page.
+      if (event.isMainFrame) {
+        tellTrampoline({ openLink: event.url });
+      }
     }
   };
 
   const setUpWindow = (opened: BrowserWindow) => {
     opened.webContents.on('will-frame-navigate', stayOnPage);
     opened.webContents.on('will-redirect', stayOnPage);
-    opened.webContents.setWindowOpenHandler(({ url }) => (isPage(url) ? { action: 'allow', overrideBrowserWindowOptions: { icon, webPreferences } } : { action: 'deny' }));
+    opened.webContents.setWindowOpenHandler(({ url }) => {
+      if (isPage(url)) {
+        return { action: 'allow', overrideBrowserWindowOptions: { icon, webPreferences } };
+      }
+
+      tellTrampoline({ openLink: url });
+
+      return { action: 'deny' };
+    });
     opened.webContents.on('did-create-window', setUpWindow);
     opened.webContents.setAudioMuted(!permissions.use.includes('sound'));
 

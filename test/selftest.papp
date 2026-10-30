@@ -109,6 +109,9 @@
     result.run_refused = await refused(() => papp.run('ls'));
     result.spawn_refused = await refused(() => papp.spawn('ls'));
     result.use_refused = await refused(() => papp.notify('selftest', 'should not show'));
+    result.open_type_refused = await refused(() => papp.open('selftest.papp')) && await refused(() => papp.open('subfolder/frame.html')) && await refused(() => papp.open('subfolder/bundle.app'));
+    result.open_outside_refused = await refused(() => papp.open('../package.json'));
+    result.open_scheme_refused = (await Promise.all(['vscode://file/etc/passwd', 'file:///etc/passwd', 'javascript:1'].map((href) => refused(() => papp.open(href))))).every(Boolean);
     result.screen_capture_refused = await refused(() => navigator.mediaDevices.getDisplayMedia({ video: true }));
     result.other_file_window_refused = window.open('subfolder/frame.html') === null;
 

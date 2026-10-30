@@ -6,8 +6,8 @@ import path from 'path';
 import readline from 'readline';
 import type { Readable, Writable } from 'stream';
 import { PAGE_FILE } from '../permissions/patterns.ts';
-import { PAGE_ENV } from '../permissions/tags.ts';
-import { APP_BUNDLE, APP_ROOT, DATA, EGRESS_LOG, GRANTS_FILE, MESSAGE_FD, PARENT_FD, readJson, realPath, UPDATE_FILE, writeJson, type ChildConfig, type ChildMessage, type Grants, type ParentMessage, type SavedFile, type UpdateState } from '../shared.ts';
+import { declaredLink, linkHost, PAGE_ENV, viewable, type Permissions } from '../permissions/tags.ts';
+import { APP_BUNDLE, APP_ROOT, DATA, EGRESS_LOG, GRANTS_FILE, LINKS_FILE, MESSAGE_FD, PARENT_FD, readJson, realPath, UPDATE_FILE, writeJson, type ChildConfig, type ChildMessage, type Grants, type Links, type ParentMessage, type SavedFile, type UpdateState } from '../shared.ts';
 import { approve } from './approve.ts';
 import { SANDBOX } from './platform.ts';
 import { offerSkill } from './skill.ts';
@@ -46,7 +46,7 @@ async function startChild({ page, permissions, pageHash }: Pick<ChildConfig, 'pa
   app.dock?.hide();
   const [command, ...args] = [...sandbox.command, process.execPath, '--no-sandbox', ...(app.isPackaged ? [] : [APP_ROOT]), page];
   const child = spawn(command, args, { stdio: ['inherit', 'inherit', 'inherit', 'pipe', sandbox.networkFd ?? 'ignore', 'pipe'], env });
-  readline.createInterface({ input: child.stdio[MESSAGE_FD] as Readable }).on('line', line => handleChildMessage(child, page, permissions.hidden, JSON.parse(line)));
+  readline.createInterface({ input: child.stdio[MESSAGE_FD] as Readable }).on('line', line => handleChildMessage(child, page, permissions, JSON.parse(line)));
   child.on('error', err => dialog.showErrorBox('Apargon', `Could not start the sandbox: ${err.message}${SANDBOX!.installHint}`));
   child.on('close', () => {
     setTray(child, page, null);
@@ -56,13 +56,14 @@ async function startChild({ page, permissions, pageHash }: Pick<ChildConfig, 'pa
   return child;
 }
 
-function handleChildMessage(child: ChildProcess, page: string, hidden: string[], message: ChildMessage) {
+function handleChildMessage(child: ChildProcess, page: string, permissions: Permissions, message: ChildMessage) {
   if ('open' in message) {
     openPage(message.open);
   } else if ('revoke' in message) {
-    const grants = readJson<Grants>(GRANTS_FILE);
-    const kept = Object.entries(grants).filter(([approved]) => !message.revoke.includes(approved));
-    writeJson(GRANTS_FILE, Object.fromEntries(kept));
+    for (const file of [GRANTS_FILE, LINKS_FILE]) {
+      const kept = Object.entries(readJson<Grants>(file)).filter(([approved]) => !message.revoke.includes(approved));
+      writeJson(file, Object.fromEntries(kept));
+    }
   } else if ('automaticUpdates' in message) {
     const state = readJson<UpdateState>(UPDATE_FILE);
     writeJson(UPDATE_FILE, { ...state, automatic: message.automaticUpdates });
@@ -74,11 +75,20 @@ function handleChildMessage(child: ChildProcess, page: string, hidden: string[],
     new Notification(message.notify).show();
   } else if ('tray' in message) {
     setTray(child, page, message.tray);
+  } else if ('openLink' in message) {
+    openLink(page, permissions, message.openLink);
+  } else if ('openFile' in message) {
+    // The real path: a symlink without an extension could lead to an app.
+    const file = realPath(message.openFile);
+
+    if (viewable(file) && !permissions.hidden.some(secret => file === secret || file.startsWith(secret + '/'))) {
+      shell.openPath(file);
+    }
   } else if ('installSkill' in message) {
     offerSkill('The papp skill for coding agents', null);
   } else if ('saveAs' in message) {
     const { id, files } = message.saveAs;
-    saveFiles(files, hidden).then(
+    saveFiles(files, permissions.hidden).then(
       paths => (child.stdio.at(PARENT_FD) as Writable).write(JSON.stringify({ saved: id, paths } satisfies ParentMessage) + '\n'),
       (err: Error) => (child.stdio.at(PARENT_FD) as Writable).write(JSON.stringify({ saved: id, error: err.message } satisfies ParentMessage) + '\n')
     );
@@ -118,6 +128,36 @@ function setTray(child: ChildProcess, page: string, title: string | null) {
     created.on('click', () => (child.stdio.at(PARENT_FD) as Writable).write(JSON.stringify({ trayClick: true } satisfies ParentMessage) + '\n'));
     trays.set(child, created);
   }
+}
+
+// The browser is outside the sandbox, logged in. A declared or remembered host opens at once; any other asks here, address shown, so the page cannot fake the question or the answer.
+async function openLink(page: string, { open }: Permissions, url: string) {
+  const host = linkHost(url);
+
+  if (!host) {
+    return;
+  } else if (!declaredLink(host, [...open, ...(readJson<Links>(LINKS_FILE)[page] ?? [])])) {
+    app.focus({ steal: true });
+    const { response, checkboxChecked } = await dialog.showMessageBox({
+      type: 'question',
+      message: 'Open this link in your browser?',
+      detail: url.length > 400 ? `${url.slice(0, 400)}… (${url.length} characters)` : url,
+      buttons: ['Open', 'Cancel'],
+      defaultId: 1,
+      cancelId: 1,
+      checkboxLabel: `Always, for links to ${host} from this page`,
+    });
+
+    if (response !== 0) {
+      return;
+    } else if (checkboxChecked) {
+      // Read again: another dialog may have saved a host while this one waited.
+      const links = readJson<Links>(LINKS_FILE);
+      writeJson(LINKS_FILE, { ...links, [page]: [...(links[page] ?? []), host] });
+    }
+  }
+
+  shell.openExternal(url);
 }
 
 // The page names the files and the user picks the folder, in this process's dialog: a page that breaks out of its sandbox can write nowhere else.

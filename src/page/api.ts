@@ -4,7 +4,7 @@ import { once } from 'events';
 import fs from 'fs';
 import path from 'path';
 import { patternSource } from '../permissions/patterns.ts';
-import { absolutePath, HOME, PROGRAM_ENV, type Permissions } from '../permissions/tags.ts';
+import { absolutePath, HOME, linkHost, PROGRAM_ENV, viewable, type Permissions } from '../permissions/tags.ts';
 import { realPath, tellTrampoline } from '../shared.ts';
 import type { pageAccess } from './access.ts';
 import { PAGE_PLATFORM } from './platform.ts';
@@ -257,6 +257,21 @@ export function pageApi(dir: string, permissions: Permissions, access: ReturnTyp
       return filePaths;
     },
     saveAs,
+    // A link goes to the browser through the trampoline, which asks unless the host is declared or remembered. A file goes to its viewer: nothing leaves the machine.
+    open(target: string) {
+      if (linkHost(target)) {
+        tellTrampoline({ openLink: target });
+      } else {
+        const file = where(target);
+        need(canSee(file), file, 'see');
+
+        if (!viewable(file)) {
+          throw new Error(`Apargon: open takes an http(s) link, a folder without an extension, or a file a viewer shows (images, video, audio, PDF, text), not ${file}.`);
+        }
+
+        tellTrampoline({ openFile: file });
+      }
+    },
     notify(title: string, body = '') {
       if (!permissions.use.includes('notifications')) {
         throw new Error('Apargon: this page may not show notifications. Ask for it with <meta name="papp-use" content="notifications">.');

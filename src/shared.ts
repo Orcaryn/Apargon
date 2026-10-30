@@ -8,15 +8,18 @@ import type { Permissions } from './permissions/tags.ts';
 export type Bridge = { port: number; socket: string };
 export type ChildConfig = { page: string; permissions: Permissions; pageHash: string | null; proxy: string | null; bridges: Bridge[] };
 export type SavedFile = { name: string; data: string };
-export type ChildMessage = { open: string } | { revoke: string[] } | { showEgressLog: true } | { automaticUpdates: boolean } | { fileIcon: string } | { notify: { title: string; body: string } } | { tray: string | null } | { saveAs: { id: string; files: SavedFile[] } } | { installSkill: true };
+export type ChildMessage = { open: string } | { revoke: string[] } | { showEgressLog: true } | { automaticUpdates: boolean } | { fileIcon: string } | { notify: { title: string; body: string } } | { tray: string | null } | { saveAs: { id: string; files: SavedFile[] } } | { installSkill: true } | { openLink: string } | { openFile: string };
 export type ParentMessage = { trayClick: true } | { saved: string; paths: string[] } | { saved: string; error: string };
 export type Grants = Record<string, string[]>;
+// Page to the link hosts the user ticked "Always" for.
+export type Links = Record<string, string[]>;
 export type UpdateState = { automatic?: boolean; checked?: string; noticed?: string };
 
 export const APP_ROOT = app.isPackaged ? process.resourcesPath : app.getAppPath();
 export const DATA = app.getPath('userData');
 export const PAGE_DATA = path.join(DATA, 'pages');
 export const GRANTS_FILE = path.join(DATA, 'grants.json');
+export const LINKS_FILE = path.join(DATA, 'links.json');
 export const NET_DATA = path.join(DATA, 'net');
 export const UPDATE_FILE = path.join(DATA, 'update.json');
 export const EGRESS_LOG = path.join(app.getPath('logs'), 'egress.log');

@@ -9,6 +9,7 @@ export type Permissions = {
   read: string[];
   write: string[];
   net: string[];
+  open: string[];
   run: Record<string, string>;
   env: string[];
   sockets: string[];
@@ -57,7 +58,7 @@ export const SECRETS = Object.entries({
 
 export function declaredPermissions(page: string, html = fs.readFileSync(page, 'utf8')) {
   const dir = path.dirname(page);
-  const permissions: Permissions = { own: null, read: [], write: [], net: [], run: {}, env: [], sockets: [], hidden: [], node: false, use: [], shortcuts: [], tags: [] };
+  const permissions: Permissions = { own: null, read: [], write: [], net: [], open: [], run: {}, env: [], sockets: [], hidden: [], node: false, use: [], shortcuts: [], tags: [] };
   const head = html.replace(/<!--[\s\S]*?-->/g, '').split(/<script\b|<body\b|<\/head\b/i)[0];
 
   for (const [, attrs] of head.matchAll(/<meta\s+([^>]*)>/gi)) {
@@ -89,6 +90,8 @@ export function declaredPermissions(page: string, html = fs.readFileSync(page, '
       permissions[kind].push(folderPattern(value, dir));
     } else if (kind === 'net') {
       permissions.net.push(hostPattern(value));
+    } else if (kind === 'open') {
+      permissions.open.push(openHost(value));
     } else if (kind === 'run' && Object.hasOwn(permissions.run, path.basename(value))) {
       throw new Error(`Two papp-run tags name a program ${path.basename(value)}. The page runs programs by name, so keep one.`);
     } else if (kind === 'run') {
@@ -106,7 +109,7 @@ export function declaredPermissions(page: string, html = fs.readFileSync(page, '
     } else if (kind === 'shortcut') {
       permissions.shortcuts.push(shortcut(value));
     } else {
-      throw new Error(`Unknown tag papp-${kind}. The tags are papp-read, papp-write, papp-net, papp-run, papp-env, papp-socket, papp-use, papp-shortcut and papp-node.`);
+      throw new Error(`Unknown tag papp-${kind}. The tags are papp-read, papp-write, papp-net, papp-open, papp-run, papp-env, papp-socket, papp-use, papp-shortcut and papp-node.`);
     }
   }
 
@@ -193,6 +196,37 @@ function hostPattern(value: string) {
   }
 
   return pattern;
+}
+
+function openHost(value: string) {
+  const host = value.toLowerCase();
+
+  if (host !== '*' && !/^(\*\.)?[a-z0-9][a-z0-9.-]*$/.test(host)) {
+    throw new Error(`Bad papp-open value "${value}". One host per <meta>, no scheme or port, such as x.com or *.example.com.`);
+  }
+
+  return host;
+}
+
+// The host of a link the browser may get, http or https; null for any other scheme, which could start an app.
+export function linkHost(href: string) {
+  const url = URL.parse(href);
+
+  return url && ['http:', 'https:'].includes(url.protocol) ? url.hostname : null;
+}
+
+export function declaredLink(host: string, patterns: string[]) {
+  return patterns.some(pattern => pattern === '*' || pattern === host || (pattern.startsWith('*.') && host.endsWith(pattern.slice(1))));
+}
+
+// What papp.open hands to the default app: a folder, or a file a viewer shows. Never a page, HTML, SVG or a script: those run or load scripts when opened.
+export const OPENABLE = /\.(png|jpe?g|gif|webp|heic|avif|bmp|tiff?|mp4|m4v|mov|webm|mkv|mp3|m4a|wav|flac|ogg|opus|aiff?|pdf|txt|md|csv|tsv|json|log|ya?ml)$/i;
+
+// A folder with an extension is refused: on macOS, .app, .pkg and .workflow are folders, and opening one runs it.
+export function viewable(file: string) {
+  const stats = fs.statSync(file, { throwIfNoEntry: false });
+
+  return stats !== undefined && (stats.isDirectory() ? path.extname(file) === '' : stats.isFile() && OPENABLE.test(file));
 }
 
 function findProgram(value: string) {

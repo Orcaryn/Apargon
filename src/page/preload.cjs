@@ -58,6 +58,7 @@ contextBridge.exposeInMainWorld('papp', {
     };
   },
   pick: options => call('pick', options),
+  open: target => call('open', target),
   saveAs: files => call('saveAs', files),
   notify: (title, body) => call('notify', title, body),
   tray: title => call('tray', title),

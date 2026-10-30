@@ -39,6 +39,7 @@ With no tags, a page sees its own folder and nothing else. It asks for more in i
 <meta name="papp-read"     content="~/logs">                   <!-- see a folder -->
 <meta name="papp-write"    content="./notes/*.md">             <!-- change files -->
 <meta name="papp-net"      content="api.example.com:443">      <!-- one server -->
+<meta name="papp-open"     content="x.com">                    <!-- its links open without asking -->
 <meta name="papp-run"      content="git">                      <!-- one program -->
 <meta name="papp-env"      content="AWS_PROFILE">              <!-- one variable for it -->
 <meta name="papp-socket"   content="/var/run/docker.sock">     <!-- one socket -->
@@ -48,6 +49,8 @@ With no tags, a page sees its own folder and nothing else. It asks for more in i
 ```
 
 A popup lists what the tags allow before the page runs. Red lines need a tick. **Permissions → Approved Pages** takes an approval back.
+
+With no tag, a page can still open a link in your browser, and a file (image, video, audio, PDF, text) or a folder in its app. A link asks first, with the address shown, unless the page names the site with `papp-open`.
 
 A `papp-node` page runs as you, with only the network blocked: open one only if you trust it. [SECURITY.md](SECURITY.md) lists what Apargon enforces and what it does not.
 

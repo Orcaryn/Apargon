@@ -5,7 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { describe, worstCase } from '../permissions/describe.ts';
 import { declaredPermissions, HOME } from '../permissions/tags.ts';
-import { GRANTS_FILE, readJson, writeJson, type Grants } from '../shared.ts';
+import { GRANTS_FILE, LINKS_FILE, readJson, writeJson, type Grants, type Links } from '../shared.ts';
 
 export async function approve(file: string) {
   const page = fs.realpathSync.native(file);
@@ -32,7 +32,13 @@ export async function approve(file: string) {
     name: path.basename(page),
     changed: previous?.some(id => id.startsWith('content:') && id !== `content:${pageHash}`) ? 'This page changed since you allowed it.' : null,
     worst,
-    lines: lines.map(line => ({ level: line.level, kind: line.id.split(':')[0], text: line.text.replaceAll(HOME + '/', '~/'), isNew: previous !== undefined && !previous.includes(line.id) })),
+    lines: lines.map(line => ({
+      level: line.level,
+      id: line.id,
+      short: line.short.replaceAll(HOME + '/', '~/'),
+      text: line.text.replaceAll(HOME + '/', '~/'),
+      isNew: previous !== undefined && !previous.includes(line.id),
+    })),
     note: seesFiles ? `Hidden files (names starting with a dot), keys and logins (~/.ssh and others) are left out unless named.${permissions.write.length ? ' Pages (.papp) can be changed only if named.' : ''}` : null,
     folder: (path.dirname(page) + '/').replaceAll(HOME + '/', '~/'),
     tags: permissions.tags,
@@ -40,7 +46,7 @@ export async function approve(file: string) {
   };
 
   if (!app.isPackaged && process.env.APARGON_TEST_ALLOW === '1') {
-    console.log(['Apargon: allowed for the test:', popup.source, popup.name, popup.changed ?? [], worst ?? [], popup.lines.map(line => `${line.level}: ${line.text}`)].flat().join('\n  '));
+    console.log(['Apargon: allowed for the test:', popup.source, popup.name, popup.changed ?? [], worst ?? [], popup.lines.map(line => `${line.level}: ${line.short} [${line.text}]`)].flat().join('\n  '));
 
     return approved;
   } else if (!(await ask('popup.html', popup))) {
@@ -49,6 +55,10 @@ export async function approve(file: string) {
 
   const latest = readJson<Grants>(GRANTS_FILE);
   writeJson(GRANTS_FILE, { ...latest, [page]: grant });
+  // A new approval forgets the hosts ticked "Always": the user allowed this page, not what the last one opened.
+  const links = readJson<Links>(LINKS_FILE);
+  delete links[page];
+  writeJson(LINKS_FILE, links);
 
   return approved;
 }

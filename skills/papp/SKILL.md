@@ -28,60 +28,108 @@ Further reading and code: https://github.com/Orcaryn/Apargon
 
 - The user opens it by double-click, or `open page.papp` (macOS), `apargon page.papp` (Linux). With tags, a popup asks first.
 - Saving a `.papp`, `.css` or `.js` in its folder reloads the window. New tags need the page reopened.
+- A link (`<a target="_blank">`, `window.open`, `papp.open`) opens in the browser. Apargon asks first, address shown, unless the page names the site with `papp-open`.
 
 ### `window.papp`
 
-The page's only way to files and programs. A relative path starts at the page's folder. Calls return promises; a path the page may not reach rejects, naming the tag to add.
+The page reaches files and programs only through `papp`. A relative path starts at the page's folder.
 
-| Call                                                    | Does                                                                                                                             |
-| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `readFile(path, encoding = 'utf8', { offset, length })` | a string; encoding `null` gives a `Uint8Array`; the range, in bytes, is optional                                                 |
-| `writeFile(path, stringOrBytes)`, `appendFile`          | writes in place; its folder must exist                                                                                           |
-| `copyFile(from, to)`                                    | needs to see `from` and change `to`                                                                                              |
-| `mkdir`, `rm`, `rename`                                 | as in Node; `mkdir` and `rm` are recursive                                                                                       |
-| `readdir(path, { stats: true })`                        | names; with `stats`, `{ name, ...stat }`, a link as itself                                                                       |
-| `stat(path)`, `exists(path)`                            | `{ isFile, isDirectory, size, mtimeMs }`; `true` / `false`                                                                       |
-| `pick({ folder, multiple })`                            | the user picks files or a folder, not a link or a folder holding home; the page may see them until it reloads; `[]` if cancelled |
-| `saveAs({ name: stringOrBytes, ... })`                  | the user picks a folder; new files only, a taken name becomes `name (2)`; the saved paths, `[]` if cancelled                     |
-| `run(program, args, { cwd, input, encoding, timeout })` | `{ status, signal, stdout, stderr }`; encoding `null` gives bytes; `timeout` in ms stops it                                      |
-| `spawn(program, args, { cwd, onOutput })`               | a job: `write`, `end`, `kill`, `done`                                                                                            |
-| `watch(path, callback, { recursive })`                  | `callback(file, 'changed' or 'removed')`; a new file counts as changed; returns a stop function                                  |
-| `notify(title, body)`                                   | a system notification                                                                                                            |
-| `tray(title)`                                           | a menu-bar icon; `null` removes it                                                                                               |
-| `onShortcut(callback)`                                  | on a `papp-shortcut`; returns a stop function                                                                                    |
-| `dir`                                                   | the page's folder                                                                                                                |
+```ts
+type Bytes = Uint8Array;
+// size and mtimeMs only for files the page may see
+type Stat = { isFile: boolean; isDirectory: boolean; size?: number; mtimeMs?: number };
+type Exit = { status: number | null; signal: string | null };
 
-A `papp-node` page has `require` and `process` instead; `require('@electron/remote')` is the main process.
+declare const papp: {
+  // the page's folder
+  dir: string;
+  // range is in bytes
+  readFile(path: string, encoding?: 'utf8', range?: { offset?: number; length?: number }): Promise<string>;
+  readFile(path: string, encoding: null, range?: { offset?: number; length?: number }): Promise<Bytes>;
+  // the folder must exist
+  writeFile(path: string, data: string | Bytes): Promise<void>;
+  appendFile(path: string, data: string | Bytes): Promise<void>;
+  copyFile(from: string, to: string): Promise<void>;
+  // recursive
+  mkdir(path: string): Promise<void>;
+  // recursive
+  rm(path: string): Promise<void>;
+  rename(from: string, to: string): Promise<void>;
+  readdir(path: string): Promise<string[]>;
+  // a link is described as itself, not what it points to
+  readdir(path: string, options: { stats: true }): Promise<({ name: string } & Stat)[]>;
+  stat(path: string): Promise<Stat>;
+  exists(path: string): Promise<boolean>;
+  // the user picks; the page may see the picks until it reloads; [] if cancelled
+  pick(options?: { folder?: boolean; multiple?: boolean }): Promise<string[]>;
+  // the user picks a folder; never replaces a file: a taken name becomes "name (2)"; [] if cancelled
+  saveAs(files: Record<string, string | Bytes>): Promise<string[]>;
+  // an http(s) link in the browser, a folder in the file manager, or a file in its viewer (images, video, audio, PDF, text)
+  open(pathOrLink: string): Promise<void>;
+  // timeout in ms stops it; encoding null gives bytes
+  run(program: string, args?: string[], options?: { cwd?: string; input?: string | Bytes; encoding?: 'utf8' | null; timeout?: number }):
+    Promise<Exit & { stdout: string | Bytes; stderr: string | Bytes }>;
+  spawn(program: string, args?: string[], options?: { cwd?: string; onOutput?: (stream: 'stdout' | 'stderr', text: string) => void }):
+    Promise<{ write(data: string | Bytes): Promise<void>; end(): Promise<void>; kill(): Promise<void>; done: Promise<Exit> }>;
+  // file is relative to the page's folder; a new file counts as changed; resolves to a stop function
+  watch(path: string, callback: (file: string, kind: 'changed' | 'removed') => void, options?: { recursive?: boolean }): Promise<() => Promise<void>>;
+  // needs papp-use notifications; text only, a click brings the window forward
+  notify(title: string, body?: string): Promise<void>;
+  // a menu-bar icon with a title of up to 24 characters, no menu; a click brings the window forward; null removes it
+  tray(title: string | null): Promise<void>;
+  // runs on a papp-shortcut; returns a stop function right away
+  onShortcut(callback: (keys: string) => void): () => void;
+};
+// A call the tags do not allow rejects with an Error naming the tag to add. File errors carry Node's code, such as 'ENOENT'.
+```
+
+With `papp-node`, the page has Node (`require`, `process`) instead of `papp`. It runs as you, with no file limits; the network stays blocked. `require('@electron/remote')` is Electron's main process, for what `papp` cannot do: windows that float above others, show on every Space or have no frame (`BrowserWindow`), a menu-bar menu (`Tray`, `Menu`), other displays (`screen`), notifications (`Notification`).
+
+```js
+require('@electron/remote').getCurrentWindow().setAlwaysOnTop(true, 'floating');
+```
 
 ## Meta tags
 
-One value per tag, in `<head>` before any `<script>`. Ask for as little as the page needs: each tag is a line in the popup, and red lines need a tick.
+One value per tag, in `<head>` before any `<script>`. Each tag is a line in the popup the user approves, so ask for as little as the page needs.
 
-| The page needs to                 | Tag                                                             | Popup                         |
-| --------------------------------- | --------------------------------------------------------------- | ----------------------------- |
-| see files next to it, or below    | nothing, unless it sits in `~`, Desktop, Documents or Downloads |                               |
-| save next to it                   | `papp-write` `./notes.txt`, `./data`                            | plain                         |
-| see a folder elsewhere            | `papp-read` `~/logs`                                            | plain                         |
-| change files elsewhere            | `papp-write` `~/notes/*.md`                                     | yellow                        |
-| call a web API                    | `papp-net` `api.example.com:443`                                | plain                         |
-| talk to a server on this computer | `papp-net` `localhost:11434`                                    | plain                         |
-| talk to a device on the network   | `papp-net` `192.168.1.5:8123`                                   | red                           |
-| use a command-line tool           | `papp-run` `git`                                                | red                           |
-| pass that tool a variable         | `papp-env` `AWS_PROFILE`                                        | red if it looks like a secret |
-| talk to Docker or an SSH agent    | `papp-socket` `/var/run/docker.sock`                            | red                           |
-| show a notification               | `papp-use` `notifications`                                      | plain                         |
-| play sound                        | `papp-use` `sound`                                              | yellow on Linux               |
-| read the clipboard from code      | `papp-use` `clipboard`                                          | yellow                        |
-| use the camera or microphone      | `papp-use` `camera`, `papp-use` `microphone`                    | yellow                        |
-| know where it is (macOS only)     | `papp-use` `location`                                           | yellow                        |
-| capture the screen                | `papp-use` `screen`                                             | red                           |
-| answer a key anywhere             | `papp-shortcut` `CommandOrControl+Shift+N`                      | yellow                        |
-| Node modules, many programs       | `papp-node` `full`, as a last resort                            | red                           |
+| The page needs to                                 | Tag                                                             |
+| ------------------------------------------------- | --------------------------------------------------------------- |
+| see files next to it, or below                    | nothing, unless it sits in `~`, Desktop, Documents or Downloads |
+| save next to it                                   | `papp-write` `./notes.txt`, `./data`                            |
+| see a folder elsewhere                            | `papp-read` `~/logs`                                            |
+| change files elsewhere                            | `papp-write` `~/notes/*.md`                                     |
+| call a web API                                    | `papp-net` `api.example.com:443`                                |
+| talk to a server on this computer                 | `papp-net` `localhost:11434`                                    |
+| talk to a device on the network                   | `papp-net` `192.168.1.5:8123`                                   |
+| open its links without asking                     | `papp-open` `x.com`, `*.example.com`                            |
+| use a command-line tool                           | `papp-run` `git`                                                |
+| pass that tool a variable                         | `papp-env` `AWS_PROFILE`                                        |
+| talk to Docker or an SSH agent                    | `papp-socket` `/var/run/docker.sock`                            |
+| show a notification                               | `papp-use` `notifications`                                      |
+| play sound                                        | `papp-use` `sound`                                              |
+| read the clipboard from code                      | `papp-use` `clipboard`                                          |
+| use the camera or microphone                      | `papp-use` `camera`, `papp-use` `microphone`                    |
+| know where it is (macOS only)                     | `papp-use` `location`                                           |
+| capture the screen                                | `papp-use` `screen`                                             |
+| answer a key anywhere                             | `papp-shortcut` `CommandOrControl+Shift+N`                      |
+| use Node, many programs, or what `papp` cannot do | `papp-node` `full`                                              |
 
-- **Folders:** relative to the page, `~/…` or absolute, subfolders included. `*` matches within one name; the part before it must exist. `~`, Desktop, Documents, Downloads and folders holding keys are red.
-- **Hosts:** always `host:port`, no scheme. `*.example.com:443` is yellow; `*` is red.
-- **Programs** keep the page's network and write limits, but can read every file but keys and logins.
-- **Shortcuts:** two different modifiers, or one with a function key.
-- **`papp-node`** already includes read, write, run and env; do not combine them.
+- **Folders:** relative to the page, `~/…` or absolute; subfolders are included. `*` matches within one name, and the part before it must exist.
+- **Hosts:** `papp-net` takes `host:port`, no scheme. `papp-open` takes the host alone.
+- **Programs** the page runs keep its network and write limits, but can read every file except keys and logins.
+- **Shortcuts:** two different modifiers, or one modifier with a function key.
+- **`papp-node`** already allows every folder, program and variable; do not add `papp-read`, `papp-write`, `papp-run` or `papp-env`.
 
-Never ask for `papp-node` to avoid writing tags. Never work around a dialog saying the process can still open sockets: that is the safety check working.
+These show red in the popup:
+
+- `papp-node`
+- `papp-socket`
+- `papp-write` on a hidden file or folder, on `~/Library` or a folder that holds it (such as `~`), or on a `.papp` page
+- `papp-net` to this computer, the local network, an IPv4 address, any host (`*`), any port (`*`) or a whole top-level domain (`*.com`)
+- `papp-open` for `*`, `*.com`, `localhost` or an IPv4 address
+- `papp-run` on Linux, if the page also has `papp-write`
+
+The user must tick "I trust this page" when any line is red, when the page has `papp-run`, or when it names a host and can see files, the clipboard, location, camera, microphone or screen. Almost every page sees its own folder, so in practice any `papp-net` or `papp-open` asks for the tick.
+
+Use `papp-node` when the tags and `papp` cannot do what the app needs, never just to avoid writing tags. If a dialog says the process can still open sockets, do not work around it: that is the safety check working.

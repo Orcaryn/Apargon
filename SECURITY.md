@@ -124,7 +124,7 @@ The OS hides a fixed list from the page and every program it runs: `~/.ssh`, `~/
 | Linux | `bwrap` covers folders with an empty one, files with `/dev/null` |
 
 - Apargon's own checks refuse them too. `~/Library` does not reach a browser profile.
-- Only a tag that starts inside one opens it. That line is red.
+- Only a tag that starts inside one opens it. That line is yellow.
 - `selftest-net` checks that a program cannot list `~/.ssh`.
 
 ### Environment
@@ -135,13 +135,14 @@ The OS hides a fixed list from the page and every program it runs: `~/.ssh`, `~/
 | the page         | the same, plus what the window needs (`PAGE_ENV`)           |
 | a full-Node page | the whole environment, and so do its programs               |
 
-- A `papp-env` name that reads like a secret (`KEY`, `TOKEN`) is red.
+- A `papp-env` name that reads like a secret (`KEY`, `TOKEN`) is yellow.
 - `selftest-net` checks that a named variable arrives and an unnamed one does not.
 
 ### Approvals
 
 - The popup is Apargon's own static page, in its own window. It allows no network and shows values as text, never HTML.
 - It says what each tag allows in plain words, and above that what they allow together.
+- A line is red when it is a way to send data somewhere the tags do not name: any server or a whole domain, an address in numbers, a program on this computer, or a written file that runs outside the sandbox (a hidden file, `~/Library`, a page).
 - A red line, or lines that together can send something out (files, the clipboard, the screen), need a checkbox.
 - An approval covers one path and one exact list. A new list asks again and marks what is new.
 - A page marked as downloaded leads with its site and is held to its content. If it changes, Apargon asks again. If it changes while open, the window reloads into a refusal and says so.
@@ -152,6 +153,8 @@ The OS hides a fixed list from the page and every program it runs: `~/.ssh`, `~/
 ### The window
 
 - It shows only the page. A link does not navigate, a frame does not load another file, and a new window opens only on the page itself. `selftest` checks the frame and the window.
+- An `http` or `https` link the page opens goes to the first process. A host declared with `papp-open`, or one the user ticked "Always" for, opens in the browser at once; any other asks in that process's own dialog, address shown. Other schemes never leave the window. `test/popup.ts` checks the host matching.
+- `papp.open` hands a file to its default app only if the page may see it and it is a folder without an extension, so not an app or other bundle, or of a viewable type (`OPENABLE` in `src/permissions/tags.ts`): images, video, audio, PDF, plain text. Not a page, HTML, SVG, a script, or anything that runs when opened. The first process checks the type, and keys and logins, again. `selftest` checks the refusals.
 - A frame from a declared host cannot reach `window.papp`. Tested by hand on 2026-10-26: Chromium blocks it as cross-origin.
 - Each page keeps its own `localStorage`, IndexedDB and cache. `selftest-node` checks that one page cannot read another's `localStorage`.
 - The favicon is read only from a file the page may see, and always gets Apargon's badge on the corner.
@@ -169,7 +172,7 @@ The OS hides a fixed list from the page and every program it runs: `~/.ssh`, `~/
 | microphone                                  | `papp-use microphone`    | yellow                 |
 | sound                                       | `papp-use sound`         | plain; yellow on Linux |
 | notifications                               | `papp-use notifications` | plain                  |
-| screen capture                              | `papp-use screen`        | red                    |
+| screen capture                              | `papp-use screen`        | yellow                 |
 | a global key combination                    | `papp-shortcut`          | yellow                 |
 
 - With `papp-net`, the popup says that what these pick up can be sent.
@@ -204,7 +207,7 @@ The OS hides a fixed list from the page and every program it runs: `~/.ssh`, `~/
 - It only adds new files: a taken name gets a number, and nothing is written through a link.
 - Any page may open the dialog, with no tag, and open it again after a cancel.
 - A saved file carries no download mark. A file that runs when opened, such as a `.terminal` file on macOS, opens without the system's warning for downloaded files.
-- A program the page runs (`papp-run`, red) could swap the picked folder for a link between Apargon's check and its write, and so add files elsewhere. It cannot replace one.
+- A program the page runs (`papp-run`) could swap the picked folder for a link between Apargon's check and its write, and so add files elsewhere. It cannot replace one.
 - Refusing a folder reached through a link relies on the dialog returning the link's path. Linux's does; macOS's is asked to and is untested.
 
 ### The papp skill
@@ -213,14 +216,14 @@ The OS hides a fixed list from the page and every program it runs: `~/.ssh`, `~/
 - It replaces whatever `SKILL.md` is there, edits included. The rename replaces a link at `SKILL.md` rather than the file it leads to, but links in the folders above it are followed.
 - The menu belongs to the page's process, so any page, or a page that breaks out of its renderer, can open the dialog, with no tag. Only one is open at a time.
 
-### Programs (`papp-run`, always red)
+### Programs (`papp-run`)
 
 - A program can read every file but keys and logins.
 - It takes any arguments, and may run others (`git -c core.sshCommand=…`).
 - A `papp-env` variable reaches it, and through it the page and the declared hosts.
 - It can read and change every page's Electron data in `pages/`: another page's `localStorage` or IndexedDB too.
 - It can move a folder that holds pages, or hard-link to a page.
-- Linux: its writes are limited by folder, not pattern. For `~/notes/*.md` it may change anything in `~/notes`, hidden files and pages included. The popup names those folders.
+- Linux: its writes are limited by folder, not pattern. For `~/notes/*.md` it may change anything in `~/notes`, hidden files and pages included. The popup names those folders, and the line is red.
 - macOS: once Apargon has camera, microphone or Screen Recording access, a program (`ffmpeg`, `screencapture`) can likely use it without the tag. A program can also play sound (`afplay`) without `papp-use sound`. Untested: a test would trigger the system prompts.
 
 ### Writable folders
@@ -228,6 +231,7 @@ The OS hides a fixed list from the page and every program it runs: `~/.ssh`, `~/
 - They can hold files other tools run later: `package.json` scripts, a `Makefile`.
 - Hidden ones (`.git/hooks`, `.envrc`) are excluded unless named. On Linux, for the page only, not its programs.
 - A synced folder (iCloud Drive, Dropbox, git auto-push) carries what the page writes off the machine.
+- The popup shows none of these red. It knows only hidden files, `~/Library` and pages.
 - The temp folder is writable.
 
 ### Keys and logins
@@ -254,6 +258,15 @@ The OS hides a fixed list from the page and every program it runs: `~/.ssh`, `~/
 | Linux | a socket file outside `/run` and `/tmp`: `tmux -S ~/sock`, Docker with `-H`, any server in a folder the page sees                                                                                                                                                                                                                               |
 | Linux | `vsock`, in a virtual machine                                                                                                                                                                                                                                                                                                                   |
 | Linux | the X11 display socket, to type into another window. Wayland does not allow this.                                                                                                                                                                                                                                                               |
+
+### Links and files (`papp.open`, `papp-open`)
+
+- The dialog is the check: an address with data in it looks like one, and a user who clicks Open without reading gets what they clicked. "Always" remembers the host for that page in `links.json`; **Permissions → Approved Pages** forgets it with the approval, and so does a new approval. A page made on this computer is asked again only when its tags change, so an edit that keeps them keeps its remembered hosts. Enter answers Cancel.
+- A declared or remembered host gets the request from your browser, logged in, as you. The popup counts a `papp-open` host as a place the page can send what it sees.
+- A page can open the dialog, or a viewer, as often as it likes, without a click.
+- Once a site is open it can take you anywhere; only the first address is checked.
+- Your viewer decides what it does with a file: Acrobat runs scripts in PDFs, Preview does not. A link in a document opens where the viewer sends it.
+- The first process checks the file's type, not the grant. A page that breaks out of its renderer could open any viewable file but keys and logins, which it could already read.
 
 ### Devices and the desktop
 
@@ -287,7 +300,7 @@ The sandbox blocks their sockets and their writes to Apargon's data and app. On 
 - ask another app to write `grants.json` (Apple Events to Terminal; a shell startup file);
 - read other pages' storage in `pages/`;
 - ask any local daemon to act for it;
-- send the trampoline any message the page process can: turn off the update check, revoke approvals, open another page, show notifications or a tray icon without the tag, set a file icon;
+- send the trampoline any message the page process can: turn off the update check, revoke approvals, open another page, show notifications or a tray icon without the tag, set a file icon, ask to open a link, open a viewable file;
 - macOS: rewrite or erase `egress.log`, which sits in `~/Library/Logs`, outside the protected folder;
 - macOS: change the downloaded update in `~/Library/Caches`. A changed build fails the signature check and is not installed.
 

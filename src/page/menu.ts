@@ -29,7 +29,7 @@ export function installMenu(page: string, lines: Line[], approved: string[]) {
               dialog.showMessageBox({
                 type: 'info',
                 message: `${path.basename(page)} may:`,
-                detail: lines.length ? lines.map(line => line.text).join('\n') : 'Nothing: no files, no network.',
+                detail: lines.length ? lines.map(line => `${line.short}: ${line.text}`).join('\n') : 'Nothing: no files, no network.',
               }),
           },
           {

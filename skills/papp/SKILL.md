@@ -29,9 +29,20 @@ Further reading and code: https://github.com/Orcaryn/Apargon
 - Open it with `open page.papp` (macOS) or `apargon page.papp` (Linux). A popup asks first, unless the page has no tags and was not downloaded.
 - Saving a `.papp`, `.css` or `.js` in its folder reloads the window. New tags need the page reopened. A downloaded page is approved with its content: after an edit, it must be reopened and approved again.
 - A web link (`<a target="_blank">`, `window.open`, `papp.open`) opens in the browser. Apargon asks first, address shown, unless the page names the site with `papp-open`. `window.open` on the page's own file opens a second window.
-- The window is 1200×800 with a frame. `<title>` names it; the favicon becomes the app icon.
+- The window is 1200×800 with a frame. `<title>` names it; the favicon becomes the app icon (see below).
 - `localStorage` and IndexedDB persist, tied to the page's path. They follow the page when it is moved or renamed, if its content is the same as when it was last open: after an edit, open the page once before moving it. A copy starts empty.
 - On Linux, a page cannot sit in `/tmp`, `/var/tmp`, under `/run`, or a folder holding them. Use a folder of its own, such as `/tmp/apargon`.
+
+### Icon
+
+The favicon is the app icon, and on macOS the `.papp` file's icon too. Without one, the page gets Apargon's.
+
+```html
+<link rel="icon" href="./icon.svg">
+```
+
+- A local image the page may see (SVG, PNG, ICO, JPEG, GIF, WebP) or a `data:image/` URL. Web addresses are ignored.
+- It is drawn on a white rounded square with an Apargon badge. Use a square image without padding.
 
 ### `window.papp`
 

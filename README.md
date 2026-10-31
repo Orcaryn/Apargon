@@ -48,7 +48,11 @@ With no tags, a page sees its own folder and nothing else. It asks for more in i
 <meta name="papp-node"     content="full">                     <!-- full Node -->
 ```
 
-A popup lists what the tags allow before the page runs. Red lines need a tick. **Permissions → Approved Pages** takes an approval back.
+Write each tag as the browser reads it: `name` and `content` quoted, with no spaces around the `=`.
+
+A popup lists what the tags allow before the page runs. A red line is a way to send data somewhere the tags do not name. When a page could send your data out (a red line, a program, a socket, or a server plus files it sees), the popup says how and asks you to tick "I trust this page". **Permissions → Approved Pages** takes an approval back.
+
+A page keeps its storage (`localStorage`, IndexedDB) when you move or rename the file, as long as its content is the same as when it was last open. A copy starts empty.
 
 With no tag, a page can still open a link in your browser, and a file (image, video, audio, PDF, text) or a folder in its app. A link asks first, with the address shown, unless the page names the site with `papp-open`.
 

@@ -1,5 +1,6 @@
 import { app, dialog, shell } from 'electron';
-import { declaredLink, linkHost, viewable } from '../../permissions/open.ts';
+import { hostMatches } from '../../permissions/network.ts';
+import { linkHost, viewable } from '../../permissions/open.ts';
 import { realPath } from '../../permissions/paths.ts';
 import { isInside } from '../../permissions/patterns.ts';
 import type { Permissions } from '../../permissions/tags.ts';
@@ -11,7 +12,7 @@ export async function openLink(page: string, { open }: Permissions, url: string)
 
   if (!host) {
     return;
-  } else if (!declaredLink(host, [...open, ...(readJson<Links>(LINKS_FILE)[page] ?? [])])) {
+  } else if (![...open, ...(readJson<Links>(LINKS_FILE)[page] ?? [])].some(pattern => hostMatches(pattern, host))) {
     app.focus({ steal: true });
     const { response, checkboxChecked } = await dialog.showMessageBox({
       type: 'question',

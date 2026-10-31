@@ -3,7 +3,8 @@ import net from 'net';
 import os from 'os';
 import path from 'path';
 import { describe, worstCase } from '../../src/permissions/describe.ts';
-import { declaredLink, linkHost, OPENABLE } from '../../src/permissions/open.ts';
+import { hostMatches } from '../../src/permissions/network.ts';
+import { linkHost, OPENABLE } from '../../src/permissions/open.ts';
 import { declaredPermissions } from '../../src/permissions/tags.ts';
 
 if (process.platform === 'linux') {
@@ -205,9 +206,9 @@ const links = [
 ].map(link => {
   const host = linkHost(link.href);
 
-  return { ...link, ok: (host !== null && declaredLink(host, open)) === link.opens };
+  return { ...link, ok: (host !== null && open.some(pattern => hostMatches(pattern, host))) === link.opens };
 });
-const anyLink = declaredLink('anything.example', ['*']) && linkHost('ssh://host') === null && linkHost('javascript:1') === null;
+const anyLink = hostMatches('*', 'anything.example') && linkHost('ssh://host') === null && linkHost('javascript:1') === null;
 const viewers =
   ['a.PNG', 'b.pdf', 'c.md', 'd.mov'].every(name => OPENABLE.test(name)) &&
   ['e.html', 'f.svg', 'g.papp', 'h.command', 'i.py', 'j.sh', 'k.webloc', 'l.desktop', 'm.app'].every(name => !OPENABLE.test(name));

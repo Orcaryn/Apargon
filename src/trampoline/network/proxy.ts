@@ -5,7 +5,7 @@ import http from 'http';
 import net from 'net';
 import os from 'os';
 import path from 'path';
-import { privateNetwork } from '../../permissions/network.ts';
+import { hostMatches, privateNetwork } from '../../permissions/network.ts';
 import { EGRESS_LOG } from '../../shared/data.ts';
 
 export async function startProxy(patterns: string[], socketFile: string | null) {
@@ -15,9 +15,8 @@ export async function startProxy(patterns: string[], socketFile: string | null) 
   const addressIfDeclared = async (host: string, port: string) => {
     const declared = patterns.some(pattern => {
       const [allowedHost, allowedPort] = pattern.split(':');
-      const hostMatches = allowedHost === '*' || allowedHost === host || (allowedHost.startsWith('*.') && host.endsWith(allowedHost.slice(1)));
 
-      return hostMatches && (allowedPort === '*' || allowedPort === port);
+      return hostMatches(allowedHost, host) && (allowedPort === '*' || allowedPort === port);
     });
 
     if (!declared) {

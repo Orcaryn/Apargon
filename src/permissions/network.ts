@@ -10,6 +10,11 @@ export function localPorts({ net }: Permissions) {
     .map(([, port]) => port);
 }
 
+// * is any host; *.example.com is any name under example.com, not example.com itself.
+export function hostMatches(pattern: string, host: string) {
+  return pattern === '*' || pattern === host || (pattern.startsWith('*.') && host.endsWith(pattern.slice(1)));
+}
+
 export function privateNetwork() {
   const addresses = new net.BlockList();
   addresses.addSubnet('127.0.0.0', 8, 'ipv4');

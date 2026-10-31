@@ -21,11 +21,11 @@
 
 The page's process and every process it starts run in an OS sandbox.
 
-| OS      | Sandbox                                                                                    |
-| ------- | ------------------------------------------------------------------------------------------ |
-| macOS   | Seatbelt: `sandbox-exec`, `sandbox/macos.sb`, plus rules for each page                     |
-| Linux   | `bwrap --unshare-net --unshare-pid --unshare-user --disable-userns --new-session`          |
-| Windows | MXC's ProcessContainer (an AppContainer), through `wxc-exec`, with outbound traffic denied |
+| OS      | Sandbox                                                                                         |
+| ------- | ----------------------------------------------------------------------------------------------- |
+| macOS   | Seatbelt: `sandbox-exec`, `src/trampoline/platform/profiles/macos.sb`, plus rules for each page |
+| Linux   | `bwrap --unshare-net --unshare-pid --unshare-user --disable-userns --new-session`               |
+| Windows | MXC's ProcessContainer (an AppContainer), through `wxc-exec`, with outbound traffic denied      |
 
 - Connections and DNS lookups fail in the kernel. On macOS binds fail too; on Linux they succeed, but only on the sandbox's own loopback, which leads nowhere.
 - Linux: the sandbox has its own network (only a loopback) and its own process list. It cannot make more namespaces, and it is cut off from the terminal Apargon started from.
@@ -35,7 +35,7 @@ The page's process and every process it starts run in an OS sandbox.
 
 ### The offline check
 
-Before it opens a page, the sandboxed process checks that it is offline. If it is not, or cannot tell, it refuses. No flag skips this. `test/refuse.ts` tests it.
+Before it opens a page, the sandboxed process checks that it is offline. If it is not, or cannot tell, it refuses. No flag skips this. `test/selftest/refuse.ts` tests it.
 
 | OS      | Check                                                                                     |
 | ------- | ----------------------------------------------------------------------------------------- |
@@ -47,7 +47,7 @@ Before it opens a page, the sandboxed process checks that it is offline. If it i
 
 Three services fetch for a process from outside its sandbox: `nsurlsessiond`, WebKit's network process and `trustd`. The sandbox blocks all three.
 
-- `test/daemons.ts` checks that they work outside the sandbox.
+- `test/selftest/daemons.ts` checks that they work outside the sandbox.
 - `selftest-node` checks that they fail inside.
 - Without `trustd`, a program that checks a certificate through macOS gets an error, not a pass.
 
@@ -72,7 +72,7 @@ The proxy runs in the trampoline, outside the sandbox. It:
 
 - forwards only to the declared `host:port` patterns, and answers 403 to the rest;
 - looks up names itself;
-- refuses any name that leads to this computer or the local network (`privateNetwork` in `src/permissions/tags.ts`);
+- refuses any name that leads to this computer or the local network (`privateNetwork` in `src/permissions/network.ts`);
 - forwards to the local network only an IPv4 address declared in numbers with its port;
 - refuses a `CONNECT` with no port;
 - logs every request, allowed or refused, to `egress.log`;
@@ -118,10 +118,11 @@ The OS also limits where the page and its programs write:
 - macOS: programs cannot open other apps (`open`), script them (Apple Events) or write app settings (`defaults write`). `selftest-mac` checks these, and that the proxy refuses this Mac's own LAN address.
 - Linux: by folder, which is looser (see "Not enforced").
 - Windows: by folder too. A `papp-write` folder that holds Apargon's data, a whole drive included, is refused.
+- Every OS: Apargon's own checks refuse writes to its data and, in the installed app, to the app's own folder.
 
 ### Keys and logins
 
-The OS hides a fixed list from the page and every program it runs: `~/.ssh`, `~/.gnupg`, `~/.aws`, cloud and GitHub CLI logins, saved passwords, browser profiles. `SECRETS` in `src/permissions/tags.ts` is the list.
+The OS hides a fixed list from the page and every program it runs: `~/.ssh`, `~/.gnupg`, `~/.aws`, cloud and GitHub CLI logins, saved passwords, browser profiles. `SECRETS` in `src/permissions/paths.ts` is the list, with each OS's own in `secrets` in `src/permissions/platform/`.
 
 | OS      | How                                                              |
 | ------- | ---------------------------------------------------------------- |
@@ -160,11 +161,11 @@ The OS hides a fixed list from the page and every program it runs: `~/.ssh`, `~/
 ### The window
 
 - It shows only the page. A link does not navigate, a frame does not load another file, and a new window opens only on the page itself. `selftest` checks the frame and the window.
-- An `http` or `https` link the page opens goes to the first process. A host declared with `papp-open`, or one the user ticked "Always" for, opens in the browser at once; any other asks in that process's own dialog, address shown. Other schemes never leave the window. `test/popup.ts` checks the host matching.
-- `papp.open` hands a file to its default app only if the page may see it and it is a folder without an extension, so not an app or other bundle, or of a viewable type (`OPENABLE` in `src/permissions/tags.ts`): images, video, audio, PDF, plain text. Not a page, HTML, SVG, a script, or anything that runs when opened. The first process checks the type, and keys and logins, again. `selftest` checks the refusals.
+- An `http` or `https` link the page opens goes to the first process. A host declared with `papp-open`, or one the user ticked "Always" for, opens in the browser at once; any other asks in that process's own dialog, address shown. Other schemes never leave the window. `test/node/popup.ts` checks the host matching.
+- `papp.open` hands a file to its default app only if the page may see it and it is a folder without an extension, so not an app or other bundle, or of a viewable type (`OPENABLE` in `src/permissions/open.ts`): images, video, audio, PDF, plain text. Not a page, HTML, SVG, a script, or anything that runs when opened. The first process checks the type, and keys and logins, again. `selftest` checks the refusals.
 - A frame from a declared host cannot reach `window.papp`. Tested by hand on 2026-10-26: Chromium blocks it as cross-origin.
 - Each page keeps its own `localStorage`, IndexedDB and cache. `selftest-node` checks that one page cannot read another's `localStorage`.
-- A page's storage follows it when it moves. A page that opens from a new path with the exact content of a page whose file is gone gets that page's storage. Same content is the same page, so no other page can claim it. The first process moves it before the window starts, and records each page's content, on open and on close, in `seen.json`, which no page can write. A copy moves nothing, and a page whose old window is still open does not open. `test/moved.ts` checks the cases.
+- A page's storage follows it when it moves. A page that opens from a new path with the exact content of a page whose file is gone gets that page's storage. Same content is the same page, so no other page can claim it. The first process moves it before the window starts, and records each page's content, on open and on close, in `seen.json`, which no page can write. A copy moves nothing, and a page whose old window is still open does not open. `test/node/storage.ts` checks the cases.
 - The favicon is read only from a file the page may see, and always gets Apargon's badge on the corner.
 - On macOS, only a page made here gets its icon in Finder.
 
@@ -338,7 +339,6 @@ Untested: whether a full-Node page can rename a folder above Apargon's data and 
 ### The packaged app
 
 - macOS: the `app.asar` hash sits in `Info.plist`, which only the code signature protects. Without a Developer ID signature, anyone can edit the app and update the hash.
-- macOS: `sandbox/macos.sb` is not hash-checked. Pages cannot write it.
 - macOS: the profile starts from `(allow default)`, because the GUI needs Mach IPC and the WindowServer.
 - macOS: `sandbox-exec` is deprecated, but it is still the way to sandbox a process tree.
 - Linux from source: on Ubuntu 23.10 and later `bwrap` fails without the AppArmor profile the `.deb` installs, and Apargon refuses to open pages.
@@ -350,7 +350,7 @@ Apargon is not a VM. A hard "nothing leaves" guarantee needs a VM with no networ
 
 ## Verification
 
-`pnpm test` runs every check in the real app and fails if one fails. `test/check.ts` lists the checks for each platform. [AGENTS.md](AGENTS.md#the-installed-deb) has the Linux run on the installed `.deb`.
+`pnpm test` runs every check in the real app and fails if one fails. `test/selftest/check.ts` lists the checks for each platform. [AGENTS.md](AGENTS.md#the-installed-deb) has the Linux run on the installed `.deb`.
 
 | Platform      | Last verified                                                                                                                                                                                                                                    |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

@@ -1,7 +1,10 @@
 import net from 'net';
 import path from 'path';
+import { LOCAL_HOSTS, privateNetwork } from './network.ts';
+import { BIG_FOLDERS, HOME, SECRETS } from './paths.ts';
 import { isInside, literalBase, PAGE_FILE, patternFolder } from './patterns.ts';
-import { BIG_FOLDERS, HOME, LOCAL_HOSTS, privateNetwork, SECRETS, type Permissions, type Use } from './tags.ts';
+import { PERMISSIONS_PLATFORM } from './platform.ts';
+import type { Permissions, Use } from './tags.ts';
 
 // The popup shows short, with text as its tip. Red is a way to send data somewhere the tags do not name.
 export type Line = { id: string; level: 'red' | 'yellow' | 'plain'; text: string; short: string };
@@ -10,11 +13,13 @@ const USE_LINES: Record<Use, Omit<Line, 'id'>> = {
   notifications: { level: 'plain', text: 'Show notifications', short: 'Notifications' },
   clipboard: { level: 'yellow', text: 'Read what you copy', short: 'Clipboard' },
   location: { level: 'yellow', text: 'Know where this computer is', short: 'Location' },
-  sound: process.platform === 'linux' ? { level: 'yellow', text: 'Play sound through the sound server, where its programs can also record', short: 'Sound' } : { level: 'plain', text: 'Play sound', short: 'Sound' },
+  sound: PERMISSIONS_PLATFORM.soundServerRecords ? { level: 'yellow', text: 'Play sound through the sound server, where its programs can also record', short: 'Sound' } : { level: 'plain', text: 'Play sound', short: 'Sound' },
   camera: { level: 'yellow', text: 'Use the camera', short: 'Camera' },
   microphone: { level: 'yellow', text: 'Use the microphone', short: 'Microphone' },
   screen: { level: 'yellow', text: 'Record or share your screen', short: 'Screen' },
 };
+// Where written files run outside the sandbox: launch agents on macOS, the Startup folder on Windows.
+const LAUNCH_FOLDER = PERMISSIONS_PLATFORM.launchFolder && path.join(HOME, PERMISSIONS_PLATFORM.launchFolder);
 const USE_SENDS: Partial<Record<Use, string>> = { clipboard: 'what you copy', location: 'where you are', camera: 'what the camera sees', microphone: 'what the microphone hears', screen: 'what is on your screen' };
 
 export function describe(permissions: Permissions) {
@@ -25,11 +30,11 @@ export function describe(permissions: Permissions) {
   }
 
   const writable = [...new Set(permissions.write.map(patternFolder))];
-  const linuxWriteNote = process.platform === 'linux' && writable.length ? `, which can change any file in ${writable.join(', ')}` : '';
+  const writeNote = PERMISSIONS_PLATFORM.writesWholeFolders && writable.length ? `, which can change any file in ${writable.join(', ')}` : '';
 
   for (const [program, file] of Object.entries(permissions.run)) {
-    // Red on Linux: there it can write hidden files, which run outside the sandbox.
-    lines.push({ id: `run:${file}`, level: linuxWriteNote ? 'red' : 'yellow', text: `Run ${file}${linuxWriteNote}`, short: program });
+    // Red where it can write hidden files, which run outside the sandbox.
+    lines.push({ id: `run:${file}`, level: writeNote ? 'red' : 'yellow', text: `Run ${file}${writeNote}`, short: program });
   }
 
   lines.push(
@@ -84,15 +89,13 @@ function envLine(name: string): Line {
 function folderLine(kind: 'read' | 'write', pattern: string): Line {
   const text = kind === 'read' ? 'See files' : 'See, change and delete files';
   const base = literalBase(pattern);
-  // Where files run outside the sandbox: launch agents on macOS, the Startup folder on Windows.
-  const library = path.join(HOME, process.platform === 'win32' ? 'AppData' : 'Library');
   const hidden = pattern.split(path.sep).some(name => name.startsWith('.'));
-  const reachesLibrary = isInside(library, base) || isInside(base, library);
+  const reachesLaunchFolder = LAUNCH_FOLDER !== null && (isInside(LAUNCH_FOLDER, base) || isInside(base, LAUNCH_FOLDER));
   // Files that run outside the sandbox: a shell's startup file, a git hook, a launch agent, a page.
-  const red = kind === 'write' && (hidden || reachesLibrary || PAGE_FILE.test(pattern));
+  const red = kind === 'write' && (hidden || reachesLaunchFolder || PAGE_FILE.test(pattern));
   const yellow =
     hidden ||
-    reachesLibrary ||
+    reachesLaunchFolder ||
     pattern.includes('*') ||
     SECRETS.some(secret => isInside(base, secret.path)) ||
     path.dirname(pattern) === path.parse(pattern).root ||

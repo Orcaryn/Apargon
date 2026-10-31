@@ -3,8 +3,5 @@
 assets/
 build/
 pnpm-lock.yaml
-test/pages/result.json
-test/pages/result-net.json
-test/pages/result-mac.json
-test/pages/result-node.json
+test/selftest/pages/results/
 src/**/*.ts

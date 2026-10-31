@@ -1,0 +1,29 @@
+import { app, Notification } from 'electron';
+import net from 'net';
+import { tellTrampoline } from '../../shared/channel.ts';
+import type { PagePlatform } from '../platform.ts';
+
+export const macos: PagePlatform = {
+  isOffline: async () => !(await canBindLoopback()),
+  notify(text, toFront) {
+    new Notification(text).on('click', toFront).show();
+  },
+  appMenu: true,
+  // In the Dock, and on the file of a page made here: the trampoline sets it, as this process may not write there.
+  showIcon(_win, icon, madeHere) {
+    app.dock?.setIcon(icon);
+
+    if (madeHere) {
+      tellTrampoline({ fileIcon: icon.toPNG().toString('base64') });
+    }
+  },
+};
+
+// Seatbelt refuses the bind with EPERM. Any other failure is not proof, so it counts as a bind.
+function canBindLoopback(): Promise<boolean> {
+  return new Promise(resolve => {
+    const server = net.createServer();
+    server.once('error', (err: NodeJS.ErrnoException) => resolve(err.code !== 'EPERM'));
+    server.listen(0, '127.0.0.1', () => server.close(() => resolve(true)));
+  });
+}

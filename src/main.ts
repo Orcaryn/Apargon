@@ -1,28 +1,13 @@
-import { app, dialog } from 'electron';
+import { app } from 'electron';
 import path from 'path';
-import { PAGE_PLATFORM } from './page/platform.ts';
-import { showPage } from './page/start.ts';
+import { preparePage, startPage } from './page/start.ts';
 import { PAGE_FILE } from './permissions/patterns.ts';
-import { PAGE_DATA, tellTrampoline, type ChildConfig } from './shared.ts';
-import { SANDBOX } from './trampoline/platform.ts';
-import { welcome } from './trampoline/skill.ts';
-import { openPage } from './trampoline/start.ts';
-import { checkForUpdates } from './trampoline/update.ts';
+import { PAGE_CONFIG, tellTrampoline } from './shared/channel.ts';
+import { openPage, startTrampoline } from './trampoline/start.ts';
 
-const childConfig: ChildConfig | null = process.env.APARGON ? JSON.parse(process.env.APARGON) : null;
-
-if (childConfig) {
-  app.setPath('userData', PAGE_DATA);
-
-  if (childConfig.proxy) {
-    app.commandLine.appendSwitch('proxy-server', childConfig.proxy);
-  }
-
-  // On Windows the GPU process cannot run in the sandbox, and a name Chromium looks up leaves through Windows' own resolver: names go only to the proxy.
-  if (process.platform === 'win32') {
-    app.disableHardwareAcceleration();
-    app.commandLine.appendSwitch('host-resolver-rules', 'MAP * ~NOTFOUND, EXCLUDE 127.0.0.1');
-  }
+// One app, two processes: the trampoline, with network, and the page process it starts in the sandbox with PAGE_CONFIG.
+if (PAGE_CONFIG) {
+  preparePage(PAGE_CONFIG);
 }
 
 const pages = process.argv.filter(arg => PAGE_FILE.test(arg)).map(arg => path.resolve(arg));
@@ -30,7 +15,7 @@ app.on('open-file', (event, file) => {
   const page = path.resolve(file);
   event.preventDefault();
 
-  if (childConfig) {
+  if (PAGE_CONFIG) {
     tellTrampoline({ open: page });
   } else if (app.isReady()) {
     openPage(page);
@@ -39,29 +24,4 @@ app.on('open-file', (event, file) => {
   }
 });
 
-app.whenReady().then(async () => {
-  if (!pages.length) {
-    await welcome(false);
-    app.quit();
-  } else if (childConfig && !(PAGE_PLATFORM && (await PAGE_PLATFORM.isOffline()))) {
-    const refusal = 'This process can still open sockets, so it is not in the sandbox. Refusing to open the page. If APARGON is set in your environment, unset it.';
-    console.error(`Apargon: ${refusal}`);
-    dialog.showErrorBox('Apargon', refusal);
-    app.quit();
-  } else if (childConfig) {
-    await showPage(childConfig);
-  } else if (!SANDBOX) {
-    dialog.showErrorBox('Apargon', `No offline mode for ${process.platform} yet. Apargon opens pages on macOS, Linux and Windows.`);
-    app.quit();
-  } else {
-    await welcome(true);
-    pages.forEach(openPage);
-    checkForUpdates();
-  }
-});
-
-app.on('window-all-closed', () => {
-  if (childConfig) {
-    app.quit();
-  }
-});
+app.whenReady().then(() => (PAGE_CONFIG ? startPage(PAGE_CONFIG) : startTrampoline(pages)));

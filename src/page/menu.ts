@@ -2,10 +2,12 @@ import { dialog, Menu, type MenuItemConstructorOptions } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import type { Line } from '../permissions/describe.ts';
-import { EGRESS_LOG, readJson, tellTrampoline, UPDATE_FILE, type UpdateState } from '../shared.ts';
+import { tellTrampoline } from '../shared/channel.ts';
+import { EGRESS_LOG, readJson, UPDATE_FILE, type UpdateState } from '../shared/data.ts';
+import { PAGE_PLATFORM } from './platform.ts';
 
 export function installMenu(page: string, lines: Line[], approved: string[]) {
-  const appMenu: MenuItemConstructorOptions[] = process.platform === 'darwin' ? [{ role: 'appMenu' }] : [];
+  const appMenu: MenuItemConstructorOptions[] = PAGE_PLATFORM!.appMenu ? [{ role: 'appMenu' }] : [];
   const updates = readJson<UpdateState>(UPDATE_FILE);
 
   const revoke = (pages: string[]) => {

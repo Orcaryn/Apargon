@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import type { Permissions } from './tags.ts';
 
 // A pattern is a real path, so each name sits between separators: \ on Windows, / elsewhere.
 const SEPARATOR = path.sep === '/' ? '/' : '\\\\';
@@ -40,3 +41,10 @@ export function patternFolder(pattern: string) {
 
 export const PAGE_SOURCE = '\\.[pP][aA][pP][pP]/?$';
 export const PAGE_FILE = new RegExp(PAGE_SOURCE);
+
+export function changeableSources({ write }: Permissions) {
+  return {
+    files: write.map(pattern => patternSource(pattern)),
+    pages: write.filter(pattern => PAGE_FILE.test(pattern)).map(pattern => patternSource(pattern)),
+  };
+}

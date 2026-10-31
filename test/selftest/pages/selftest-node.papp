@@ -1,0 +1,78 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="papp-node" content="full">
+<title>Apargon selftest (full Node)</title>
+<body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
+
+<script>
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const dns = require('dns');
+  const { execFileSync, execSync } = require('child_process');
+
+  const here = path.dirname(decodeURIComponent(location.pathname));
+  const result = {};
+
+  const outside = path.join(here, '..', 'node-outside.tmp');
+  fs.writeFileSync(outside, 'hi');
+  result.fs_anywhere = fs.readFileSync(outside, 'utf8') === 'hi';
+  fs.unlinkSync(outside);
+
+  result.child_process = execSync('echo ok').toString().trim() === 'ok';
+
+  result.storage_apart = localStorage.getItem('apargon-selftest') === null;
+
+  const win = require('@electron/remote').getCurrentWindow();
+  win.setAlwaysOnTop(true, 'floating');
+  result.electron_window = win.isAlwaysOnTop();
+  win.setAlwaysOnTop(false);
+
+  try {
+    const data = process.platform === 'darwin' ? 'Library/Application Support/apargon' : '.config/apargon';
+    fs.appendFileSync(path.join(os.homedir(), data, 'grants.json'), '');
+    result.grants_protected = false;
+  } catch {
+    result.grants_protected = true;
+  }
+
+  try {
+    execSync('curl -s -m 3 https://example.com');
+    result.curl_blocked = false;
+  } catch {
+    result.curl_blocked = true;
+  }
+
+  if (process.platform === 'darwin') {
+    const leak = path.join(here, 'results', 'leak');
+    result.download_service_blocked = execFileSync(leak, ['download', 'https://example.com/'], { encoding: 'utf8' }).trim() === 'blocked';
+    result.webkit_blocked = execFileSync(leak, ['webkit', 'https://example.com/'], { encoding: 'utf8' }).trim() === 'blocked';
+    result.trust_blocked = execFileSync(leak, ['trust', path.join(here, 'results', 'leak.der')], { encoding: 'utf8' }).trim() === 'blocked';
+  }
+
+  if (process.platform === 'linux') {
+    result.processes_hidden = fs.readFileSync('/proc/1/comm', 'utf8').trim() === 'bwrap';
+    result.own_session = result.processes_hidden && fs.readFileSync('/proc/self/stat', 'utf8').split(') ')[1].split(' ')[3] !== '0';
+    const runtime = process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid()}`;
+    const x11 = /^:(\d+)/.exec(process.env.DISPLAY ?? '');
+    const display = [process.env.WAYLAND_DISPLAY && path.resolve(runtime, process.env.WAYLAND_DISPLAY), x11 && `/tmp/.X11-unix/X${x11[1]}`].filter(Boolean);
+    const sockets = ['/run', '/tmp', '/var/tmp'].flatMap((folder) => fs.readdirSync(folder, { recursive: true, withFileTypes: true }).filter((entry) => entry.isSocket()).map((entry) => path.join(entry.parentPath, entry.name)));
+    result.socket_folders_hidden = sockets.every((socket) => display.includes(socket));
+    result.other_pages_sockets_hidden = fs.readdirSync(path.join(os.homedir(), '.config/apargon/net')).length === 0;
+  }
+
+  const fetched = fetch('https://example.com', { cache: 'no-store', signal: AbortSignal.timeout(3000) })
+    .then((r) => {
+      result.fetch_leak = { status: r.status, type: r.type, url: r.url };
+      return false;
+    }, () => true);
+  const resolved = new Promise((done) => dns.lookup('example.com', (err) => done(!!err)));
+
+  Promise.all([fetched, resolved]).then(([fetchBlocked, dnsBlocked]) => {
+    result.fetch_blocked = fetchBlocked;
+    result.dns_blocked = dnsBlocked;
+    document.body.textContent = JSON.stringify(result);
+    fs.writeFileSync(path.join(here, 'results', 'result-node.json'), JSON.stringify(result, null, 2) + '\n');
+    setTimeout(() => window.close(), 200);
+  });
+</script>

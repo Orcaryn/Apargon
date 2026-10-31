@@ -1,7 +1,7 @@
 import { app, dialog } from 'electron';
 import fs from 'fs';
 import path from 'path';
-import { realPath } from '../../permissions/paths.ts';
+import { realPath, runsOutsideSandbox } from '../../permissions/paths.ts';
 import { isInside, PAGE_FILE } from '../../permissions/patterns.ts';
 import type { SavedFile } from '../../shared/channel.ts';
 import { DATA, INSTALL_FOLDER } from '../../shared/data.ts';
@@ -30,8 +30,10 @@ export async function saveFiles(files: SavedFile[], hidden: string[]) {
   // A link the page planted could lead the user into a folder they did not mean. Keys and logins are hidden names or whole folders, so with plain names the folder is what to check.
   const folder = filePaths[0];
 
-  if (realPath(folder) !== folder || PAGE_FILE.test(folder) || [DATA, INSTALL_FOLDER ?? [], hidden].flat().some(protectedFolder => isInside(folder, protectedFolder))) {
+  if (realPath(folder) !== folder) {
     throw new Error(`Apargon: a page may not save to ${folder}. Pick a folder itself, not a link to it.`);
+  } else if (PAGE_FILE.test(folder) || runsOutsideSandbox(folder) || [DATA, INSTALL_FOLDER ?? [], hidden].flat().some(protectedFolder => isInside(folder, protectedFolder))) {
+    throw new Error(`Apargon: a page may not save to ${folder}: it holds Apargon's data, keys, logins, or files that run on their own.`);
   }
 
   // Like a browser's downloads, a taken name gets a number: 'wx' never replaces a file or follows a link.

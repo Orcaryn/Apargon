@@ -1,7 +1,7 @@
 import net from 'net';
 import path from 'path';
 import { LOCAL_HOSTS, privateNetwork } from './network.ts';
-import { BIG_FOLDERS, HOME, SECRETS } from './paths.ts';
+import { BIG_FOLDERS, HOME, LAUNCH_FOLDER, runsOutsideSandbox, SECRETS } from './paths.ts';
 import { isInside, literalBase, PAGE_FILE, patternFolder } from './patterns.ts';
 import { PERMISSIONS_PLATFORM } from './platform.ts';
 import type { Permissions, Use } from './tags.ts';
@@ -18,8 +18,6 @@ const USE_LINES: Record<Use, Omit<Line, 'id'>> = {
   microphone: { level: 'yellow', text: 'Use the microphone', short: 'Microphone' },
   screen: { level: 'yellow', text: 'Record or share your screen', short: 'Screen' },
 };
-// Where written files run outside the sandbox: launch agents on macOS, the Startup folder on Windows.
-const LAUNCH_FOLDER = PERMISSIONS_PLATFORM.launchFolder && path.join(HOME, PERMISSIONS_PLATFORM.launchFolder);
 const USE_SENDS: Partial<Record<Use, string>> = { clipboard: 'what you copy', location: 'where you are', camera: 'what the camera sees', microphone: 'what the microphone hears', screen: 'what is on your screen' };
 
 export function describe(permissions: Permissions) {
@@ -89,13 +87,11 @@ function envLine(name: string): Line {
 function folderLine(kind: 'read' | 'write', pattern: string): Line {
   const text = kind === 'read' ? 'See files' : 'See, change and delete files';
   const base = literalBase(pattern);
-  const hidden = pattern.split(path.sep).some(name => name.startsWith('.'));
-  const reachesLaunchFolder = LAUNCH_FOLDER !== null && (isInside(LAUNCH_FOLDER, base) || isInside(base, LAUNCH_FOLDER));
-  // Files that run outside the sandbox: a shell's startup file, a git hook, a launch agent, a page.
-  const red = kind === 'write' && (hidden || reachesLaunchFolder || PAGE_FILE.test(pattern));
+  // A folder that holds the launch folder reaches it too.
+  const runsOutside = runsOutsideSandbox(pattern) || (LAUNCH_FOLDER !== null && isInside(LAUNCH_FOLDER, base));
+  const red = kind === 'write' && (runsOutside || PAGE_FILE.test(pattern));
   const yellow =
-    hidden ||
-    reachesLaunchFolder ||
+    runsOutside ||
     pattern.includes('*') ||
     SECRETS.some(secret => isInside(base, secret.path)) ||
     path.dirname(pattern) === path.parse(pattern).root ||

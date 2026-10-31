@@ -5,6 +5,7 @@ import path from 'path';
 import { describe, worstCase } from '../../src/permissions/describe.ts';
 import { hostMatches } from '../../src/permissions/network.ts';
 import { linkHost, OPENABLE } from '../../src/permissions/open.ts';
+import { HOME, LAUNCH_FOLDER, runsOutsideSandbox } from '../../src/permissions/paths.ts';
 import { declaredPermissions } from '../../src/permissions/tags.ts';
 
 if (process.platform === 'linux') {
@@ -214,6 +215,15 @@ const anyLink = hostMatches('*', 'anything.example') && linkHost('ssh://host') =
 const viewers =
   ['a.PNG', 'b.pdf', 'c.md', 'd.mov'].every(name => OPENABLE.test(name)) &&
   ['e.html', 'f.svg', 'g.papp', 'h.command', 'i.py', 'j.sh', 'k.webloc', 'l.desktop', 'm.app'].every(name => !OPENABLE.test(name));
+// saveAs refuses these folders, and the popup shows writes to them red.
+const runsOutside =
+  (LAUNCH_FOLDER === null || runsOutsideSandbox(path.join(LAUNCH_FOLDER, 'x'))) &&
+  runsOutsideSandbox(path.join(HOME, '.config', 'autostart')) &&
+  runsOutsideSandbox(path.join(HOME, 'Library', 'CloudStorage', 'Dropbox', '.git', 'hooks')) &&
+  !runsOutsideSandbox(path.join(HOME, 'Library', 'CloudStorage', 'Dropbox')) &&
+  !runsOutsideSandbox(path.join(HOME, 'Library', 'Mobile Documents', 'com~apple~CloudDocs')) &&
+  !runsOutsideSandbox(path.join(HOME, 'Downloads')) &&
+  !runsOutsideSandbox(HOME);
 listener.close();
 fs.rmSync(dir, { recursive: true });
 
@@ -243,6 +253,7 @@ for (const { href, opens, ok } of links) {
 
 console.log(`${anyLink ? 'ok  ' : 'FAIL'} papp-open * takes any http(s) link and no other scheme`);
 console.log(`${viewers ? 'ok  ' : 'FAIL'} papp.open takes viewable files only`);
+console.log(`${runsOutside ? 'ok  ' : 'FAIL'} papp.saveAs refuses launch agents and hidden folders, not cloud drives`);
 
 process.exit(
   (
@@ -255,7 +266,8 @@ process.exit(
       !smuggled.length &&
       links.every(({ ok }) => ok) &&
       anyLink &&
-      viewers
+      viewers &&
+      runsOutside
   ) ?
     0
   : 1

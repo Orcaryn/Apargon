@@ -1,6 +1,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { isInside } from './patterns.ts';
 import { PERMISSIONS_PLATFORM } from './platform.ts';
 
 // The real path as on disk, as every pattern is: on Windows, in the folder's own case.
@@ -29,6 +30,18 @@ export const SECRETS = Object.entries({
   ...Object.fromEntries(BROWSERS.map(name => [name, 'browser logins and cookies'])),
   ...PERMISSIONS_PLATFORM.secrets,
 }).map(([name, holds]) => ({ path: path.join(HOME, name), holds }));
+
+// Files written here can run outside the sandbox: launch agents on macOS, the Startup folder on Windows, and hidden names, such as a shell's startup file, a git hook or an autostart entry.
+export const LAUNCH_FOLDER = PERMISSIONS_PLATFORM.launchFolder && path.join(HOME, PERMISSIONS_PLATFORM.launchFolder);
+// macOS keeps iCloud Drive, Dropbox, OneDrive and Google Drive in ~/Library. Files there only sync.
+const CLOUD_FOLDERS = ['Library/Mobile Documents', 'Library/CloudStorage'].map(name => path.join(HOME, name));
+
+export function runsOutsideSandbox(file: string) {
+  const hidden = file.split(path.sep).some(name => name.startsWith('.'));
+  const launched = LAUNCH_FOLDER !== null && isInside(file, LAUNCH_FOLDER) && !CLOUD_FOLDERS.some(cloud => isInside(file, cloud));
+
+  return hidden || launched;
+}
 
 export function absolutePath(value: string, dir: string) {
   const absolute = path.resolve(dir, value === '~' ? HOME : value.replace(/^~\//, HOME + '/'));

@@ -17,7 +17,7 @@ export function handleRequest(request: PageRequest, { page, permissions, reply, 
   } else if ('automaticUpdates' in request) {
     writeJson(UPDATE_FILE, { ...readJson<UpdateState>(UPDATE_FILE), automatic: request.automaticUpdates });
   } else if ('fileIcon' in request) {
-    TRAMPOLINE_PLATFORM!.setFileIcon?.(page, request.fileIcon);
+    TRAMPOLINE_PLATFORM.setFileIcon?.(page, request.fileIcon);
   } else if ('showEgressLog' in request) {
     shell.openPath(EGRESS_LOG);
   } else if ('notify' in request) {

@@ -14,4 +14,5 @@ export type PagePlatform = {
   showIcon(win: BrowserWindow, icon: NativeImage, madeHere: boolean): void;
 };
 
-export const PAGE_PLATFORM: PagePlatform | null = process.platform === 'darwin' ? macos : process.platform === 'linux' ? linux : process.platform === 'win32' ? windows : null;
+// Another system gets Linux's, whose offline check fails there.
+export const PAGE_PLATFORM: PagePlatform = process.platform === 'darwin' ? macos : process.platform === 'win32' ? windows : linux;

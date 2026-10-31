@@ -16,7 +16,7 @@ export function checkForUpdates() {
 
   writeJson(UPDATE_FILE, { ...state, checked: new Date().toISOString() });
 
-  if (TRAMPOLINE_PLATFORM!.autoUpdates) {
+  if (TRAMPOLINE_PLATFORM.autoUpdates) {
     autoUpdater.on('error', err => console.error(`Apargon: update failed: ${err.message}`));
     autoUpdater.setFeedURL({ url: FEED, serverType: 'json' });
     autoUpdater.checkForUpdates();

@@ -280,7 +280,7 @@ export function pageApi(dir: string, permissions: Permissions, access: ReturnTyp
         throw new Error('Apargon: this page may not show notifications. Ask for it with <meta name="papp-use" content="notifications">.');
       }
 
-      PAGE_PLATFORM!.notify({ title: String(title), body: String(body) }, toFront);
+      PAGE_PLATFORM.notify({ title: String(title), body: String(body) }, toFront);
     },
     tray(title: string | null) {
       tellTrampoline({ tray: title === null ? null : String(title).slice(0, 24) });

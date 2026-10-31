@@ -25,7 +25,7 @@ export function followFavicon(win: BrowserWindow, canSee: (file: string) => bool
       return;
     }
 
-    PAGE_PLATFORM!.showIcon(win, await drawIcon(favicon), madeHere);
+    PAGE_PLATFORM.showIcon(win, await drawIcon(favicon), madeHere);
   };
 
   win.webContents.on('page-favicon-updated', (_event, urls) => {

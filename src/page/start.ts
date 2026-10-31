@@ -21,12 +21,12 @@ export function preparePage({ proxy }: PageConfig) {
     app.commandLine.appendSwitch('proxy-server', proxy);
   }
 
-  PAGE_PLATFORM?.beforeReady?.();
+  PAGE_PLATFORM.beforeReady?.();
   app.on('window-all-closed', () => app.quit());
 }
 
 export async function startPage({ page, permissions, pageHash, bridges }: PageConfig) {
-  if (!(PAGE_PLATFORM && (await PAGE_PLATFORM.isOffline()))) {
+  if (!(await PAGE_PLATFORM.isOffline())) {
     const refusal = 'This process can still open sockets, so it is not in the sandbox. Refusing to open the page. If APARGON is set in your environment, unset it.';
     console.error(`Apargon: ${refusal}`);
     dialog.showErrorBox('Apargon', refusal);

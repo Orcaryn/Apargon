@@ -7,7 +7,7 @@ import { EGRESS_LOG, readJson, UPDATE_FILE, type UpdateState } from '../shared/d
 import { PAGE_PLATFORM } from './platform.ts';
 
 export function installMenu(page: string, lines: Line[], approved: string[]) {
-  const appMenu: MenuItemConstructorOptions[] = PAGE_PLATFORM!.appMenu ? [{ role: 'appMenu' }] : [];
+  const appMenu: MenuItemConstructorOptions[] = PAGE_PLATFORM.appMenu ? [{ role: 'appMenu' }] : [];
   const updates = readJson<UpdateState>(UPDATE_FILE);
 
   const revoke = (pages: string[]) => {

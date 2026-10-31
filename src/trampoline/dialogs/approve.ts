@@ -13,7 +13,7 @@ export async function approve(file: string) {
   const page = fs.realpathSync.native(file);
   const html = fs.readFileSync(page);
   const permissions = declaredPermissions(page, html.toString());
-  const downloadAddress = TRAMPOLINE_PLATFORM!.downloadAddress(page);
+  const downloadAddress = TRAMPOLINE_PLATFORM.downloadAddress(page);
   const site = downloadAddress === null ? null : (URL.parse(downloadAddress)?.hostname ?? '');
   const downloadedFrom = site === '' ? 'another computer' : site;
   const lines = describe(permissions);

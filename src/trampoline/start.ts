@@ -28,9 +28,6 @@ export async function startTrampoline(pages: string[]) {
   if (!pages.length) {
     await welcome(false);
     app.quit();
-  } else if (!TRAMPOLINE_PLATFORM) {
-    dialog.showErrorBox('Apargon', `No offline mode for ${process.platform} yet. Apargon opens pages on macOS, Linux and Windows.`);
-    app.quit();
   } else {
     await welcome(true);
     pages.forEach(openPage);
@@ -58,7 +55,7 @@ export async function openPage(file: string) {
 async function startPageProcess({ page, permissions, pageHash }: Pick<PageConfig, 'page' | 'permissions' | 'pageHash'>) {
   followMove(page, PAGE_DATA, SEEN_FILE, running);
   noteContent(page, SEEN_FILE);
-  const sandbox = await TRAMPOLINE_PLATFORM!.prepare(page, permissions);
+  const sandbox = await TRAMPOLINE_PLATFORM.prepare(page, permissions);
   const proxy = sandbox.proxyPort === null ? null : `127.0.0.1:${sandbox.proxyPort}`;
   const inherited = Object.entries(process.env).filter(([name]) => permissions.node || PAGE_ENV.includes(PERMISSIONS_PLATFORM.envIgnoresCase ? name.toUpperCase() : name) || permissions.env.includes(name));
   const replies = sandbox.repliesInFile ? path.join(REPLIES_DATA, `${randomUUID()}.jsonl`) : null;
@@ -98,7 +95,7 @@ async function startPageProcess({ page, permissions, pageHash }: Pick<PageConfig
       console.log(line);
     }
   });
-  child.on('error', err => dialog.showErrorBox('Apargon', `Could not start the sandbox: ${err.message}${TRAMPOLINE_PLATFORM!.installHint}`));
+  child.on('error', err => dialog.showErrorBox('Apargon', `Could not start the sandbox: ${err.message}${TRAMPOLINE_PLATFORM.installHint}`));
   running.push(page);
   child.on('close', () => {
     running.splice(running.indexOf(page), 1);

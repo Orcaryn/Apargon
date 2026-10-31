@@ -20,4 +20,5 @@ export type TrampolinePlatform = {
 // command wraps Apargon's own and its environment. The page's requests arrive on requestFd of stdio; replies go on REPLY_FD, or through a file where the sandbox passes no more than standard input, output and error.
 type Prepared = { command(apargon: string[], env: NodeJS.ProcessEnv): string[]; stdio: StdioOptions; requestFd: number; repliesInFile: boolean; proxyPort: number | null; bridges: Bridge[]; close(): void };
 
-export const TRAMPOLINE_PLATFORM: TrampolinePlatform | null = process.platform === 'darwin' ? macos : process.platform === 'linux' ? linux : process.platform === 'win32' ? windows : null;
+// Another system gets Linux's: bwrap is not there, so no page opens.
+export const TRAMPOLINE_PLATFORM: TrampolinePlatform = process.platform === 'darwin' ? macos : process.platform === 'win32' ? windows : linux;

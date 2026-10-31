@@ -112,7 +112,7 @@ function hostLine(pattern: string): Line {
   const anyPort = port === '*' ? ' on any port' : '';
 
   if (LOCAL_HOSTS.includes(host)) {
-    return { id, level: 'red', text: port === '*' ? 'Connect to any program on this computer' : 'Connect to a program on this computer', short: pattern };
+    return { id, level: 'red', text: 'Connect to a program on this computer', short: pattern };
   } else if (host === '*') {
     return { id, level: 'red', text: `Send and receive data${anyPort}`, short: port === '*' ? 'Any server' : `Any server:${port}` };
   }

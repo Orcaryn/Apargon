@@ -3,7 +3,7 @@ import net from 'net';
 import os from 'os';
 import path from 'path';
 import { PROGRAM_ENV } from './env.ts';
-import { privateNetwork } from './network.ts';
+import { LOCAL_HOSTS, privateNetwork } from './network.ts';
 import { absolutePath, BIG_FOLDERS, HOME, SECRETS } from './paths.ts';
 import { isInside, literalBase } from './patterns.ts';
 import { PERMISSIONS_PLATFORM } from './platform.ts';
@@ -158,8 +158,9 @@ function hostPattern(value: string) {
     throw new Error(`Apargon never reaches ${host}: it is one of this computer's own addresses. For a program on this computer, declare localhost:<port>.`);
   } else if (host.endsWith('.local')) {
     throw new Error(`Apargon reaches a device on your local network only by its address in numbers, such as 192.168.1.5:${port === '*' ? '80' : port}, not by a name such as ${host}.`);
-  } else if (privateNetwork().check(host) && port === '*') {
-    throw new Error(`Apargon reaches a device on your local network on one port only. Write ${host}:<port>.`);
+  } else if ((LOCAL_HOSTS.includes(host) || privateNetwork().check(host)) && port === '*') {
+    // On this computer, any port would include other pages' proxies, and with them their hosts.
+    throw new Error(`Apargon reaches ${host} on one port only. Write ${host}:<port>.`);
   }
 
   return pattern;

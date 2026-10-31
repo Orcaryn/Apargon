@@ -1,6 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import { localPorts } from '../network.ts';
 import { patternFolder } from '../patterns.ts';
 import type { PermissionsPlatform } from '../platform.ts';
 
@@ -21,8 +20,6 @@ export const linux: PermissionsPlatform = {
 
     if (reopened) {
       return `On Linux Apargon cannot open ${reopened}: it would bring back sockets to programs outside the sandbox. Use a folder of its own, such as /tmp/apargon.`;
-    } else if (localPorts(permissions).includes('*')) {
-      return 'On Linux, a port on this computer must be a number, such as localhost:11434: Apargon carries each declared port into the sandbox.';
     } else if (use.includes('location')) {
       return 'On Linux Apargon cannot give a page its location: Chromium finds it through a web service, and the page has no network.';
     }

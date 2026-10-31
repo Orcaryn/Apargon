@@ -15,14 +15,15 @@ export function pageAccess(permissions: Permissions) {
 
     return firstWild === -1 ? [] : names.slice(firstWild).map((_, i) => new RegExp(patternSource(path.join(root, ...names.slice(0, firstWild + i)), false)));
   });
-  const apargonFolders = [DATA, INSTALL_FOLDER ?? []].flat();
-  const isSecret = (file: string) => permissions.hidden.some(secret => isInside(file, secret));
-  const canSee = (file: string) => visible.some(pattern => pattern.test(file)) && !isSecret(file);
+  // Apargon's data holds other pages' storage and the approvals: the page's process may read it, the page may not.
+  const offLimits = [permissions.hidden, DATA, INSTALL_FOLDER ?? []].flat();
+  const isOffLimits = (file: string) => offLimits.some(folder => isInside(file, folder));
+  const canSee = (file: string) => visible.some(pattern => pattern.test(file)) && !isOffLimits(file);
 
   return {
-    isSecret,
+    isOffLimits,
     canSee,
     canList: (file: string) => canSee(file) || listable.some(pattern => pattern.test(file)),
-    canChange: (file: string) => (PAGE_FILE.test(file) ? changeablePages : changeable).some(pattern => pattern.test(file)) && !isSecret(file) && !apargonFolders.some(folder => isInside(file, folder)),
+    canChange: (file: string) => (PAGE_FILE.test(file) ? changeablePages : changeable).some(pattern => pattern.test(file)) && !isOffLimits(file),
   };
 }

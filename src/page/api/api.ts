@@ -19,7 +19,7 @@ export function pageApi(dir: string, permissions: Permissions, access: ReturnTyp
   // What the user picked in this window's dialog, until the page reloads.
   const picked: RegExp[] = [];
   let resets = 0;
-  const canSee = (file: string) => access.canSee(file) || (picked.some(pattern => pattern.test(file)) && !access.isSecret(file));
+  const canSee = (file: string) => access.canSee(file) || (picked.some(pattern => pattern.test(file)) && !access.isOffLimits(file));
   const canList = (file: string) => access.canList(file) || canSee(file);
   const { canChange } = access;
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => PROGRAM_ENV.includes(name) || permissions.env.includes(name)));

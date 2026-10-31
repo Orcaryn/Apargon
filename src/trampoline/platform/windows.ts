@@ -14,11 +14,11 @@ export const windows: TrampolinePlatform = {
   // ProcessContainer: Windows' own sandbox, through MXC. The page reaches no address but the proxy's.
   async prepare(page, permissions) {
     const written = permissions.write.map(patternFolder);
-    const reachesData = written.find(folder => isInside(DATA, folder));
+    const reachesData = written.find(folder => isInside(DATA, folder) || isInside(folder, DATA));
 
-    // The sandbox cannot make a folder read-only inside a writable one, so a page may not write around Apargon's approvals.
+    // The sandbox nests no read-only folder in a writable one, and the reverse would let a page write in Apargon's data.
     if (reachesData) {
-      throw new Error(`On Windows a page may not change ${reachesData}: it holds Apargon's approvals. Name a folder inside it.`);
+      throw new Error(`On Windows a page may not change ${reachesData}: it holds or is inside Apargon's data. Name another folder.`);
     }
 
     // A folder named twice keeps one grant: one also listed could not be read. So each folder is named once, with the most it needs.

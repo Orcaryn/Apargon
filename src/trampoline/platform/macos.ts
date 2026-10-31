@@ -18,7 +18,7 @@ export const macos: TrampolinePlatform = {
     const proxyPort = proxy && (proxy.address() as AddressInfo).port;
     const profile = seatbeltProfile(permissions, proxyPort);
 
-    return { command: apargon => ['sandbox-exec', '-p', profile, ...apargon], stdio: ['inherit', 'inherit', 'inherit', 'pipe', 'ignore', 'pipe'], requestFd: REQUEST_FD, repliesInFile: false, proxyPort, bridges: [], close: () => proxy?.close() };
+    return { command: apargon => ['sandbox-exec', '-p', profile, ...apargon], stdio: ['ignore', 'pipe', 'pipe', 'pipe', 'ignore', 'pipe'], requestFd: REQUEST_FD, repliesInFile: false, proxyPort, bridges: [], close: () => proxy?.close() };
   },
   installHint: '',
   // The quarantine mark says the file was downloaded; Spotlight keeps where from, the page last.
@@ -78,6 +78,9 @@ function seatbeltProfile(permissions: Permissions, proxyPort: number | null) {
   if (INSTALL_FOLDER) {
     rules.push(`(deny file-write* (subpath "${INSTALL_FOLDER}"))`);
   }
+
+  // No terminal, not even by name: through it a page could type commands into the shell that started Apargon. Last, as /dev is writable above.
+  rules.push('(deny file-read* file-write* file-ioctl (literal "/dev/tty") (regex #"^/dev/ttys[0-9]+$"))');
 
   return rules.join('\n') + '\n';
 }

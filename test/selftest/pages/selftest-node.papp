@@ -37,6 +37,13 @@
   }
 
   try {
+    fs.closeSync(fs.openSync('/dev/tty', 'r+'));
+    result.terminal_unreachable = false;
+  } catch {
+    result.terminal_unreachable = [0, 1, 2].every((fd) => !require('tty').isatty(fd));
+  }
+
+  try {
     execSync('curl -s -m 3 https://example.com');
     result.curl_blocked = false;
   } catch {

@@ -28,7 +28,7 @@ export const linux: TrampolinePlatform = {
 
     return {
       command: apargon => ['bwrap', ...bwrapArgs(page, permissions, socketFolder), ...apargon],
-      stdio: ['inherit', 'inherit', 'inherit', 'pipe', networkFd, 'pipe'],
+      stdio: ['ignore', 'pipe', 'pipe', 'pipe', networkFd, 'pipe'],
       requestFd: REQUEST_FD,
       repliesInFile: false,
       proxyPort: proxyBridge?.port ?? null,

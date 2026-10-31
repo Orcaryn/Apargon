@@ -60,7 +60,7 @@ export const windows: TrampolinePlatform = {
         return [WXC_EXEC, '--config-base64', Buffer.from(JSON.stringify(request)).toString('base64')];
       },
       // MXC's executor passes the page only standard input, output and error, and input only once it closes: messages come on standard output, mixed with the page's other output, which is passed on.
-      stdio: ['ignore', 'pipe', 'inherit'],
+      stdio: ['ignore', 'pipe', 'pipe'],
       requestFd: 1,
       repliesInFile: true,
       proxyPort,

@@ -13,7 +13,7 @@ const EXPECTED =
     }
   : {
       'result.json': PLAIN,
-      'result-node.json': `fs_anywhere child_process storage_apart electron_window grants_protected curl_blocked fetch_blocked dns_blocked ${mac ? 'download_service_blocked webkit_blocked trust_blocked' : 'processes_hidden own_session socket_folders_hidden other_pages_sockets_hidden'}`,
+      'result-node.json': `fs_anywhere child_process storage_apart electron_window grants_protected terminal_unreachable curl_blocked fetch_blocked dns_blocked ${mac ? 'download_service_blocked webkit_blocked trust_blocked' : 'processes_hidden own_session socket_folders_hidden other_pages_sockets_hidden'}`,
       ...(mac && { 'result-mac.json': 'proxy_refuses_own_lan_address program_open_app_blocked program_apple_event_blocked program_preference_write_blocked' }),
       'result-net.json': `curl_declared curl_undeclared_blocked curl_direct_blocked proxy_refuses_this_computer proxy_refuses_local_network proxy_allows_declared_lan_address read_granted read_only program_writes_granted program_outside_write_blocked program_input program_bytes program_timeout spawn_streams spawn_input spawn_kill spawn_undeclared_refused spawn_options_as_args_refused program_env_named program_env_unnamed_left_out program_ssh_hidden undeclared_program_refused options_as_args_refused fetch_declared fetch_declared_http fetch_wildcard_subdomain fetch_wildcard_apex_blocked fetch_undeclared_blocked clipboard_read_granted microphone_permission_granted camera_permission_denied_without_tag ${mac ? 'proxy_refuses_connect_without_port program_hidden_write_blocked program_own_folder_write_blocked program_page_write_blocked' : 'own_sockets_only page_process_env_unnamed_left_out'}`,
     };

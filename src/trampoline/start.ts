@@ -88,12 +88,15 @@ async function startPageProcess({ page, permissions, pageHash }: Pick<PageConfig
 
   const setTray = trayFor(page, () => reply({ trayClick: true }));
 
-  readline.createInterface({ input: child.stdio[sandbox.requestFd] as Readable }).on('line', line => {
-    if (line.startsWith('{')) {
-      handleRequest(JSON.parse(line), { page, permissions, reply, setTray, openPage });
-    } else if (line.trim()) {
-      console.log(line);
-    }
+  // The page's requests, and its output as plain text: given the terminal itself, it could type commands into the shell that started Apargon.
+  new Set([sandbox.requestFd, 1, 2]).forEach(fd => {
+    readline.createInterface({ input: child.stdio[fd] as Readable }).on('line', line => {
+      if (fd === sandbox.requestFd && line.startsWith('{')) {
+        handleRequest(JSON.parse(line), { page, permissions, reply, setTray, openPage });
+      } else if (line.trim()) {
+        (fd === 2 ? console.error : console.log)(line.replace(/[\p{Cc}\p{Cf}]/gu, ''));
+      }
+    });
   });
   child.on('error', err => dialog.showErrorBox('Apargon', `Could not start the sandbox: ${err.message}${TRAMPOLINE_PLATFORM.installHint}`));
   running.push(page);

@@ -1,6 +1,6 @@
 # Apargon
 
-Apargon is a desktop app for macOS and Linux that runs papps.
+Apargon is a desktop app for macOS, Linux and Windows that runs papps.
 
 A papp is a single `.papp` file: an HTML file with extra `<meta>` tags. It works like a desktop app, without the setup a desktop app needs: no installer, no server, no build step. You double-click it, and Apargon opens it in a sandboxed window.
 
@@ -16,7 +16,9 @@ On macOS or Ubuntu 24.04, with the papp skill for agents (`sh -s -- --no-skill` 
 curl -fsSL https://apargon.com/install.sh | sh
 ```
 
-[`install.sh`](install.sh) checks the app's notarization on macOS, and the `.deb` against the release's `SHA256SUMS` on Linux, before it installs it. Or download from the [latest release](https://github.com/Orcaryn/Apargon/releases/latest): the `.dmg` for macOS (`arm64` or `x64`), the `.deb` for Ubuntu 24.04. Windows is not supported yet.
+[`install.sh`](install.sh) checks the app's notarization on macOS, and the `.deb` against the release's `SHA256SUMS` on Linux, before it installs it. Or download from the [latest release](https://github.com/Orcaryn/Apargon/releases/latest): the `.dmg` for macOS (`arm64` or `x64`), the `.deb` for Ubuntu 24.04, the `.exe` for Windows (`x64` or `arm64`).
+
+The Windows installer is not signed, so Windows warns before it runs. Check it against the release's `SHA256SUMS` first.
 
 Or with Homebrew on macOS:
 
@@ -57,6 +59,16 @@ A page keeps its storage (`localStorage`, IndexedDB) when you move or rename the
 With no tag, a page can still open a link in your browser, and a file (image, video, audio, PDF, text) or a folder in its app. A link asks first, with the address shown, unless the page names the site with `papp-open`.
 
 A `papp-node` page runs as you, with only the network blocked: open one only if you trust it. [SECURITY.md](SECURITY.md) lists what Apargon enforces and what it does not.
+
+## Windows
+
+On Windows, a few things work differently:
+
+- **Programs can leak.** A page's programs, and a `papp-node` page, can send any file they see to the internet. Windows lets them. So the popup warns you, and you must tick "I trust this page".
+- **No sockets, no `localhost`.** A page with `papp-socket` or `papp-net` to `localhost` does not open.
+- **Only `.exe` and `.com` programs.** `papp-run` does not take `.bat` or `.cmd` files.
+- **Programs see less.** Only the page's folders, their own folder, and folders every app can read, like `C:\Windows` and Program Files.
+- **`papp-node` writes less.** Only in the folders inside your home folder, and in the page's own folder. Never in Apargon's data or on other drives.
 
 ## Build with an agent
 

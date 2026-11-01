@@ -63,7 +63,7 @@
         "dmg",
         "zip"
       ],
-      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "artifactName": "${productName}-${arch}.${ext}",
       "category": "public.app-category.developer-tools",
       "hardenedRuntime": true,
       "entitlements": "build/entitlements.mac.plist",
@@ -78,6 +78,7 @@
       }
     },
     "deb": {
+      "artifactName": "${name}_${arch}.${ext}",
       "depends": [
         "bubblewrap (>= 0.8.0)",
         "libasound2t64 | libasound2",
@@ -105,7 +106,7 @@
       "target": [
         "nsis"
       ],
-      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "artifactName": "${productName}-${arch}.${ext}",
       "icon": "build/icon.png",
       "extraResources": [
         {
@@ -119,7 +120,8 @@
       ]
     },
     "nsis": {
-      "perMachine": true
+      "perMachine": true,
+      "buildUniversalInstaller": false
     }
   },
   "dependencies": {

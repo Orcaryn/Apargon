@@ -39,7 +39,7 @@ main() {
       curl -fLOJ https://apargon.com/download/linux
       curl -fsSL https://github.com/Orcaryn/Apargon/releases/latest/download/SHA256SUMS | grep '_amd64\.deb$' | sha256sum --check
       echo 'apargon: installing the .deb with apt-get, which needs sudo.'
-      sudo apt-get install -y ./apargon_*_amd64.deb
+      sudo apt-get install -y ./apargon_amd64.deb
       open=apargon
       ;;
     *)

@@ -183,7 +183,8 @@ Untested: whether it can rename a folder above Apargon's data and plant a `grant
 
 ### The packaged app
 
-- macOS checks `app.asar` against its build hash. Linux doesn't.
+- macOS checks `app.asar` against its build hash. Windows has the same check turned on, untested. Linux doesn't.
+- Windows: the installer is not signed. Windows warns before it runs, and only `SHA256SUMS` shows it is the real one.
 - Linux: Ubuntu 23.10+ needs the AppArmor profile from the `.deb`. Without it, pages silently don't open.
 
 ### Scope
@@ -194,12 +195,12 @@ Apargon is not a VM. For a hard "nothing leaves" guarantee, use a VM with no net
 
 `pnpm test` runs every check in the real app. `test/selftest/check.ts` lists them. [AGENTS.md](AGENTS.md#tests) has the Linux `.deb` run.
 
-| Platform      | Last verified                                                                                                    |
-| ------------- | ---------------------------------------------------------------------------------------------------------------- |
-| macOS         | 2026-10-31, `pnpm test` on `eba0470`: every check                                                                |
-| Linux         | 2026-10-31, `.deb` from `eba0470` on Ubuntu 24.04 with AppArmor: 86 checks, the refusal test, and the Node tests |
-| Linux desktop | not yet                                                                                                          |
-| Windows       | 2026-10-30, Windows 11 on arm64: 48 checks, no leak in the packet capture                                        |
+| Platform      | Last verified                                                                                                                                |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS         | 2026-10-31, `pnpm test` on `eba0470`: every check                                                                                            |
+| Linux         | 2026-10-31, `.deb` from `eba0470` on Ubuntu 24.04 with AppArmor: 86 checks, the refusal test, and the Node tests                             |
+| Linux desktop | not yet                                                                                                                                      |
+| Windows       | 2026-10-31, Windows 11 on arm64: 72 checks from source with no leak in the packet capture, and 72 in the installed arm64 app. x64 not tested |
 
 Not tested: the NAT64 refusal, the proxy refusing this Mac's own LAN address, and two pages reaching each other's `localhost` ports.
 

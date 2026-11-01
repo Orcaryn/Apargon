@@ -15,8 +15,9 @@ main() {
 Usage: ./release.sh --major | --minor | --patch
 
 Runs the checks, bumps the version, builds a notarized .dmg and .zip for Apple silicon and
-Intel and a .deb for Linux, commits and tags the version, pushes, then publishes a GitHub
-release with the update feeds installed copies read and points the Homebrew cask at it.
+Intel, a .deb for Linux and an .exe installer for each Windows architecture, commits and tags the version,
+pushes, then publishes a GitHub release with the update feeds installed copies read and
+points the Homebrew cask at it.
 Requires main up to date with its remote, a clean working tree, and committed release notes
 at release-notes/<version>.md.
 EOF
@@ -33,9 +34,10 @@ EOF
     --patch) VERSION="$major.$minor.$((patch + 1))" ;;
   esac
 
-  DMGS=("dist/Apargon-$VERSION-x64.dmg" "dist/Apargon-$VERSION-arm64.dmg")
-  ZIPS=("dist/Apargon-$VERSION-x64.zip" "dist/Apargon-$VERSION-arm64.zip")
-  DEB="dist/apargon_${VERSION}_amd64.deb"
+  DMGS=("dist/Apargon-x64.dmg" "dist/Apargon-arm64.dmg")
+  ZIPS=("dist/Apargon-x64.zip" "dist/Apargon-arm64.zip")
+  DEB="dist/apargon_amd64.deb"
+  EXES=("dist/Apargon-x64.exe" "dist/Apargon-arm64.exe")
 
   echo "==> Version: $current_version -> $VERSION"
   refuse_unless_ready
@@ -85,6 +87,7 @@ build() {
   rm -rf dist
   APPLE_KEYCHAIN_PROFILE="$NOTARY_PROFILE" pnpm dist --publish never
   pnpm dist:linux --publish never
+  pnpm dist:win --publish never
 
   for app in dist/mac/Apargon.app dist/mac-arm64/Apargon.app; do
     codesign -dv "$app" 2>&1 | grep "TeamIdentifier=$TEAM_ID" >/dev/null || { echo "Not signed by team $TEAM_ID: $app" >&2; exit 1; }
@@ -104,10 +107,11 @@ publish() {
   local arch
   local -a feeds=()
 
-  (cd dist && shasum -a 256 "${DMGS[@]#dist/}" "${ZIPS[@]#dist/}" "${DEB#dist/}") > dist/SHA256SUMS
+  (cd dist && shasum -a 256 "${DMGS[@]#dist/}" "${ZIPS[@]#dist/}" "${DEB#dist/}" "${EXES[@]#dist/}") > dist/SHA256SUMS
 
   for arch in x64 arm64; do
-    feeds+=("$(write_feed darwin "$arch" "Apargon-$VERSION-$arch.zip")")
+    feeds+=("$(write_feed darwin "$arch" "Apargon-$arch.zip")")
+    feeds+=("$(write_feed win32 "$arch" "Apargon-$arch.exe")")
   done
 
   feeds+=("$(write_feed linux x64 "${DEB#dist/}")")
@@ -118,15 +122,15 @@ publish() {
   } > dist/release-notes.md
 
   git push --follow-tags
-  gh release create "v$VERSION" --repo "$REPO" --verify-tag --title "Apargon $VERSION" --notes-file dist/release-notes.md "${DMGS[@]}" "${ZIPS[@]}" "$DEB" dist/SHA256SUMS "${feeds[@]}"
+  gh release create "v$VERSION" --repo "$REPO" --verify-tag --title "Apargon $VERSION" --notes-file dist/release-notes.md "${DMGS[@]}" "${ZIPS[@]}" "$DEB" "${EXES[@]}" dist/SHA256SUMS "${feeds[@]}"
 
   echo "==> https://github.com/$REPO/releases/tag/v$VERSION"
 }
 
 update_cask() {
   local arm intel
-  arm="$(shasum -a 256 "dist/Apargon-$VERSION-arm64.zip" | cut -d ' ' -f 1)"
-  intel="$(shasum -a 256 "dist/Apargon-$VERSION-x64.zip" | cut -d ' ' -f 1)"
+  arm="$(shasum -a 256 dist/Apargon-arm64.zip | cut -d ' ' -f 1)"
+  intel="$(shasum -a 256 dist/Apargon-x64.zip | cut -d ' ' -f 1)"
 
   gh repo clone "$TAP" dist/tap -- --quiet --depth 1
   cat > dist/tap/Casks/apargon.rb <<EOF
@@ -137,7 +141,7 @@ cask "apargon" do
   sha256 arm:   "$arm",
          intel: "$intel"
 
-  url "https://github.com/$REPO/releases/download/v#{version}/Apargon-#{version}-#{arch}.zip"
+  url "https://github.com/$REPO/releases/download/v#{version}/Apargon-#{arch}.zip"
   name "Apargon"
   desc "Runs an HTML file as a desktop app with only the access its tags ask for"
   homepage "https://github.com/$REPO"

@@ -14,7 +14,6 @@ export const macos: PermissionsPlatform = {
   soundServerRecords: false,
   programFolders: ['/opt/homebrew/bin', '/usr/local/bin'],
   programExtensions: [''],
-  programsWorstCase: 'It can run programs that see all your files. Through other apps, they may send them anywhere.',
   // The .app bundle: Apargon.app/Contents/MacOS/Apargon.
   installFolder: path.resolve(process.execPath, '../../..'),
   sameKey: { CommandOrControl: 'Command', Super: 'Command' },

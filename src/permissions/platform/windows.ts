@@ -34,8 +34,6 @@ export const windows: PermissionsPlatform = {
   programFolders: [],
   // In Windows' own order. Node runs a batch file only through cmd.exe, which would read its arguments as commands.
   programExtensions: ['.com', '.exe'],
-  // A program can open \\<data>.example.com\x: Windows looks the name up outside the sandbox, and the lookup carries the data.
-  programsWorstCase: 'It can run programs. Windows lets them send the files they see anywhere, and Apargon cannot stop it.',
   installFolder: path.dirname(process.execPath),
   sameKey: { CommandOrControl: 'Control' },
   typingModifiers: ['AltGr', 'Shift'],

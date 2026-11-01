@@ -27,8 +27,6 @@ export type PermissionsPlatform = {
   programFolders: string[];
   // The endings of a file the OS runs as a program, tried in turn after a name; '' where any file can be one.
   programExtensions: string[];
-  // The worst case of a page that runs programs, in the popup.
-  programsWorstCase: string;
   // What Apargon is installed as: no page may change it.
   installFolder: string;
   // Modifiers that are one key here, and the ones held for typing.

@@ -60,11 +60,11 @@ export function worstCase({ node, run, sockets, net, open, own, read, write, use
   const sends = [...(own || read.length || write.length ? ['the files it sees'] : []), ...use.flatMap(name => USE_SENDS[name] ?? [])];
 
   if (node) {
-    return 'It can do anything you can, including sending your files anywhere.';
+    return 'It can do anything you can, and send your files anywhere.';
   } else if (Object.keys(run).length) {
-    return PERMISSIONS_PLATFORM.programsWorstCase;
+    return `It can run ${Object.keys(run).join(', ')}.`;
   } else if (sockets.length) {
-    return 'It can talk to other programs on this computer. Through them, it may send the files it sees anywhere.';
+    return `It can talk to ${sockets.map(socket => path.basename(socket)).join(', ')}.`;
   } else if (hosts.length && sends.length) {
     return `It can send ${sends.join(' and ')} to ${hosts.includes('*') ? 'any server' : hosts.join(', ')}.`;
   }

@@ -34,7 +34,6 @@ export const linux: PermissionsPlatform = {
   soundServerRecords: true,
   programFolders: ['/usr/local/bin'],
   programExtensions: [''],
-  programsWorstCase: 'It can run programs that see all your files. Through other apps, they may send them anywhere.',
   installFolder: path.dirname(process.execPath),
   sameKey: { CommandOrControl: 'Control' },
   typingModifiers: ['AltGr', 'Shift'],

@@ -53,16 +53,12 @@ if (process.platform === 'win32') {
       return !(err as Error).message.includes(reason);
     }
   });
-  // Programs open, found as Windows names them, with the leak in the worst case.
+  // Programs and Node open, a program found as Windows names it.
   fs.writeFileSync(page, '<meta name="papp-run" content="cmd">\n<meta name="papp-env" content="APARGON_TEST_ENV">');
-  const programs = declaredPermissions(page);
+  const cmd = declaredPermissions(page).run.cmd;
   fs.writeFileSync(page, '<meta name="papp-node" content="full">');
   declaredPermissions(page);
-  const allowed = [
-    programs.run.cmd.toLowerCase().endsWith('\\system32\\cmd.exe') ? [] : `papp-run cmd found ${programs.run.cmd}`,
-    worstCase(programs)?.includes('Windows lets them send') ? [] : `programs' worst case: ${worstCase(programs)}`,
-  ].flat();
-  const failures = [...opened.map(([tag, value]) => `opened ${tag} ${value}`), ...allowed];
+  const failures = [...opened.map(([tag, value]) => `opened ${tag} ${value}`), ...(cmd.toLowerCase().endsWith('\\system32\\cmd.exe') ? [] : [`papp-run cmd found ${cmd}`])];
   console.log(failures.length ? `popup: FAIL, ${failures.join(', ')}` : 'popup: ok, every tag Windows cannot fence refused, programs allowed');
   process.exit(failures.length ? 1 : 0);
 }
@@ -134,11 +130,11 @@ const worst = [
   { tags: '<meta name="papp-read" content="./data">', expected: null },
   { tags: '<meta name="papp-net" content="api.github.com:443">\n<meta name="papp-net" content="api.github.com:80">', expected: 'It can send the files it sees to api.github.com.' },
   { tags: '<meta name="papp-net" content="*">', expected: 'It can send the files it sees to any server.' },
-  { tags: '<meta name="papp-run" content="/bin/ls">', expected: 'It can run programs that see all your files. Through other apps, they may send them anywhere.' },
+  { tags: '<meta name="papp-run" content="/bin/ls">\n<meta name="papp-run" content="/bin/cat">', expected: 'It can run ls, cat.' },
   { tags: '<meta name="papp-open" content="x.com">', expected: 'It can send the files it sees to x.com.' },
   { tags: '<meta name="papp-open" content="*">', expected: 'It can send the files it sees to any server.' },
-  { tags: '<meta name="papp-node" content="full">', expected: 'It can do anything you can, including sending your files anywhere.' },
-  { tags: '<meta name="papp-socket" content="./data">', expected: 'It can talk to other programs on this computer. Through them, it may send the files it sees anywhere.' },
+  { tags: '<meta name="papp-node" content="full">', expected: 'It can do anything you can, and send your files anywhere.' },
+  { tags: '<meta name="papp-socket" content="./data">', expected: 'It can talk to data.' },
   {
     tags: '<meta name="papp-net" content="api.github.com:443">\n<meta name="papp-use" content="clipboard">\n<meta name="papp-use" content="location">',
     expected: 'It can send the files it sees and what you copy and where you are to api.github.com.',

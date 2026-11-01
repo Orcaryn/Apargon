@@ -1,6 +1,6 @@
 import { app } from 'electron';
 import { spawnSync } from 'child_process';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import fs from 'fs';
 import type { AddressInfo } from 'net';
 import path from 'path';
@@ -45,6 +45,10 @@ export const macos: TrampolinePlatform = {
     }`;
     spawnSync('/usr/bin/osascript', ['-l', 'JavaScript', '-e', script, page, png]);
     spawnSync('/usr/bin/xattr', ['-w', 'com.apargon.icon', hash, page]);
+  },
+  // The quarantine mark a browser's download gets: Gatekeeper then checks the file before it runs.
+  markDownloaded(file) {
+    spawnSync('/usr/bin/xattr', ['-w', 'com.apple.quarantine', `0083;${Math.floor(Date.now() / 1000).toString(16)};Apargon;${randomUUID().toUpperCase()}`, file]);
   },
   autoUpdates: true,
 };

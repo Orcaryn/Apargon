@@ -102,7 +102,7 @@
 - Any page can open the save dialog, with no tag, again and again.
 - The trampoline writes only new files, into the folder the user picks.
 - Hidden folders and `~/Library` or `AppData` are refused: files saved there can run on their own. macOS cloud drives in `~/Library` (iCloud Drive, `~/Library/CloudStorage`) are allowed: files there only sync.
-- Saved files have no download mark. So they open without the OS warning.
+- On macOS and Windows, saved files get the download mark, so the OS warns before one runs. Linux has no such mark, nor does a drive that cannot hold one, like a USB stick on Windows: the file is saved without it.
 - A program could swap the picked folder for a link between check and write.
 
 ### Programs (`papp-run`)

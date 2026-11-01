@@ -13,6 +13,8 @@ export type TrampolinePlatform = {
   downloadAddress(page: string): string | null;
   // Shows the page's favicon where the OS can: on its file, or in the launcher entry the dock names it by.
   pageIcon?(page: string, png: string): void;
+  // Marks a file a page saved as downloaded, so the OS warns before running it, where the OS has such a mark.
+  markDownloaded?(file: string): void;
   // Installs updates itself; elsewhere Apargon says a new version is out.
   autoUpdates: boolean;
 };

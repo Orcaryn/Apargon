@@ -5,6 +5,7 @@ import { realPath, runsOutsideSandbox } from '../../permissions/paths.ts';
 import { isInside, PAGE_FILE } from '../../permissions/patterns.ts';
 import type { SavedFile } from '../../shared/channel.ts';
 import { DATA, INSTALL_FOLDER } from '../../shared/data.ts';
+import { TRAMPOLINE_PLATFORM } from '../platform.ts';
 
 // The page names the files and the user picks the folder, in this process's dialog: a page that breaks out of its sandbox can write nowhere else.
 export async function saveFiles(files: SavedFile[], hidden: string[]) {
@@ -45,6 +46,7 @@ export async function saveFiles(files: SavedFile[], hidden: string[]) {
 
       try {
         fs.writeFileSync(file, Buffer.from(data, 'base64'), { flag: 'wx' });
+        TRAMPOLINE_PLATFORM.markDownloaded?.(file);
 
         return file;
       } catch (err) {

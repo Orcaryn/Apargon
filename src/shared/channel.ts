@@ -1,3 +1,4 @@
+import { app } from 'electron';
 import { once } from 'events';
 import fs from 'fs';
 import net from 'net';
@@ -18,16 +19,25 @@ export const REPLY_FD = 5;
 // Set by the trampoline for the page process.
 export const PAGE_CONFIG: PageConfig | null = process.env.APARGON ? JSON.parse(process.env.APARGON) : null;
 
+// The trampoline can die under the page: a crash, or a kill. Its proxy and dialogs go with it, so the page quits, as bwrap's --die-with-parent already makes it on Linux.
 export function tellTrampoline(request: PageRequest) {
   const line = Buffer.from(JSON.stringify(request) + '\n');
 
-  // A large request, such as a save, can go out in more than one write.
-  for (let written = 0; written < line.length; ) {
-    written += fs.writeSync(PAGE_CONFIG!.requestFd, line, written);
+  try {
+    // A large request, such as a save, can go out in more than one write.
+    for (let written = 0; written < line.length; ) {
+      written += fs.writeSync(PAGE_CONFIG!.requestFd, line, written);
+    }
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'EPIPE') {
+      throw err;
+    }
+
+    app.exit();
   }
 }
 
-// The trampoline's replies, from the file where the sandbox passes no more pipes, else on REPLY_FD.
+// The trampoline's replies, from the file where the sandbox passes no more pipes, else on REPLY_FD. The pipe ends with the trampoline; the file tells nothing, so there only the next request finds out.
 export function onTrampolineReply(handle: (reply: PageReply) => void) {
   const { replies } = PAGE_CONFIG!;
   const read = (line: string) => handle(JSON.parse(line));
@@ -41,7 +51,10 @@ export function onTrampolineReply(handle: (reply: PageReply) => void) {
       done = text.lastIndexOf('\n') + 1;
     });
   } else {
-    readline.createInterface({ input: new net.Socket({ fd: REPLY_FD, writable: false }) }).on('line', read);
+    readline
+      .createInterface({ input: new net.Socket({ fd: REPLY_FD, writable: false }) })
+      .on('line', read)
+      .on('close', () => app.exit());
   }
 }
 

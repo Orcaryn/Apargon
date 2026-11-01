@@ -6,7 +6,7 @@ import path from 'path';
 import readline from 'readline';
 import type { Readable, Writable } from 'stream';
 import { PAGE_ENV } from '../permissions/env.ts';
-import { REPLY_FD, type PageConfig, type PageReply } from '../shared/channel.ts';
+import { REPLY_FD, type PageConfig, type PageReply, type PageRequest } from '../shared/channel.ts';
 import { APP_ROOT, PAGE_DATA, REPLIES_DATA, SEEN_FILE } from '../shared/data.ts';
 import { approve } from './dialogs/approve.ts';
 import { welcome } from './dialogs/skill.ts';
@@ -92,8 +92,11 @@ async function startPageProcess({ page, permissions, pageHash }: Pick<PageConfig
   // The page's requests, and its output as plain text: given the terminal itself, it could type commands into the shell that started Apargon.
   new Set([sandbox.requestFd, 1, 2]).forEach(fd => {
     readline.createInterface({ input: child.stdio[fd] as Readable }).on('line', line => {
-      if (fd === sandbox.requestFd && line.startsWith('{')) {
-        handleRequest(JSON.parse(line), { page, permissions, reply, setTray, openPage });
+      // Where requests share standard output, a line that only looks like one is output.
+      const request = fd === sandbox.requestFd && line.startsWith('{') ? parseRequest(line) : null;
+
+      if (request) {
+        handleRequest(request, { page, permissions, reply, setTray, openPage });
       } else if (line.trim()) {
         (fd === 2 ? console.error : console.log)(line.replace(/[\p{Cc}\p{Cf}]/gu, ''));
       }
@@ -113,4 +116,13 @@ async function startPageProcess({ page, permissions, pageHash }: Pick<PageConfig
   });
 
   return child;
+}
+
+// A line starting with { parses to an object or not at all.
+function parseRequest(line: string): PageRequest | null {
+  try {
+    return JSON.parse(line);
+  } catch {
+    return null;
+  }
 }

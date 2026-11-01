@@ -11,6 +11,8 @@ export const windows: PermissionsPlatform = {
     'AppData/Local/Microsoft/Vault': 'Windows saved passwords',
     'AppData/Roaming/gcloud': 'Google Cloud logins',
     'AppData/Roaming/GitHub CLI': 'GitHub CLI logins',
+    // curl and git on Windows read _netrc beside .netrc.
+    _netrc: 'saved server passwords',
     // Not secrets, but they run outside the sandbox: PowerShell's startup scripts, and what starts when you log in.
     'Documents/PowerShell': 'PowerShell startup scripts',
     'Documents/WindowsPowerShell': 'PowerShell startup scripts',

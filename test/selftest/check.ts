@@ -4,12 +4,15 @@ import path from 'path';
 const mac = process.platform === 'darwin';
 const PLAIN =
   'no_node storage_own own_folder_read own_subfolder_read own_folder_write_refused own_subfolder_write_refused granted_write page_write_refused page_rename_refused options_refused watch_folder watch_file_renamed_over watch_survives_second_window watch_removed watch_recursive watch_outside_refused watch_hidden_refused hidden_below_match_refused readdir_stats read_range append append_refused copy copy_refused save_names_refused outside_read_refused outside_write_refused home_read_refused hidden_write_refused run_refused spawn_refused open_type_refused open_outside_refused open_scheme_refused fetch_blocked outside_file_url_refused other_file_frame_refused other_file_window_refused use_refused screen_capture_refused permissions_denied';
-// Windows runs no programs, so only the plain page and its own.
+// Windows has its own pages: its programs and paths are not POSIX ones.
 const EXPECTED =
   process.platform === 'win32' ?
     {
       'result.json': PLAIN,
       'result-win.json': 'fetch_declared fetch_undeclared_blocked network_path_refused network_url_refused network_open_refused page_stream_refused page_trailing_dot_refused',
+      'result-win-programs.json':
+        'curl_declared curl_undeclared_blocked curl_direct_blocked program_writes_granted program_outside_write_blocked program_installed_runs program_input program_timeout spawn_streams spawn_kill spawn_undeclared_refused program_env_named program_env_unnamed_left_out program_ssh_hidden undeclared_program_refused options_as_args_refused',
+      'result-win-node.json': 'fs_anywhere child_process storage_apart electron_window grants_protected curl_blocked fetch_blocked dns_blocked',
     }
   : {
       'result.json': PLAIN,

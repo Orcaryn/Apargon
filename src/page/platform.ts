@@ -12,6 +12,8 @@ export type PagePlatform = {
   appMenu: boolean;
   // The page's favicon as its icon; madeHere for a page made on this computer.
   showIcon(win: BrowserWindow, icon: NativeImage, madeHere: boolean): void;
+  // A program gets a process group of its own, which a kill ends whole. Windows has none, and taskkill finds children through WMI, which the sandbox cannot reach: there a kill ends the program, not what it started.
+  processGroups: boolean;
 };
 
 // Another system gets Linux's, whose offline check fails there.

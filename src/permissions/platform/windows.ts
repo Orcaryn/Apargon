@@ -18,11 +18,11 @@ export const windows: PermissionsPlatform = {
     'AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup': 'programs that start when you log in',
     ...Object.fromEntries(BROWSERS.map(name => [name, 'browser logins and cookies'])),
   },
-  // In capitals, as Windows ignores case in them.
-  pageEnv: 'SYSTEMROOT WINDIR SYSTEMDRIVE USERPROFILE HOMEDRIVE HOMEPATH USERNAME APPDATA LOCALAPPDATA TEMP TMP PROGRAMDATA PROGRAMFILES PATHEXT COMSPEC PROCESSOR_ARCHITECTURE NUMBER_OF_PROCESSORS'.split(' '),
-  envIgnoresCase: true,
-  // Windows has no way to keep a page's programs offline: a program can still send data out through Windows itself.
-  refusedTags: Object.fromEntries(['run', 'node', 'env', 'socket'].map(kind => [kind, `On Windows Apargon cannot give a page papp-${kind}: Windows lets programs send data out past the sandbox. Apargon opens pages there without programs.`])),
+  // Programs need them as much as the page.
+  programEnv: 'SYSTEMROOT WINDIR SYSTEMDRIVE USERPROFILE HOMEDRIVE HOMEPATH USERNAME APPDATA LOCALAPPDATA TEMP TMP PROGRAMDATA PROGRAMFILES PATHEXT COMSPEC PROCESSOR_ARCHITECTURE NUMBER_OF_PROCESSORS'.split(' '),
+  pageEnv: [],
+  // Apargon has no relay for a socket into the sandbox here.
+  refusedTags: { socket: 'Apargon cannot give a page papp-socket on Windows yet. Remove the tag to open the page there.' },
   refuse: permissions => (localPorts(permissions).length ? 'On Windows a page reaches only the servers it names, through Apargon, not programs on this computer.' : null),
   // Windows looks up the server of a network path itself, outside the sandbox, before anyone can refuse it. A colon after the drive names a stream of a file, as page.papp::$DATA is the page, and Windows drops a name's trailing dots and spaces: either reaches a file under a name the checks do not see.
   refusePath: file => (/^[\\/]{2}/.test(file) || file.includes(':', 2) || /[. ]([\\/]|$)/.test(file) ? `Apargon: Windows reads ${file} as a network path or as another file's name, so Apargon never opens it.` : null),
@@ -32,6 +32,10 @@ export const windows: PermissionsPlatform = {
   writesWholeFolders: true,
   soundServerRecords: false,
   programFolders: [],
+  // In Windows' own order. Node runs a batch file only through cmd.exe, which would read its arguments as commands.
+  programExtensions: ['.com', '.exe'],
+  // A program can open \\<data>.example.com\x: Windows looks the name up outside the sandbox, and the lookup carries the data.
+  programsWorstCase: 'It can run programs. Windows lets them send the files they see anywhere, and Apargon cannot stop it.',
   installFolder: path.dirname(process.execPath),
   sameKey: { CommandOrControl: 'Control' },
   typingModifiers: ['AltGr', 'Shift'],

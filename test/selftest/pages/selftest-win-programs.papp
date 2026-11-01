@@ -1,0 +1,65 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="papp-net" content="example.com:443">
+<meta name="papp-run" content="cmd">
+<meta name="papp-run" content="curl">
+<meta name="papp-run" content="findstr">
+<meta name="papp-run" content="git">
+<meta name="papp-run" content="node">
+<meta name="papp-env" content="APARGON_TEST_ENV">
+<meta name="papp-write" content="./results/result-win-programs.json">
+<meta name="papp-write" content="./touched*">
+<title>Apargon selftest for Windows programs</title>
+<body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
+
+<script type="module">
+  // Programs here can leak through Windows' name lookups, as SECURITY.md says: so no name below starts apg-leak-, which the Windows test looks for.
+  const result = {};
+  const refused = async (call) => {
+    try { await call(); return false; } catch { return true; }
+  };
+  const curl = async (...args) => (await papp.run('curl', ['-s', '-o', 'NUL', '-m', '5', '-w', '%{http_code}', ...args])).stdout;
+  const cmd = (line) => papp.run('cmd', ['/d', '/c', line]);
+  const lines = (text) => text.replace(/\r/g, '');
+
+  try {
+    result.curl_declared = await curl('https://example.com/') === '200';
+    result.curl_undeclared_blocked = await curl('https://example.net/') !== '200';
+    result.curl_direct_blocked = await curl('--noproxy', '*', 'https://example.com/') !== '200';
+
+    result.program_writes_granted = (await cmd('echo x> touched.tmp')).status === 0;
+    await papp.rm('touched.tmp');
+    result.program_outside_write_blocked = (await cmd('echo x> ..\\touched-outside.tmp')).status !== 0;
+    // Under Program Files, outside the folders Apargon grants.
+    result.program_installed_runs = (await papp.run('git', ['--version'])).stdout.startsWith('git version');
+    result.program_input = lines((await papp.run('findstr', ['^'], { input: 'piped\n' })).stdout) === 'piped\n';
+
+    // ping fails at once in the sandbox, and PowerShell finds no Start-Sleep there: the waits are Node's, from a folder Apargon grants.
+    const started = Date.now();
+    const timedOut = await papp.run('node', ['-e', 'setTimeout(Object,30000)'], { timeout: 1000 });
+    result.program_timeout = (timedOut.signal === 'SIGTERM' && Date.now() - started < 5000) || { ...timedOut, ms: Date.now() - started };
+
+    const chunks = [];
+    const streamed = await papp.spawn('cmd', ['/d', '/c', 'echo one& node -e setTimeout(Object,1000)& echo two'], { onOutput: (_stream, text) => chunks.push(text) });
+    result.spawn_streams = (await streamed.done).status === 0 && lines(chunks.join('')) === 'one\ntwo\n';
+    const sleeper = await papp.spawn('node', ['-e', 'setTimeout(Object,30000)']);
+    const killedAt = Date.now();
+    sleeper.kill();
+    const stopped = await sleeper.done;
+    result.spawn_kill = (stopped.signal === 'SIGTERM' && Date.now() - killedAt < 5000) || { ...stopped, ms: Date.now() - killedAt };
+    result.spawn_undeclared_refused = await refused(() => papp.spawn('where'));
+
+    const env = (await cmd('set')).stdout;
+    result.program_env_named = env.includes('APARGON_TEST_ENV=passed') && /^SYSTEMROOT=/m.test(env) && /^PATH=/m.test(env);
+    result.program_env_unnamed_left_out = !env.includes('APARGON_TEST_ALLOW=') && !env.includes('APARGON=');
+    result.program_ssh_hidden = (await cmd('dir "%USERPROFILE%\\.ssh"')).status !== 0;
+    result.undeclared_program_refused = await refused(() => papp.run('where'));
+    result.options_as_args_refused = await refused(() => papp.run('cmd', { cwd: 'C:\\' }));
+  } catch (err) {
+    result.error = err.message;
+  }
+
+  document.body.textContent = JSON.stringify(result);
+  await papp.writeFile('results/result-win-programs.json', JSON.stringify(result, null, 2) + '\n');
+  setTimeout(() => window.close(), 200);
+</script>

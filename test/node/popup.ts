@@ -30,15 +30,17 @@ if (process.platform === 'win32') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apargon-popup-'));
   const page = path.join(dir, 'case.papp');
   fs.mkdirSync(path.join(dir, 'data'));
+  fs.writeFileSync(path.join(dir, 'data', 'tool.cmd'), '@echo off');
   const cases = [
-    ['papp-run', 'cmd.exe', 'cannot give a page papp-run'],
-    ['papp-node', 'full', 'cannot give a page papp-node'],
-    ['papp-env', 'PATH', 'cannot give a page papp-env'],
     ['papp-socket', './data', 'cannot give a page papp-socket'],
     ['papp-net', 'localhost:11434', 'not programs on this computer'],
     ['papp-read', '//apg-popup.example.com/share', 'network path'],
     ['papp-write', './data/case.papp::$DATA', "another file's name"],
     ['papp-write', './data/case.papp.', "another file's name"],
+    ['papp-run', path.join(dir, 'data', 'tool.cmd'), 'cannot run'],
+    ['papp-run', '\\\\apg-popup.example.com\\share\\tool.exe', 'network path'],
+    ['papp-run', '\\\\?\\UNC\\apg-popup.example.com\\share\\tool.exe', 'network path'],
+    ['papp-run', `${path.join(dir, 'data', 'tool.cmd')}:x.exe`, "another file's name"],
   ];
   const opened = cases.filter(([tag, value, reason]) => {
     fs.writeFileSync(page, `<meta name="${tag}" content="${value}">`);
@@ -51,8 +53,18 @@ if (process.platform === 'win32') {
       return !(err as Error).message.includes(reason);
     }
   });
-  console.log(opened.length ? `popup: FAIL, opened ${opened.map(([tag, value]) => `${tag} ${value}`).join(', ')}` : 'popup: ok, every tag Windows cannot fence refused');
-  process.exit(opened.length ? 1 : 0);
+  // Programs open, found as Windows names them, with the leak in the worst case.
+  fs.writeFileSync(page, '<meta name="papp-run" content="cmd">\n<meta name="papp-env" content="APARGON_TEST_ENV">');
+  const programs = declaredPermissions(page);
+  fs.writeFileSync(page, '<meta name="papp-node" content="full">');
+  declaredPermissions(page);
+  const allowed = [
+    programs.run.cmd.toLowerCase().endsWith('\\system32\\cmd.exe') ? [] : `papp-run cmd found ${programs.run.cmd}`,
+    worstCase(programs)?.includes('Windows lets them send') ? [] : `programs' worst case: ${worstCase(programs)}`,
+  ].flat();
+  const failures = [...opened.map(([tag, value]) => `opened ${tag} ${value}`), ...allowed];
+  console.log(failures.length ? `popup: FAIL, ${failures.join(', ')}` : 'popup: ok, every tag Windows cannot fence refused, programs allowed');
+  process.exit(failures.length ? 1 : 0);
 }
 
 if (process.platform !== 'darwin') {

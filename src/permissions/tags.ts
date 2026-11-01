@@ -177,19 +177,29 @@ function openHost(value: string) {
 }
 
 function findProgram(value: string) {
+  const { programExtensions } = PERMISSIONS_PLATFORM;
+  const runnable = (file: string) => programExtensions.some(extension => file.toLowerCase().endsWith(extension)) && fs.statSync(file, { throwIfNoEntry: false })?.isFile();
+  // Before the file is looked for: Windows would ask the server of a network path, before the popup.
+  const refusal = PERMISSIONS_PLATFORM.refusePath(value);
+
   if (value.includes('*')) {
     throw new Error('papp-run takes one program, no wildcards. For any program, use papp-node.');
   } else if (path.isAbsolute(value) && path.normalize(value) !== value) {
     throw new Error(`Bad papp-run value "${value}". Write the path without .., . or //, as in ${path.normalize(value)}.`);
-  } else if (path.isAbsolute(value) && !fs.statSync(value, { throwIfNoEntry: false })?.isFile()) {
-    throw new Error(`Program ${value} was not found, or is a folder.`);
+  } else if (refusal) {
+    throw new Error(refusal);
+  } else if (path.isAbsolute(value) && !runnable(value)) {
+    throw new Error(`Program ${value} was not found, or is a folder or another file that cannot run.`);
   } else if (path.isAbsolute(value)) {
     return value;
   } else if (!/^[\w.+-]+$/.test(value)) {
     throw new Error(`Bad papp-run value "${value}". Name one program, such as git, or give its full path.`);
   }
 
-  const found = [...process.env.PATH!.split(path.delimiter), ...PERMISSIONS_PLATFORM.programFolders].map(dir => path.join(dir, value)).find(file => fs.statSync(file, { throwIfNoEntry: false })?.isFile());
+  // An empty PATH entry, as a trailing ; leaves, is no folder.
+  const folders = [...process.env.PATH!.split(path.delimiter), ...PERMISSIONS_PLATFORM.programFolders].filter(Boolean);
+  const names = programExtensions.map(extension => (value.toLowerCase().endsWith(extension) ? value : value + extension));
+  const found = folders.flatMap(dir => names.map(name => path.join(dir, name))).find(runnable);
 
   if (!found) {
     throw new Error(`Program ${value} was not found. Give its full path in papp-run.`);

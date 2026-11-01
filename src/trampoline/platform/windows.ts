@@ -3,7 +3,8 @@ import fs from 'fs';
 import type { AddressInfo } from 'net';
 import path from 'path';
 import { isInside, patternFolder } from '../../permissions/patterns.ts';
-import { APP_ROOT, DATA, PAGE_DATA } from '../../shared/data.ts';
+import { HOME } from '../../permissions/paths.ts';
+import { APP_ROOT, DATA, INSTALL_FOLDER, PAGE_DATA } from '../../shared/data.ts';
 import type { TrampolinePlatform } from '../platform.ts';
 import { startProxy } from '../network/proxy.ts';
 
@@ -21,9 +22,17 @@ export const windows: TrampolinePlatform = {
       throw new Error(`On Windows a page may not change ${reachesData}: it holds or is inside Apargon's data. Name another folder.`);
     }
 
+    // papp-node changes what you can, but not Apargon: the home folder and, outside it, the page's own, less the folders that hold Apargon's data or the app.
+    // Real paths, as the folders read from the disk: no short names such as PROGRA~1.
+    const apargonFolders = [DATA, INSTALL_FOLDER].filter(folder => folder !== null).map(folder => fs.realpathSync.native(folder));
+    const pageFolder = path.dirname(page);
+    const pageFolderApart = !isInside(pageFolder, HOME) && !apargonFolders.some(folder => isInside(folder, pageFolder) || isInside(pageFolder, folder));
+    const nodeWritable = permissions.node ? [...foldersBut(HOME, apargonFolders), ...(pageFolderApart ? [pageFolder] : [])] : [];
     // A folder named twice keeps one grant: one also listed could not be read. So each folder is named once, with the most it needs.
-    const writable = [fs.realpathSync(app.getPath('temp')), PAGE_DATA, ...written];
-    const readable = [path.dirname(process.execPath), APP_ROOT, DATA, path.dirname(page), ...permissions.read.map(patternFolder)].filter(folder => !writable.some(writableFolder => isInside(folder, writableFolder)));
+    const writable = [fs.realpathSync(app.getPath('temp')), PAGE_DATA, ...written, ...nodeWritable];
+    // Every sandbox may read Windows' own folder already.
+    const programFolders = Object.values(permissions.run).map(program => path.dirname(program)).filter(folder => !isInside(folder, process.env.SYSTEMROOT!));
+    const readable = [path.dirname(process.execPath), APP_ROOT, DATA, pageFolder, ...permissions.read.map(patternFolder), ...programFolders].filter(folder => !writable.some(writableFolder => isInside(folder, writableFolder)));
     const granted = [...readable, ...writable];
     fs.mkdirSync(PAGE_DATA, { recursive: true });
     const proxy = permissions.net.length ? await startProxy(permissions.net, null) : null;
@@ -79,3 +88,21 @@ export const windows: TrampolinePlatform = {
   },
   autoUpdates: false,
 };
+
+// Every folder in root but kept, as whole folders where it can: a folder that holds one of kept is opened and its own folders given instead. Links lead elsewhere and are left out.
+function foldersBut(root: string, kept: string[]): string[] {
+  return fs
+    .readdirSync(root, { withFileTypes: true })
+    .filter(entry => entry.isDirectory())
+    .flatMap(entry => {
+      const folder = path.join(root, entry.name);
+
+      if (kept.some(keptFolder => isInside(folder, keptFolder))) {
+        return [];
+      } else if (kept.some(keptFolder => isInside(keptFolder, folder))) {
+        return foldersBut(folder, kept);
+      }
+
+      return [folder];
+    });
+}

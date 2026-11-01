@@ -62,7 +62,7 @@ export function worstCase({ node, run, sockets, net, open, own, read, write, use
   if (node) {
     return 'It can do anything you can, including sending your files anywhere.';
   } else if (Object.keys(run).length) {
-    return 'It can run programs that see all your files. Through other apps, they may send them anywhere.';
+    return PERMISSIONS_PLATFORM.programsWorstCase;
   } else if (sockets.length) {
     return 'It can talk to other programs on this computer. Through them, it may send the files it sees anywhere.';
   } else if (hosts.length && sends.length) {

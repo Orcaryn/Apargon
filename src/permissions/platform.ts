@@ -7,9 +7,10 @@ import type { Permissions } from './tags.ts';
 export type PermissionsPlatform = {
   // Hidden from a page unless named, beside the shared list: a path in the home folder, to what it holds.
   secrets: Record<string, string>;
+  // Passed to the page's programs, beside PROGRAM_ENV, and so to the page process too.
+  programEnv: string[];
   // Passed to the page process, beside PROGRAM_ENV.
   pageEnv: string[];
-  envIgnoresCase: boolean;
   // A tag refused before its value is read, to the reason.
   refusedTags: Record<string, string>;
   // Once every tag is read: the reason the page cannot have them, or null.
@@ -24,6 +25,10 @@ export type PermissionsPlatform = {
   soundServerRecords: boolean;
   // Where papp-run also looks for a program it is given by name.
   programFolders: string[];
+  // The endings of a file the OS runs as a program, tried in turn after a name; '' where any file can be one.
+  programExtensions: string[];
+  // The worst case of a page that runs programs, in the popup.
+  programsWorstCase: string;
   // What Apargon is installed as: no page may change it.
   installFolder: string;
   // Modifiers that are one key here, and the ones held for typing.

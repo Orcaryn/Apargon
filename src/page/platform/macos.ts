@@ -8,6 +8,7 @@ export const macos: PagePlatform = {
   notify(text, toFront) {
     new Notification(text).on('click', toFront).show();
   },
+  processGroups: true,
   appMenu: true,
   // In the Dock, and on the file of a page made here: the trampoline sets it, as this process may not write there.
   showIcon(_win, icon, madeHere) {

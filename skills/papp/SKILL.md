@@ -1,13 +1,13 @@
 ---
 name: papp
-description: Use when the user wants an app with a window on their own computer, instead of a CLI, a local server plus a browser tab, or a new Electron app. Also for any .papp file. Not for websites or Windows.
+description: Use when the user wants an app with a window on their own computer, instead of a CLI, a local server plus a browser tab, or a new Electron app. Also for any .papp file. Not for websites.
 ---
 
 # Apargon
 
 ## What it is
 
-Apargon runs a `.papp` file, one HTML file, as a desktop app on macOS or Linux. The page gets exactly what its tags ask for: files, servers, programs, devices. Everything else is blocked; the network by the OS itself.
+Apargon runs a `.papp` file, one HTML file, as a desktop app on macOS, Linux or Windows. The page gets exactly what its tags ask for: files, servers, programs, devices. Everything else is blocked; the network by the OS itself.
 
 Further reading and code: https://github.com/Orcaryn/Apargon
 
@@ -26,12 +26,13 @@ Further reading and code: https://github.com/Orcaryn/Apargon
 </script>
 ```
 
-- Open it with `open page.papp` (macOS) or `apargon page.papp` (Linux). A popup asks first, unless the page has no tags and was not downloaded.
+- Open it with `open page.papp` (macOS), `apargon page.papp` (Linux), or a double-click (Windows). A popup asks first, unless the page has no tags and was not downloaded.
 - Saving a `.papp`, `.css` or `.js` in its folder reloads the window. New tags need the page reopened. A downloaded page is approved with its content: after an edit, it must be reopened and approved again.
 - A web link (`<a target="_blank">`, `window.open`, `papp.open`) opens in the browser. Apargon asks first, address shown, unless the page names the site with `papp-open`. `window.open` on the page's own file opens a second window.
 - The window is 1200×800 with a frame. `<title>` names it; the favicon becomes the app icon (see below).
 - `localStorage` and IndexedDB persist, tied to the page's path. They follow the page when it is moved or renamed, if its content is the same as when it was last open: after an edit, open the page once before moving it. A copy starts empty.
 - On Linux, a page cannot sit in `/tmp`, `/var/tmp`, under `/run`, or a folder holding them. Use a folder of its own, such as `/tmp/apargon`.
+- On Windows, Apargon refuses a path that starts with `\\`, has a `:` after the drive letter, or has a name ending in a dot or a space.
 
 ### Icon
 
@@ -133,9 +134,14 @@ One value per tag, in `<head>` before any `<script>`. Each tag is a line in the 
 - **Hosts:** `papp-net` takes `host:port`, no scheme. `papp-open` takes the host alone. Scripts, fonts and images from another site need its host in `papp-net`. With any `papp-net` tag, `fetch` to a declared host skips CORS.
 - **Sound:** without `papp-use sound`, the page plays muted, with no error.
 - **No tag needed** to write to the clipboard, go fullscreen or lock the pointer.
-- **Programs** the page runs keep its network and write limits, but can read every file except keys and logins.
+- **Programs** the page runs keep its network and write limits, but can read every file except keys and logins. On Windows they see less: the page's folders, their own folder, and folders every app can read, like Program Files.
 - **Shortcuts:** two different modifiers, or one modifier with a function key.
 - **`papp-node`** already allows every folder, program and variable; do not add `papp-read`, `papp-write`, `papp-run` or `papp-env`.
+- **Windows:**
+  - A page with `papp-socket`, or `papp-net` to `localhost`, does not open.
+  - `papp-run` takes only `.exe` and `.com` files, not `.bat` or `.cmd`.
+  - Stopping a program (`kill`, a timeout, a reload) does not stop the programs it started.
+  - `papp-node` writes only in the folders inside the home folder, and in the page's own folder.
 
 These show red in the popup:
 
@@ -144,7 +150,7 @@ These show red in the popup:
 - `papp-write` on a hidden file or folder, on `~/Library` or a folder that holds it (such as `~`), or on a `.papp` page
 - `papp-net` to this computer, the local network, an IPv4 address, any host (`*`), any port (`*`) or a whole top-level domain (`*.com`)
 - `papp-open` for `*`, `*.com`, `localhost` or an IPv4 address
-- `papp-run` on Linux, if the page also has `papp-write`
+- `papp-run` on Linux or Windows, if the page also has `papp-write`
 
 A red line, `papp-run`, or any `papp-net` or `papp-open` host makes the popup demand an extra "I trust this page" tick.
 

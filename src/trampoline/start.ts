@@ -6,7 +6,6 @@ import path from 'path';
 import readline from 'readline';
 import type { Readable, Writable } from 'stream';
 import { PAGE_ENV } from '../permissions/env.ts';
-import { PERMISSIONS_PLATFORM } from '../permissions/platform.ts';
 import { REPLY_FD, type PageConfig, type PageReply } from '../shared/channel.ts';
 import { APP_ROOT, PAGE_DATA, REPLIES_DATA, SEEN_FILE } from '../shared/data.ts';
 import { approve } from './dialogs/approve.ts';
@@ -57,7 +56,9 @@ async function startPageProcess({ page, permissions, pageHash }: Pick<PageConfig
   noteContent(page, SEEN_FILE);
   const sandbox = await TRAMPOLINE_PLATFORM.prepare(page, permissions);
   const proxy = sandbox.proxyPort === null ? null : `127.0.0.1:${sandbox.proxyPort}`;
-  const inherited = Object.entries(process.env).filter(([name]) => permissions.node || PAGE_ENV.includes(PERMISSIONS_PLATFORM.envIgnoresCase ? name.toUpperCase() : name) || permissions.env.includes(name));
+  // By name, as Windows finds Path for PATH.
+  const passed = permissions.node ? Object.keys(process.env) : [...PAGE_ENV, ...permissions.env];
+  const inherited = passed.filter(name => name in process.env).map(name => [name, process.env[name]]);
   const replies = sandbox.repliesInFile ? path.join(REPLIES_DATA, `${randomUUID()}.jsonl`) : null;
 
   if (replies) {

@@ -6,6 +6,7 @@ export const linux: PagePlatform = {
   isOffline: inEmptyNetwork,
   // Notifications need D-Bus, which the fence hides, so the trampoline shows them.
   notify: text => tellTrampoline({ notify: text }),
+  processGroups: true,
   appMenu: false,
   showIcon(win, icon) {
     if (!win.isDestroyed()) {

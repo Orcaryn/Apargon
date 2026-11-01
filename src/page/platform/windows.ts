@@ -18,6 +18,7 @@ export const windows: PagePlatform = {
       win.setIcon(icon);
     }
   },
+  processGroups: false,
 };
 
 // MXC's firewall rules refuse the container any address but Apargon's proxy, with EACCES. Outside, a port nobody listens on refuses with ECONNREFUSED, and one in use answers: either is not proof.

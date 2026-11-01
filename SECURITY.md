@@ -11,7 +11,7 @@
 - The OS blocks all network. Only Apargon's proxy, declared `localhost` ports and declared socket files get through.
 - The proxy only goes to declared hosts.
 - A `papp-node` page runs as you. Trust it like a script.
-- Windows: only the proxy gets through. Windows refuses `localhost` ports, `papp-socket`, `papp-run`, `papp-node` and `papp-env`.
+- Windows: only the proxy gets through. Windows refuses `localhost` ports and `papp-socket`. A page's programs can send data out through Windows itself, see "Not enforced".
 - A page in `/`, `~`, `~/Desktop`, `~/Documents` or `~/Downloads` gets no own folder.
 
 ## Key decisions
@@ -26,7 +26,7 @@
 - **The window shows only the page.** No navigation. No frame of another file.
 - **Hidden files** (dot names) are never matched by `*`. A tag must name them.
 - **A page can only write a `.papp`** through a `papp-write` pattern that ends in `.papp`. That line is red.
-- **Windows runs no programs.** A program could open `\\host\x`. A Windows service then looks up the name, and the DNS query leaks data. This leaked in every MXC mode tested.
+- **Windows runs programs, and says they leak.** A program can open `\\host\x`. A Windows service then looks up the name outside the sandbox, and the DNS query carries data. This leaked in every MXC mode tested. So the popup's worst case for a page with programs says so, and Allow needs "I trust this page."
 - **The app's only network call** is the update check. No telemetry, no crash reports, nothing at login.
 
 ## How each OS enforces it
@@ -55,6 +55,8 @@
 - Sandbox: MXC (an AppContainer). Outbound traffic is denied.
 - Offline check: connecting to `127.0.0.1:9` must fail with `EACCES`. This is weak, see "Not enforced".
 - Writes: limited by folder. A write folder in or around Apargon's data is refused.
+- Programs: only `.com` and `.exe`. A batch file runs through `cmd.exe`, which reads its arguments as commands.
+- `papp-node`: writes in the folders inside the home folder, and in the page's own folder. Not in Apargon's data or the app. Not in a folder that holds them, like `~` or `~\AppData`: there it writes only in the folders inside. Not on other drives. The list is made when the page opens.
 - Keys and logins: hidden, but only those that exist when the page opens.
 - Apargon refuses `\\` paths, `file://host/`, `:` streams and names ending in a dot or a space.
 
@@ -75,7 +77,7 @@
 ## Popup colours
 
 - **Red:** a way to send data somewhere the tags don't name. This includes any server, `*.com`, any port, an IP address, `localhost`, a socket, `papp-node`, and writing hidden files, `~/Library`, `AppData` or pages.
-- **Yellow:** worth a look. This includes `*.example.com`, wide folders, keys and logins, clipboard, location, camera, microphone, screen, shortcuts, and `papp-run` on macOS.
+- **Yellow:** worth a look. This includes `*.example.com`, wide folders, keys and logins, clipboard, location, camera, microphone, screen, shortcuts, and `papp-run`. On Linux and Windows, `papp-run` is red if the page also has `papp-write`.
 - **Checkbox:** needed for any red line. Also needed when the page can run programs, or send what it sees to a host.
 
 ## Not enforced
@@ -104,9 +106,10 @@
 
 ### Programs (`papp-run`)
 
-- They can read every file but keys and logins.
+- They can read every file but keys and logins. Windows: the granted folders, each program's own folder, and what every sandbox may read, like `C:\Windows` and Program Files.
 - They take any arguments, like `git -c core.sshCommand=…`.
 - They can change every page's storage in `pages/`.
+- Windows: stopping a program (`kill`, a timeout, a reload) stops only that program. Programs it started keep running in the sandbox until they end. If they share its output, `papp.run` waits for them.
 - macOS: programs can't open terminal devices (`/dev/ttys…`). Tools that need a pseudo-terminal likely fail. Untested.
 - macOS: they can probably use the camera, microphone or screen once Apargon has that access. Untested.
 
@@ -128,7 +131,8 @@
 
 ### Windows
 
-- A page that exploits Chromium can leak data through DNS. No MXC setting stops this.
+- A page's programs, and a `papp-node` page, can send any file they see anywhere: they open `\\<data>.example.com\x`, and Windows looks the name up outside the sandbox. No MXC setting stops this. The popup says so.
+- A page that exploits Chromium can leak data the same way.
 - The offline check only proves loopback is blocked. A Windows sandbox blocks loopback even when it has internet. What keeps the page offline is the deny rule Apargon sends to MXC.
 - With OneDrive backup, the PowerShell startup folders are not on the list.
 

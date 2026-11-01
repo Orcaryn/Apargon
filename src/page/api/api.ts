@@ -22,7 +22,8 @@ export function pageApi(dir: string, permissions: Permissions, access: ReturnTyp
   const canSee = (file: string) => access.canSee(file) || (picked.some(pattern => pattern.test(file)) && !access.isOffLimits(file));
   const canList = (file: string) => access.canList(file) || canSee(file);
   const { canChange } = access;
-  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => PROGRAM_ENV.includes(name) || permissions.env.includes(name)));
+  // By name, as Windows finds Path for PATH.
+  const env = Object.fromEntries([...PROGRAM_ENV, ...permissions.env].filter(name => name in process.env).map(name => [name, process.env[name]]));
   const where = (file: string) => realPath(absolutePath(file, dir));
 
   const need = (allowed: boolean, file: string, verb: 'see' | 'change') => {
@@ -47,7 +48,7 @@ export function pageApi(dir: string, permissions: Permissions, access: ReturnTyp
     return canSee(file) ? { ...kind, size: stats.size, mtimeMs: stats.mtimeMs } : kind;
   };
 
-  const startProgram = (name: string, args: string[], cwd = '.', detached = false) => {
+  const startProgram = (name: string, args: string[], cwd = '.') => {
     if (!Object.hasOwn(permissions.run, name)) {
       throw new Error(`Apargon: this page may not run ${name}. Ask for it with <meta name="papp-run" content="${name}">.`);
     } else if (!Array.isArray(args)) {
@@ -57,15 +58,20 @@ export function pageApi(dir: string, permissions: Permissions, access: ReturnTyp
     const folder = where(cwd);
     need(canList(folder), folder, 'see');
 
-    return spawn(permissions.run[name], args, { cwd: folder, env, detached });
+    // No console window on Windows.
+    return spawn(permissions.run[name], args, { cwd: folder, env, detached: PAGE_PLATFORM.processGroups, windowsHide: true });
   };
 
-  const killGroup = (child: ChildProcessWithoutNullStreams) => {
-    try {
-      process.kill(-child.pid!);
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'ESRCH') {
-        throw err;
+  const stopProgram = (child: ChildProcessWithoutNullStreams) => {
+    if (!PAGE_PLATFORM.processGroups) {
+      child.kill();
+    } else {
+      try {
+        process.kill(-child.pid!);
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== 'ESRCH') {
+          throw err;
+        }
       }
     }
   };
@@ -158,7 +164,7 @@ export function pageApi(dir: string, permissions: Permissions, access: ReturnTyp
       fs.renameSync(source, destination);
     },
     async run(name: string, args: string[] = [], { cwd, input, encoding = 'utf8', timeout }: { cwd?: string; input?: string | Uint8Array; encoding?: 'utf8' | null; timeout?: number } = {}) {
-      const child = startProgram(name, args, cwd, true);
+      const child = startProgram(name, args, cwd);
       await once(child, 'spawn');
       runs.add(child);
       const stdout: Buffer[] = [];
@@ -167,7 +173,7 @@ export function pageApi(dir: string, permissions: Permissions, access: ReturnTyp
       child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk));
       child.stdin.on('error', () => {});
       child.stdin.end(input);
-      const timer = timeout && setTimeout(() => killGroup(child), timeout);
+      const timer = timeout && setTimeout(() => stopProgram(child), timeout);
 
       return new Promise((resolve, reject) => {
         child.on('error', reject);
@@ -184,7 +190,7 @@ export function pageApi(dir: string, permissions: Permissions, access: ReturnTyp
       });
     },
     async spawn(id: string, name: string, args: string[] = [], options: { cwd?: string } = {}) {
-      const child = startProgram(name, args, options.cwd, true);
+      const child = startProgram(name, args, options.cwd);
       await once(child, 'spawn');
       jobs.set(id, child);
 
@@ -213,7 +219,7 @@ export function pageApi(dir: string, permissions: Permissions, access: ReturnTyp
       const child = jobs.get(id);
 
       if (child) {
-        killGroup(child);
+        stopProgram(child);
       }
     },
     watch(id: string, file: string, { recursive = false }: { recursive?: boolean } = {}) {
@@ -288,9 +294,9 @@ export function pageApi(dir: string, permissions: Permissions, access: ReturnTyp
     reset() {
       watchers.forEach(watcher => watcher.close());
       watchers.clear();
-      jobs.forEach(killGroup);
+      jobs.forEach(stopProgram);
       jobs.clear();
-      runs.forEach(killGroup);
+      runs.forEach(stopProgram);
       runs.clear();
       picked.length = 0;
       resets++;

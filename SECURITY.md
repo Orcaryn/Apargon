@@ -53,7 +53,7 @@
 ### Windows
 
 - Sandbox: MXC (an AppContainer). Outbound traffic is denied.
-- Offline check: connecting to `127.0.0.1:9` must fail with `EACCES`. This is weak, see "Not enforced".
+- Offline check: connecting to `127.0.0.1:9` and to `192.0.2.1:9`, an address no network routes, must both fail with `EACCES`. MXC refuses every address that way at once. A sandbox that only blocks loopback, or no sandbox, answers differently for the second.
 - Writes: limited by folder. A write folder in or around Apargon's data is refused.
 - `localhost` ports: through the proxy. Chromium is told not to bypass it for loopback. A program that ignores `http_proxy` is refused by MXC.
 - Programs: only `.com` and `.exe`. A batch file runs through `cmd.exe`, which reads its arguments as commands.
@@ -134,7 +134,6 @@
 
 - A page's programs, and a `papp-node` page, can send any file they see anywhere: they open `\\<data>.example.com\x`, and Windows looks the name up outside the sandbox. No MXC setting stops this. The popup does not say so; it needs "I trust this page."
 - A page that exploits Chromium can leak data the same way.
-- The offline check only proves loopback is blocked. A Windows sandbox blocks loopback even when it has internet. What keeps the page offline is the deny rule Apargon sends to MXC.
 - With OneDrive backup, the PowerShell startup folders are not on the list.
 
 ### Links and files

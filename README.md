@@ -65,7 +65,7 @@ A `papp-node` page runs as you, with only the network blocked: open one only if 
 On Windows, a few things work differently:
 
 - **Programs can leak.** A page's programs, and a `papp-node` page, can send any file they see to the internet. Windows lets them. So you must tick "I trust this page" before such a page opens.
-- **No sockets, no `localhost`.** A page with `papp-socket` or `papp-net` to `localhost` does not open.
+- **No sockets.** A page with `papp-socket` does not open. `localhost` works through Apargon's proxy, so a program must honour `http_proxy`, as `curl` does.
 - **Only `.exe` and `.com` programs.** `papp-run` does not take `.bat` or `.cmd` files.
 - **Programs see less.** Only the page's folders, their own folder, and folders every app can read, like `C:\Windows` and Program Files.
 - **`papp-node` writes less.** Only in the folders inside your home folder, and in the page's own folder. Never in Apargon's data or on other drives.

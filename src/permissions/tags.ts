@@ -147,7 +147,8 @@ function folderPattern(value: string, dir: string) {
 }
 
 function hostPattern(value: string) {
-  const pattern = value === '*' ? '*:*' : value.toLowerCase();
+  // A trailing dot names the same host: without it, localhost. would not count as this computer.
+  const pattern = value === '*' ? '*:*' : value.toLowerCase().replace('.:', ':');
   const [host, port] = pattern.split(':');
 
   if (!/^(\*|(\*\.)?[a-z0-9][a-z0-9.-]*):(\*|[1-9]\d*)$/.test(pattern) || +port < 1 || +port > 65535) {
@@ -167,7 +168,7 @@ function hostPattern(value: string) {
 }
 
 function openHost(value: string) {
-  const host = value.toLowerCase();
+  const host = value.toLowerCase().replace(/\.$/, '');
 
   if (host !== '*' && !/^(\*\.)?[a-z0-9][a-z0-9.-]*$/.test(host)) {
     throw new Error(`Bad papp-open value "${value}". One host per <meta>, no scheme or port, such as x.com or *.example.com.`);

@@ -6,7 +6,7 @@
   "main": "src/main.ts",
   "scripts": {
     "start": "electron . examples/hello.papp",
-    "test": "rm -f test/selftest/pages/results/result*.json && node test/node/platforms.ts && node test/node/preload.ts && node test/node/popup.ts && node test/node/storage.ts && node test/selftest/refuse.ts && node test/selftest/daemons.ts && APARGON_TEST_ALLOW=1 electron . test/selftest/pages/selftest.papp && APARGON_TEST_ALLOW=1 electron . test/selftest/pages/selftest-node.papp && APARGON_TEST_ALLOW=1 APARGON_TEST_ENV=passed electron . test/selftest/pages/selftest-net.papp && { [ $(uname) != Darwin ] || APARGON_TEST_ALLOW=1 electron . test/selftest/pages/selftest-mac.papp; } && node test/selftest/check.ts",
+    "test": "rm -f test/selftest/pages/results/result*.json && node test/node/platforms.ts && node test/node/preload.ts && node test/node/popup.ts && node test/node/storage.ts && node test/selftest/refuse.ts && node test/selftest/daemons.ts && APARGON_TEST_ALLOW=1 electron . test/selftest/pages/selftest.papp && APARGON_TEST_ALLOW=1 electron . test/selftest/pages/selftest-node.papp && APARGON_TEST_ALLOW=1 APARGON_TEST_ENV=passed node test/selftest/listen.ts electron . test/selftest/pages/selftest-net.papp && { [ $(uname) != Darwin ] || APARGON_TEST_ALLOW=1 electron . test/selftest/pages/selftest-mac.papp; } && node test/selftest/check.ts",
     "dist": "electron-builder --mac --arm64 --x64",
     "dist:linux": "electron-builder --linux --x64",
     "dist:win": "electron-builder --win --x64 --arm64",

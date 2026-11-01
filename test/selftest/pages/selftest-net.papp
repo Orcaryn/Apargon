@@ -5,6 +5,8 @@
 <meta name="papp-net" content="*.example.org:443">
 <meta name="papp-net" content="*:9">
 <meta name="papp-net" content="10.255.255.2:9">
+<meta name="papp-net" content="localhost:47181">
+<meta name="papp-socket" content="./results/declared.sock">
 <meta name="papp-run" content="curl">
 <meta name="papp-run" content="touch">
 <meta name="papp-run" content="cat">
@@ -37,6 +39,15 @@
     result.proxy_allows_declared_lan_address = await curl('http://10.255.255.2:9/') !== '403';
     if (mac) {
       result.proxy_refuses_connect_without_port = (await papp.run('sh', ['-c', 'printf "CONNECT example.com HTTP/1.1\\r\\nHost: example.com\\r\\n\\r\\n" | nc -w 3 127.0.0.1 "${http_proxy##*:}" | head -1'])).stdout.includes('403');
+    }
+
+    // test/selftest/listen.ts serves these: the sandbox must keep out the port and socket file not declared.
+    result.local_port_declared = await curl('--noproxy', '*', 'http://127.0.0.1:47181/') === '200';
+    result.local_port_undeclared_blocked = await curl('--noproxy', '*', 'http://127.0.0.1:47182/') !== '200';
+    result.socket_declared = await curl('--unix-socket', 'results/declared.sock', 'http://listener/') === '200';
+    // Linux lets a page reach a socket file in a folder it sees: SECURITY.md lists it.
+    if (mac) {
+      result.socket_undeclared_blocked = await curl('--unix-socket', 'results/other.sock', 'http://listener/') !== '200';
     }
 
     result.read_granted = (await papp.readFile('../../../examples/hello.papp')).includes('papp');

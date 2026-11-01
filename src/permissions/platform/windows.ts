@@ -1,5 +1,4 @@
 import path from 'path';
-import { localPorts } from '../network.ts';
 import type { PermissionsPlatform } from '../platform.ts';
 
 const BROWSERS = ['AppData/Local/Google/Chrome', 'AppData/Local/Chromium', 'AppData/Local/BraveSoftware', 'AppData/Local/Microsoft/Edge', 'AppData/Roaming/Mozilla'];
@@ -23,7 +22,7 @@ export const windows: PermissionsPlatform = {
   pageEnv: [],
   // Apargon has no relay for a socket into the sandbox here.
   refusedTags: { socket: 'Apargon cannot give a page papp-socket on Windows yet. Remove the tag to open the page there.' },
-  refuse: permissions => (localPorts(permissions).length ? 'On Windows a page reaches only the servers it names, through Apargon, not programs on this computer.' : null),
+  refuse: () => null,
   // Windows looks up the server of a network path itself, outside the sandbox, before anyone can refuse it. A colon after the drive names a stream of a file, as page.papp::$DATA is the page, and Windows drops a name's trailing dots and spaces: either reaches a file under a name the checks do not see.
   refusePath: file => (/^[\\/]{2}/.test(file) || file.includes(':', 2) || /[. ]([\\/]|$)/.test(file) ? `Apargon: Windows reads ${file} as a network path or as another file's name, so Apargon never opens it.` : null),
   // The Startup folder.

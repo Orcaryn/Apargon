@@ -1,6 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="papp-net" content="example.com:443">
+<meta name="papp-net" content="localhost:47181">
 <meta name="papp-run" content="cmd">
 <meta name="papp-run" content="curl">
 <meta name="papp-run" content="findstr">
@@ -26,6 +27,10 @@
     result.curl_declared = await curl('https://example.com/') === '200';
     result.curl_undeclared_blocked = await curl('https://example.net/') !== '200';
     result.curl_direct_blocked = await curl('--noproxy', '*', 'https://example.com/') !== '200';
+    // Through the proxy only: the sandbox refuses the direct connection, and the proxy the port not declared.
+    result.local_port_declared = await curl('http://localhost:47181/') === '200';
+    result.local_port_direct_blocked = await curl('--noproxy', '*', 'http://127.0.0.1:47181/') !== '200';
+    result.local_port_undeclared_blocked = await curl('http://127.0.0.1:47182/') !== '200';
 
     result.program_writes_granted = (await cmd('echo x> touched.tmp')).status === 0;
     await papp.rm('touched.tmp');

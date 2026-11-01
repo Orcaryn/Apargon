@@ -138,7 +138,7 @@ One value per tag, in `<head>` before any `<script>`. Each tag is a line in the 
 - **Shortcuts:** two different modifiers, or one modifier with a function key.
 - **`papp-node`** already allows every folder, program and variable; do not add `papp-read`, `papp-write`, `papp-run` or `papp-env`.
 - **Windows:**
-  - A page with `papp-socket`, or `papp-net` to `localhost`, does not open.
+  - A page with `papp-socket` does not open. `localhost` goes through Apargon's proxy: `fetch` works; a program must honour `http_proxy`.
   - `papp-run` takes only `.exe` and `.com` files, not `.bat` or `.cmd`.
   - Stopping a program (`kill`, a timeout, a reload) does not stop the programs it started.
   - `papp-node` writes only in the folders inside the home folder, and in the page's own folder.

@@ -33,7 +33,6 @@ if (process.platform === 'win32') {
   fs.writeFileSync(path.join(dir, 'data', 'tool.cmd'), '@echo off');
   const cases = [
     ['papp-socket', './data', 'cannot give a page papp-socket'],
-    ['papp-net', 'localhost:11434', 'not programs on this computer'],
     ['papp-read', '//apg-popup.example.com/share', 'network path'],
     ['papp-write', './data/case.papp::$DATA', "another file's name"],
     ['papp-write', './data/case.papp.', "another file's name"],
@@ -53,13 +52,15 @@ if (process.platform === 'win32') {
       return !(err as Error).message.includes(reason);
     }
   });
-  // Programs and Node open, a program found as Windows names it.
+  // Programs, Node and a local port open, a program found as Windows names it.
   fs.writeFileSync(page, '<meta name="papp-run" content="cmd">\n<meta name="papp-env" content="APARGON_TEST_ENV">');
   const cmd = declaredPermissions(page).run.cmd;
   fs.writeFileSync(page, '<meta name="papp-node" content="full">');
   declaredPermissions(page);
+  fs.writeFileSync(page, '<meta name="papp-net" content="localhost:11434">');
+  declaredPermissions(page);
   const failures = [...opened.map(([tag, value]) => `opened ${tag} ${value}`), ...(cmd.toLowerCase().endsWith('\\system32\\cmd.exe') ? [] : [`papp-run cmd found ${cmd}`])];
-  console.log(failures.length ? `popup: FAIL, ${failures.join(', ')}` : 'popup: ok, every tag Windows cannot fence refused, programs allowed');
+  console.log(failures.length ? `popup: FAIL, ${failures.join(', ')}` : 'popup: ok, every tag Windows cannot fence refused, programs and localhost allowed');
   process.exit(failures.length ? 1 : 0);
 }
 
@@ -163,6 +164,7 @@ const colours = [
   { tags: '<meta name="papp-socket" content="./data/a.sock">', kind: 'socket:', level: 'red', says: 'program' },
   { tags: '<meta name="papp-net" content="1.1.1.1:443">', kind: 'net:', level: 'red', says: 'data' },
   { tags: '<meta name="papp-net" content="127.0.0.1:8080">', kind: 'net:', level: 'red', says: 'on this computer' },
+  { tags: '<meta name="papp-net" content="localhost.:80">', kind: 'net:', level: 'red', says: 'on this computer' },
   { tags: '<meta name="papp-net" content="10.0.0.1:80">', kind: 'net:', level: 'red', says: 'data' },
   { tags: '<meta name="papp-net" content="192.168.1.1:443">', kind: 'net:', level: 'red', says: 'data' },
   { tags: '<meta name="papp-open" content="x.com">', kind: 'open:', level: 'plain', says: 'browser' },

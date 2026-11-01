@@ -11,7 +11,7 @@
 - The OS blocks all network. Only Apargon's proxy, declared `localhost` ports and declared socket files get through.
 - The proxy only goes to declared hosts.
 - A `papp-node` page runs as you. Trust it like a script.
-- Windows: only the proxy gets through. Windows refuses `localhost` ports and `papp-socket`. A page's programs can send data out through Windows itself, see "Not enforced".
+- Windows: only the proxy gets through. Declared `localhost` ports go through it too. `papp-socket` is refused. A page's programs can send data out through Windows itself, see "Not enforced".
 - A page in `/`, `~`, `~/Desktop`, `~/Documents` or `~/Downloads` gets no own folder.
 
 ## Key decisions
@@ -55,6 +55,7 @@
 - Sandbox: MXC (an AppContainer). Outbound traffic is denied.
 - Offline check: connecting to `127.0.0.1:9` must fail with `EACCES`. This is weak, see "Not enforced".
 - Writes: limited by folder. A write folder in or around Apargon's data is refused.
+- `localhost` ports: through the proxy. Chromium is told not to bypass it for loopback. A program that ignores `http_proxy` is refused by MXC.
 - Programs: only `.com` and `.exe`. A batch file runs through `cmd.exe`, which reads its arguments as commands.
 - `papp-node`: writes in the folders inside the home folder, and in the page's own folder. Not in Apargon's data or the app. Not in a folder that holds them, like `~` or `~\AppData`: there it writes only in the folders inside. Not on other drives. The list is made when the page opens.
 - Keys and logins: hidden, but only those that exist when the page opens.
@@ -72,7 +73,7 @@
 - It refuses local addresses: loopback, `0/8`, `10/8`, `172.16/12`, `192.168/16`, `100.64/10`, `169.254/16`, `fc00::/7`, `fe80::/10`, `64:ff9b::/96`, and this machine's own addresses.
 - A local IPv4 address works only if declared in numbers, with its port.
 - It logs to `egress.log`. If the log fails to write, it stops taking connections.
-- Declared `localhost` ports skip the proxy and are not logged. Each needs a number: `localhost:*` would reach other pages' proxies.
+- A declared `localhost` port: the page reaches it directly on macOS and Linux, through the proxy on Windows. Its programs go through the proxy on every OS, so those connections are logged. Each needs a number: `localhost:*` would reach other pages' proxies.
 
 ## Popup colours
 

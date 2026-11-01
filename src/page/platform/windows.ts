@@ -8,13 +8,14 @@ export const windows: PagePlatform = {
   isOffline: async () => (await loopbackConnectError()) === 'EACCES',
   // Windows shows notifications through a service the sandbox may not reach, so the trampoline shows them.
   notify: text => tellTrampoline({ notify: text }),
-  // The GPU process cannot run in the sandbox, and a name Chromium looks up leaves through Windows' own resolver: names go only to the proxy.
+  // The GPU process cannot run in the sandbox, and a name Chromium looks up leaves through Windows' own resolver: names go only to the proxy. So does localhost: Chromium would reach it directly, which the sandbox refuses.
   // The taskbar groups windows by app id: each page gets its own button, with its title and icon.
   beforeReady(page) {
     app.setAppUserModelId(pageAppId(page));
     app.disableHardwareAcceleration();
     app.commandLine.appendSwitch('host-resolver-rules', 'MAP * ~NOTFOUND, EXCLUDE 127.0.0.1');
   },
+    app.commandLine.appendSwitch('proxy-bypass-list', '<-loopback>');
   appMenu: false,
   showIcon(win, icon) {
     if (!win.isDestroyed()) {

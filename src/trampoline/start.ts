@@ -68,9 +68,9 @@ async function startPageProcess({ page, permissions, pageHash }: Pick<PageConfig
 
   const env: NodeJS.ProcessEnv = { ...Object.fromEntries(inherited), APARGON: JSON.stringify({ page, permissions, pageHash, proxy, bridges: sandbox.bridges, requestFd: sandbox.requestFd, replies } satisfies PageConfig) };
 
+  // Programs reach a declared localhost port through the proxy too: no no_proxy, not even the user's.
   if (proxy) {
     env.http_proxy = env.https_proxy = `http://${proxy}`;
-    env.no_proxy = 'localhost,127.0.0.1';
   }
 
   app.dock?.hide();

@@ -5,7 +5,7 @@ import http from 'http';
 import net from 'net';
 import os from 'os';
 import path from 'path';
-import { hostMatches, privateNetwork } from '../../permissions/network.ts';
+import { hostMatches, LOCAL_HOSTS, privateNetwork } from '../../permissions/network.ts';
 import { EGRESS_LOG } from '../../shared/data.ts';
 
 export async function startProxy(patterns: string[], socketFile: string | null) {
@@ -21,6 +21,11 @@ export async function startProxy(patterns: string[], socketFile: string | null) 
 
     if (!declared) {
       return null;
+    } else if (LOCAL_HOSTS.includes(host)) {
+      // A declared port on this computer: on Windows, the page's only way to it. Not the proxy's own port, or it would call itself without end; on Linux it has none, it listens on a socket file.
+      const own = server.address();
+
+      return typeof own === 'object' && own?.port === +port ? null : '127.0.0.1';
     }
 
     const { address, family } = await dns.promises.lookup(host);

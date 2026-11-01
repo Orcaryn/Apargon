@@ -1,4 +1,5 @@
 import { app } from 'electron';
+import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { PERMISSIONS_PLATFORM } from '../permissions/platform.ts';
@@ -20,6 +21,11 @@ export const UPDATE_FILE = path.join(DATA, 'update.json');
 // Pages may read Apargon's data, not write it, so no page can forge another's replies.
 export const REPLIES_DATA = path.join(DATA, 'replies');
 export const EGRESS_LOG = path.join(app.getPath('logs'), 'egress.log');
+
+// A page as an app of its own on the taskbar or dock, named after its path: the same after an edit, another for a copy.
+export function pageAppId(page: string) {
+  return `apargon-page-${createHash('sha256').update(page).digest('hex').slice(0, 16)}`;
+}
 
 export function readJson<T extends object>(file: string): T {
   return JSON.parse(fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '{}');

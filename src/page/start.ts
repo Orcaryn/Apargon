@@ -14,14 +14,14 @@ import { PAGE_PLATFORM } from './platform.ts';
 import { createPageSession } from './session.ts';
 
 // Before the app is ready: the page process keeps its own data, reaches the network only through the proxy, and quits with its last window.
-export function preparePage({ proxy }: PageConfig) {
+export function preparePage({ page, proxy }: PageConfig) {
   app.setPath('userData', PAGE_DATA);
 
   if (proxy) {
     app.commandLine.appendSwitch('proxy-server', proxy);
   }
 
-  PAGE_PLATFORM.beforeReady?.();
+  PAGE_PLATFORM.beforeReady?.(page);
   app.on('window-all-closed', () => app.quit());
 }
 
@@ -55,6 +55,7 @@ export async function startPage({ page, permissions, pageHash, bridges }: PageCo
     ? { session: pageSession, nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity, preload: path.join(import.meta.dirname, 'api', 'preload', 'preload.cjs') }
     : { session: pageSession, nodeIntegration: true, contextIsolation: false, sandbox: false, webSecurity, preload: path.join(import.meta.dirname, 'api', 'preload', 'node-preload.cjs') };
   const win = new BrowserWindow({ width: 1200, height: 800, icon, webPreferences });
+  PAGE_PLATFORM.pin?.(win, page);
   const pageWindows = () => BrowserWindow.getAllWindows().filter(other => other.webContents.session === pageSession);
 
   const toFront = () => {

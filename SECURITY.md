@@ -151,6 +151,7 @@
 - A shortcut takes those keys from every app.
 - Any page can show a tray icon, with no tag. It and notifications show under Apargon's name.
 - A page's icon can look like another app. Only the badge shows it is a page.
+- On Linux and Windows a page shows on the dock or taskbar under its own title and icon, and a pin of it reopens the page in Apargon. On Linux this is a hidden launcher entry per page in `~/.local/share/applications`, removed the next time a page opens and its page is gone. The title is the page's to choose, so it can name another app. On macOS the Dock says Apargon for every page.
 
 ### Storage after a move
 

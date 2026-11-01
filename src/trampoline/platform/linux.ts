@@ -8,15 +8,18 @@ import { patternFolder } from '../../permissions/patterns.ts';
 import { PRIVATE } from '../../permissions/platform/linux.ts';
 import type { Permissions } from '../../permissions/tags.ts';
 import { REQUEST_FD, relay, type Bridge } from '../../shared/channel.ts';
-import { DATA, NET_DATA, PAGE_DATA } from '../../shared/data.ts';
+import { APP_ROOT, DATA, NET_DATA, PAGE_DATA, pageAppId } from '../../shared/data.ts';
 import type { TrampolinePlatform } from '../platform.ts';
 import { startProxy } from '../network/proxy.ts';
 
 const RUNTIME = process.env.XDG_RUNTIME_DIR ?? `/run/user/${os.userInfo().uid}`;
+const APPLICATIONS = path.join(process.env.XDG_DATA_HOME ?? path.join(os.homedir(), '.local', 'share'), 'applications');
+const ICONS = path.join(DATA, 'icons');
 
 export const linux: TrampolinePlatform = {
   // The page's network holds only its own loopback, so the proxy and declared ports reach it as socket files.
   async prepare(page, permissions) {
+    writeLauncherEntry(page);
     fs.mkdirSync(NET_DATA, { recursive: true });
     const socketFolder = permissions.net.length ? fs.mkdtempSync(path.join(NET_DATA, 'page-')) : null;
     const localBridges = socketFolder ? localPorts(permissions).map(port => ({ port: +port, socket: path.join(socketFolder, `${port}.sock`) })) : [];
@@ -51,8 +54,61 @@ export const linux: TrampolinePlatform = {
 
     return mark.status === 0 ? mark.stdout : null;
   },
+  pageIcon(page, png) {
+    fs.mkdirSync(ICONS, { recursive: true });
+    fs.writeFileSync(path.join(ICONS, `${pageAppId(page)}.png`), Buffer.from(png, 'base64'));
+    writeLauncherEntry(page);
+  },
   autoUpdates: false,
 };
+
+// The dock names a window after the launcher entry its class matches, and shows that entry's icon: one per page, under its title, that reopens it. Hidden from the app grid, so opening a page installs nothing visible. Entries of pages that are gone go with it.
+function writeLauncherEntry(page: string) {
+  const id = pageAppId(page);
+  const icon = path.join(ICONS, `${id}.png`);
+  const lines = [
+    '[Desktop Entry]',
+    'Type=Application',
+    `Name=${pageTitle(page)}`,
+    `Icon=${fs.existsSync(icon) ? icon : app.isPackaged ? 'apargon' : path.join(APP_ROOT, 'build', 'icon.png')}`,
+    `Exec=${[process.execPath, ...(app.isPackaged ? [] : [APP_ROOT]), page].map(quoteExecArgument).join(' ')}`,
+    `StartupWMClass=${id}`,
+    'NoDisplay=true',
+    `X-Apargon-Page=${page}`,
+  ];
+  fs.mkdirSync(APPLICATIONS, { recursive: true });
+
+  for (const entry of fs.readdirSync(APPLICATIONS).filter(name => /^apargon-page-[0-9a-f]+\.desktop$/.test(name))) {
+    const other = /^X-Apargon-Page=(.*)$/m.exec(fs.readFileSync(path.join(APPLICATIONS, entry), 'utf8'))?.[1];
+
+    if (other && !fs.existsSync(other)) {
+      fs.rmSync(path.join(APPLICATIONS, entry));
+      fs.rmSync(path.join(ICONS, entry.replace(/\.desktop$/, '.png')), { force: true });
+    }
+  }
+
+  fs.writeFileSync(path.join(APPLICATIONS, `${id}.desktop`), lines.join('\n') + '\n');
+}
+
+// The page's <title>, on one line, or its file name.
+function pageTitle(page: string) {
+  const title = /<title[^>]*>([^<]*)<\/title>/i.exec(fs.readFileSync(page, 'utf8'))?.[1] ?? '';
+  const text = title
+    .replace(/&(amp|lt|gt|quot|apos);/g, (_match, name: string) => ({ amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" })[name]!)
+    .replace(/&#x([0-9a-f]+);/gi, (_match, hex: string) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_match, dec: string) => String.fromCodePoint(+dec))
+    .replace(/[\p{Cc}\p{Cf}\s]+/gu, ' ')
+    .trim();
+
+  return text || path.basename(page, path.extname(page));
+}
+
+// As the Desktop Entry specification quotes an Exec argument: in double quotes, with its own escapes under the string escapes of the value.
+function quoteExecArgument(arg: string) {
+  const escaped = arg.replace(/\\/g, '\\\\\\\\').replace(/["$`]/g, '\\\\$&').replace(/%/g, '%%');
+
+  return '"' + escaped + '"';
+}
 
 // The page's network starts empty and only the declared bridges bind in it, so the proxy's port need only differ from theirs.
 function unusedPort(declared: Bridge[]) {

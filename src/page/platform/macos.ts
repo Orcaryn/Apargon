@@ -15,7 +15,7 @@ export const macos: PagePlatform = {
     app.dock?.setIcon(icon);
 
     if (madeHere) {
-      tellTrampoline({ fileIcon: icon.toPNG().toString('base64') });
+      tellTrampoline({ pageIcon: icon.toPNG().toString('base64') });
     }
   },
 };

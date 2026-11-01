@@ -31,7 +31,7 @@ export const macos: TrampolinePlatform = {
 
     return [...whereFroms.matchAll(/"([^"]+)"/g)].at(-1)?.[1] ?? '';
   },
-  setFileIcon(page, png) {
+  pageIcon(page, png) {
     const hash = createHash('sha256').update(png).digest('hex');
 
     if (spawnSync('/usr/bin/xattr', ['-p', 'com.apargon.icon', page], { encoding: 'utf8' }).stdout.trim() === hash) {

@@ -11,8 +11,8 @@ export type TrampolinePlatform = {
   installHint: string;
   // The address the OS marked a downloaded file with, '' if it marked none, or null for a file made on this computer.
   downloadAddress(page: string): string | null;
-  // Shows the page's favicon on its file, where the OS can.
-  setFileIcon?(page: string, png: string): void;
+  // Shows the page's favicon where the OS can: on its file, or in the launcher entry the dock names it by.
+  pageIcon?(page: string, png: string): void;
   // Installs updates itself; elsewhere Apargon says a new version is out.
   autoUpdates: boolean;
 };

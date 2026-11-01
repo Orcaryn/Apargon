@@ -1,6 +1,7 @@
 import { app } from 'electron';
 import net from 'net';
 import { tellTrampoline } from '../../shared/channel.ts';
+import { pageAppId } from '../../shared/data.ts';
 import type { PagePlatform } from '../platform.ts';
 
 export const windows: PagePlatform = {
@@ -8,13 +9,20 @@ export const windows: PagePlatform = {
   // Windows shows notifications through a service the sandbox may not reach, so the trampoline shows them.
   notify: text => tellTrampoline({ notify: text }),
   // The GPU process cannot run in the sandbox, and a name Chromium looks up leaves through Windows' own resolver: names go only to the proxy.
-  beforeReady() {
+  // The taskbar groups windows by app id: each page gets its own button, with its title and icon.
+  beforeReady(page) {
+    app.setAppUserModelId(pageAppId(page));
     app.disableHardwareAcceleration();
     app.commandLine.appendSwitch('host-resolver-rules', 'MAP * ~NOTFOUND, EXCLUDE 127.0.0.1');
   },
   appMenu: false,
   showIcon(win, icon) {
     if (!win.isDestroyed()) {
+  // Without this a pin would start Apargon with no page, under Apargon's name.
+  pin(win, page) {
+    const relaunchCommand = [process.execPath, page].map(arg => `"${arg}"`).join(' ');
+    win.on('page-title-updated', (_event, title) => win.setAppDetails({ appId: pageAppId(page), relaunchCommand, relaunchDisplayName: title }));
+  },
       win.setIcon(icon);
     }
   },

@@ -1,17 +1,27 @@
+import { app } from 'electron';
 import fs from 'fs';
 import { tellTrampoline, TRAMPOLINE_NETWORK_FD } from '../../shared/channel.ts';
+import { pageAppId } from '../../shared/data.ts';
 import type { PagePlatform } from '../platform.ts';
 
 export const linux: PagePlatform = {
   isOffline: inEmptyNetwork,
   // Notifications need D-Bus, which the fence hides, so the trampoline shows them.
   notify: text => tellTrampoline({ notify: text }),
+  // The window's class on X11 and app id on Wayland, which the desktop matches to the launcher entry the trampoline wrote for this page.
+  beforeReady(page) {
+    app.setName(pageAppId(page));
+    app.setDesktopName(`${pageAppId(page)}.desktop`);
+  },
   processGroups: true,
   appMenu: false,
+  // In the launcher entry too, where the dock takes it from: the trampoline writes it, as this process may not.
   showIcon(win, icon) {
     if (!win.isDestroyed()) {
       win.setIcon(icon);
     }
+
+    tellTrampoline({ pageIcon: icon.toPNG().toString('base64') });
   },
 };
 

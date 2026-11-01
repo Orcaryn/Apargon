@@ -8,7 +8,7 @@ export type Bridge = { port: number; socket: string };
 // requestFd: where the page writes its PageRequests. replies: the file the trampoline writes PageReplies to, where the sandbox passes no more pipes; else they come on REPLY_FD.
 export type PageConfig = { page: string; permissions: Permissions; pageHash: string | null; proxy: string | null; bridges: Bridge[]; requestFd: number; replies: string | null };
 export type SavedFile = { name: string; data: string };
-export type PageRequest = { open: string } | { revoke: string[] } | { showEgressLog: true } | { automaticUpdates: boolean } | { fileIcon: string } | { notify: { title: string; body: string } } | { tray: string | null } | { saveAs: { id: string; files: SavedFile[] } } | { installSkill: true } | { openLink: string } | { openFile: string };
+export type PageRequest = { open: string } | { revoke: string[] } | { showEgressLog: true } | { automaticUpdates: boolean } | { pageIcon: string } | { notify: { title: string; body: string } } | { tray: string | null } | { saveAs: { id: string; files: SavedFile[] } } | { installSkill: true } | { openLink: string } | { openFile: string };
 export type PageReply = { trayClick: true } | { saved: string; paths: string[] } | { saved: string; error: string };
 
 // The page process's pipes, after standard input, output and error, where the sandbox passes them.

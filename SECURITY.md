@@ -198,7 +198,7 @@ Apargon is not a VM. For a hard "nothing leaves" guarantee, use a VM with no net
 | Platform      | Last verified                                                                                                                                |
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | macOS         | 2026-10-31, `pnpm test` on `eba0470`: every check                                                                                            |
-| Linux         | 2026-10-31, `.deb` from `eba0470` on Ubuntu 24.04 with AppArmor: 86 checks, the refusal test, and the Node tests                             |
+| Linux         | 2026-11-01, `.deb` from `40c59fa` on Ubuntu 24.04 with AppArmor: 87 checks, the refusal test, and the Node tests                             |
 | Linux desktop | not yet                                                                                                                                      |
 | Windows       | 2026-10-31, Windows 11 on arm64: 72 checks from source with no leak in the packet capture, and 72 in the installed arm64 app. x64 not tested |
 

@@ -64,7 +64,7 @@ A `papp-node` page runs as you, with only the network blocked: open one only if 
 
 On Windows, a few things work differently:
 
-- **Programs can leak.** A page's programs, and a `papp-node` page, can send any file they see to the internet. Windows lets them. So the popup warns you, and you must tick "I trust this page".
+- **Programs can leak.** A page's programs, and a `papp-node` page, can send any file they see to the internet. Windows lets them. So you must tick "I trust this page" before such a page opens.
 - **No sockets, no `localhost`.** A page with `papp-socket` or `papp-net` to `localhost` does not open.
 - **Only `.exe` and `.com` programs.** `papp-run` does not take `.bat` or `.cmd` files.
 - **Programs see less.** Only the page's folders, their own folder, and folders every app can read, like `C:\Windows` and Program Files.

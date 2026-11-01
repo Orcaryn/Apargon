@@ -26,7 +26,7 @@
 - **The window shows only the page.** No navigation. No frame of another file.
 - **Hidden files** (dot names) are never matched by `*`. A tag must name them.
 - **A page can only write a `.papp`** through a `papp-write` pattern that ends in `.papp`. That line is red.
-- **Windows runs programs, and says they leak.** A program can open `\\host\x`. A Windows service then looks up the name outside the sandbox, and the DNS query carries data. This leaked in every MXC mode tested. So the popup's worst case for a page with programs says so, and Allow needs "I trust this page."
+- **Windows runs programs, though they can leak.** A program can open `\\host\x`. A Windows service then looks up the name outside the sandbox, and the DNS query carries data. This leaked in every MXC mode tested. So Allow needs "I trust this page," and this file and the README say why.
 - **The app's only network call** is the update check. No telemetry, no crash reports, nothing at login.
 
 ## How each OS enforces it
@@ -131,7 +131,7 @@
 
 ### Windows
 
-- A page's programs, and a `papp-node` page, can send any file they see anywhere: they open `\\<data>.example.com\x`, and Windows looks the name up outside the sandbox. No MXC setting stops this. The popup says so.
+- A page's programs, and a `papp-node` page, can send any file they see anywhere: they open `\\<data>.example.com\x`, and Windows looks the name up outside the sandbox. No MXC setting stops this. The popup does not say so; it needs "I trust this page."
 - A page that exploits Chromium can leak data the same way.
 - The offline check only proves loopback is blocked. A Windows sandbox blocks loopback even when it has internet. What keeps the page offline is the deny rule Apargon sends to MXC.
 - With OneDrive backup, the PowerShell startup folders are not on the list.
@@ -197,7 +197,7 @@ Apargon is not a VM. For a hard "nothing leaves" guarantee, use a VM with no net
 
 | Platform      | Last verified                                                                                                                                |
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| macOS         | 2026-10-31, `pnpm test` on `eba0470`: every check                                                                                            |
+| macOS         | 2026-11-01, `pnpm test` on `20d2e01`: every check                                                                                            |
 | Linux         | 2026-11-01, `.deb` from `40c59fa` on Ubuntu 24.04 with AppArmor: 87 checks, the refusal test, and the Node tests                             |
 | Linux desktop | not yet                                                                                                                                      |
 | Windows       | 2026-10-31, Windows 11 on arm64: 72 checks from source with no leak in the packet capture, and 72 in the installed arm64 app. x64 not tested |

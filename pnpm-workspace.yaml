@@ -3,3 +3,6 @@ allowBuilds:
   electron-winstaller: false
   koffi: false
   node-pty: false
+overrides:
+  minimatch@9: ^11.0.1
+  minimatch@10: ^11.0.1

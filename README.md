@@ -18,7 +18,7 @@ curl -fsSL https://apargon.com/install.sh | sh
 
 [`install.sh`](install.sh) checks the app's notarization on macOS, and the `.deb` against the release's `SHA256SUMS` on Linux, before it installs it. Or download from the [latest release](https://github.com/Orcaryn/Apargon/releases/latest): the `.dmg` for macOS (`arm64` or `x64`), the `.deb` for Ubuntu 24.04, the `.exe` for Windows (`x64` or `arm64`).
 
-The Windows installer is not signed, so Windows warns before it runs. Check it against the release's `SHA256SUMS` first.
+The Windows installer is not signed, so Windows warns before it runs. Check it against the release's `SHA256SUMS` first: that shows the download arrived whole. It comes from the same release, so it cannot show who published it.
 
 Or with Homebrew on macOS:
 

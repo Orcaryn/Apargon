@@ -185,7 +185,7 @@ Untested: whether it can rename a folder above Apargon's data and plant a `grant
 ### The packaged app
 
 - macOS checks `app.asar` against its build hash. Windows has the same check turned on, untested. Linux doesn't.
-- Windows: the installer is not signed. Windows warns before it runs, and only `SHA256SUMS` shows it is the real one.
+- Windows: the installer is not signed. Windows warns before it runs. `SHA256SUMS` comes from the same release, so it only shows the download arrived whole, not who published it.
 - Linux: Ubuntu 23.10+ needs the AppArmor profile from the `.deb`. Without it, pages silently don't open.
 
 ### Scope
@@ -196,12 +196,12 @@ Apargon is not a VM. For a hard "nothing leaves" guarantee, use a VM with no net
 
 `pnpm test` runs every check in the real app. `test/selftest/check.ts` lists them. [AGENTS.md](AGENTS.md#tests) has the Linux `.deb` run.
 
-| Platform      | Last verified                                                                                                                                |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| macOS         | 2026-11-01, `pnpm test` on `20d2e01`: every check                                                                                            |
-| Linux         | 2026-11-01, `.deb` from `40c59fa` on Ubuntu 24.04 with AppArmor: 87 checks, the refusal test, and the Node tests                             |
-| Linux desktop | not yet                                                                                                                                      |
-| Windows       | 2026-10-31, Windows 11 on arm64: 72 checks from source with no leak in the packet capture, and 72 in the installed arm64 app. x64 not tested |
+| Platform      | Last verified                                                                                                                                                                                                                     |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS         | 2026-11-01, `pnpm test` on `3b3d16e` with the uncommitted `listen.ts`, secrets, trailing-dot and download-mark changes: 96 checks                                                                                                 |
+| Linux         | 2026-11-01, installed `.deb` whose sandbox code matches `3b3d16e`, with the `listen.ts` tests, on Ubuntu 24.04 with AppArmor: 90 checks, the refusal test, and the Node tests. The secrets change after it is not yet run there   |
+| Linux desktop | not yet                                                                                                                                                                                                                           |
+| Windows       | 2026-11-01, Windows 11 on arm64 (GitHub `windows-11-arm`, run 41315097711 of the spike repo, this tree on `3b3d16e`): 77 checks from source with no leak in the packet capture, and 77 in the installed arm64 app. x64 not tested |
 
 Not tested: the NAT64 refusal, the proxy refusing this Mac's own LAN address, and two pages reaching each other's `localhost` ports.
 

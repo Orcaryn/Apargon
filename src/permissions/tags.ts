@@ -177,7 +177,7 @@ function openHost(value: string) {
 }
 
 function findProgram(value: string) {
-  const { programExtensions } = PERMISSIONS_PLATFORM;
+  const { programExtensions, programFolders } = PERMISSIONS_PLATFORM;
   const runnable = (file: string) => programExtensions.some(extension => file.toLowerCase().endsWith(extension)) && fs.statSync(file, { throwIfNoEntry: false })?.isFile();
   // Before the file is looked for: Windows would ask the server of a network path, before the popup.
   const refusal = PERMISSIONS_PLATFORM.refusePath(value);
@@ -197,7 +197,7 @@ function findProgram(value: string) {
   }
 
   // An empty PATH entry, as a trailing ; leaves, is no folder.
-  const folders = [...process.env.PATH!.split(path.delimiter), ...PERMISSIONS_PLATFORM.programFolders].filter(Boolean);
+  const folders = [...process.env.PATH!.split(path.delimiter), ...programFolders].filter(Boolean);
   const names = programExtensions.map(extension => (value.toLowerCase().endsWith(extension) ? value : value + extension));
   const found = folders.flatMap(dir => names.map(name => path.join(dir, name))).find(runnable);
 

@@ -24,7 +24,7 @@ export const windows: TrampolinePlatform = {
 
     // papp-node changes what you can, but not Apargon: the home folder and, outside it, the page's own, less the folders that hold Apargon's data or the app.
     // Real paths, as the folders read from the disk: no short names such as PROGRA~1.
-    const apargonFolders = [DATA, INSTALL_FOLDER].filter(folder => folder !== null).map(folder => fs.realpathSync.native(folder));
+    const apargonFolders = [DATA, INSTALL_FOLDER ?? []].flat().map(folder => fs.realpathSync.native(folder));
     const pageFolder = path.dirname(page);
     const pageFolderApart = !isInside(pageFolder, HOME) && !apargonFolders.some(folder => isInside(folder, pageFolder) || isInside(pageFolder, folder));
     const nodeWritable = permissions.node ? [...foldersBut(HOME, apargonFolders), ...(pageFolderApart ? [pageFolder] : [])] : [];

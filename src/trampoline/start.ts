@@ -35,6 +35,12 @@ export async function startTrampoline(pages: string[]) {
 
 export async function openPage(file: string) {
   openPages++;
+
+  // A page that opened at login, then was deleted, stops opening; approve then reports it missing.
+  if (!fs.existsSync(file)) {
+    TRAMPOLINE_PLATFORM.startAtLogin(file, false);
+  }
+
   const child = await approve(file)
     .then(approved => approved && startPageProcess(approved))
     .catch((err: Error) => dialog.showErrorBox('Apargon', err.message));
@@ -54,6 +60,7 @@ async function startPageProcess({ page, permissions, pageHash }: Pick<PageConfig
   followMove(page, PAGE_DATA, SEEN_FILE, running);
   noteContent(page, PAGE_DATA, SEEN_FILE);
   const sandbox = await TRAMPOLINE_PLATFORM.prepare(page, permissions);
+  TRAMPOLINE_PLATFORM.startAtLogin(page, permissions.use.includes('login'));
   const proxy = sandbox.proxyPort === null ? null : `127.0.0.1:${sandbox.proxyPort}`;
   // By name, as Windows finds Path for PATH.
   const passed = permissions.node ? Object.keys(process.env) : [...PAGE_ENV, ...permissions.env];
@@ -86,7 +93,15 @@ async function startPageProcess({ page, permissions, pageHash }: Pick<PageConfig
     }
   };
 
-  const setTray = trayFor(page, () => reply({ trayClick: true }));
+  const showTray = trayFor(
+    page,
+    () => reply({ show: true }),
+    () => reply({ quit: true })
+  );
+  // A page in the background keeps an icon: it is how the user finds it again.
+  const noTitle = permissions.use.includes('background') ? '' : null;
+  const setTray = (title: string | null) => showTray(title ?? noTitle);
+  setTray(null);
 
   // The page's requests, and its output as plain text: given the terminal itself, it could type commands into the shell that started Apargon.
   new Set([sandbox.requestFd, 1, 2]).forEach(fd => {
@@ -111,7 +126,7 @@ async function startPageProcess({ page, permissions, pageHash }: Pick<PageConfig
   child.on('close', () => {
     running.splice(running.indexOf(page), 1);
     noteContent(page, PAGE_DATA, SEEN_FILE);
-    setTray(null);
+    showTray(null);
     sandbox.close();
 
     if (replies) {

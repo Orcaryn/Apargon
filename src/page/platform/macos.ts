@@ -1,13 +1,11 @@
-import { app, Notification } from 'electron';
+import { app } from 'electron';
 import net from 'net';
 import { tellTrampoline } from '../../shared/channel.ts';
 import type { PagePlatform } from '../platform.ts';
 
 export const macos: PagePlatform = {
   isOffline: async () => !(await canBindLoopback()),
-  notify(text, toFront) {
-    new Notification(text).on('click', toFront).show();
-  },
+  notifiesHere: true,
   processGroups: true,
   appMenu: true,
   // The trampoline sets the file's icon: this process may not write there.

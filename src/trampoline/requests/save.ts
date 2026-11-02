@@ -9,10 +9,14 @@ import { TRAMPOLINE_PLATFORM } from '../platform.ts';
 
 // The page names the files and the user picks the folder, in this process's dialog: a page that breaks out of its sandbox can write nowhere else.
 export async function saveFiles(files: SavedFile[], hidden: string[]) {
-  const badName = files.find(({ name }) => !name || path.basename(name) !== name || name.startsWith('.') || PAGE_FILE.test(name) || /[\p{Cc}\p{Cf}]/u.test(name));
+  if (!files.length) {
+    throw new Error('Apargon: saveAs takes one or more files.');
+  }
 
-  if (!files.length || badName) {
-    throw new Error(`Apargon: saveAs takes one or more plain file names, without a folder, a leading dot or .papp${badName ? `: ${JSON.stringify(badName.name)}` : ''}.`);
+  const badName = findBadName(files.map(({ name }) => name));
+
+  if (badName !== undefined) {
+    throw new Error(`Apargon: saveAs takes plain file names, without a folder, a leading dot or .papp: ${JSON.stringify(badName)}.`);
   }
 
   // This process has no window of its own: without this, its dialog opens behind the page.
@@ -28,14 +32,8 @@ export async function saveFiles(files: SavedFile[], hidden: string[]) {
     return [];
   }
 
-  // A link the page planted could lead the user into a folder they did not mean. Keys and logins are hidden names or whole folders, so with plain names the folder is what to check.
   const folder = filePaths[0];
-
-  if (realPath(folder) !== folder) {
-    throw new Error(`Apargon: a page may not save to ${folder}. Pick a folder itself, not a link to it.`);
-  } else if (PAGE_FILE.test(folder) || runsOutsideSandbox(folder) || [DATA, INSTALL_FOLDER ?? [], hidden].flat().some(protectedFolder => isInside(folder, protectedFolder))) {
-    throw new Error(`Apargon: a page may not save to ${folder}: it holds Apargon's data, keys, logins, or files that run on their own.`);
-  }
+  checkFolder(folder, hidden);
 
   // Like a browser's downloads, a taken name gets a number: 'wx' never replaces a file or follows a link.
   return files.map(({ name, data }) => {
@@ -56,4 +54,43 @@ export async function saveFiles(files: SavedFile[], hidden: string[]) {
       }
     }
   });
+}
+
+// The page suggests a file, the user picks the name and folder, and the dialog asks before it replaces one.
+export async function saveFile(suggested: string, data: string, hidden: string[]) {
+  app.focus({ steal: true });
+  const { canceled, filePath } = await dialog.showSaveDialog({ defaultPath: suggested, properties: ['createDirectory', 'showOverwriteConfirmation'] });
+
+  if (canceled) {
+    return null;
+  } else if (findBadName([path.basename(filePath)]) !== undefined) {
+    throw new Error(`Apargon: a page may not save as ${path.basename(filePath)}: a hidden name, a .papp, or one with characters that do not show.`);
+  }
+
+  checkFolder(path.dirname(filePath), hidden);
+  const file = fs.openSync(filePath, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC | TRAMPOLINE_PLATFORM.noFollow);
+
+  try {
+    fs.writeFileSync(file, Buffer.from(data, 'base64'));
+  } finally {
+    fs.closeSync(file);
+  }
+
+  TRAMPOLINE_PLATFORM.markDownloaded?.(filePath);
+
+  return filePath;
+}
+
+// The first name that is not a plain file name, if any.
+function findBadName(names: string[]) {
+  return names.find(name => !name || path.basename(name) !== name || name.startsWith('.') || PAGE_FILE.test(name) || /[\p{Cc}\p{Cf}]/u.test(name));
+}
+
+// A link the page planted could lead the user into a folder they did not mean. Keys and logins are hidden names or whole folders, so with plain names the folder is what to check.
+function checkFolder(folder: string, hidden: string[]) {
+  if (realPath(folder) !== folder) {
+    throw new Error(`Apargon: a page may not save to ${folder}. Pick a folder itself, not a link to it.`);
+  } else if (PAGE_FILE.test(folder) || runsOutsideSandbox(folder) || [DATA, INSTALL_FOLDER ?? [], hidden].flat().some(protectedFolder => isInside(folder, protectedFolder))) {
+    throw new Error(`Apargon: a page may not save to ${folder}: it holds Apargon's data, keys, logins, or files that run on their own.`);
+  }
 }

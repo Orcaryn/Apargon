@@ -1,4 +1,4 @@
-import { desktopCapturer, net, session } from 'electron';
+import { desktopCapturer, dialog, net, session } from 'electron';
 import { createHash } from 'crypto';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -34,7 +34,8 @@ export function createPageSession(page: string, { use }: Permissions, pageHash: 
     return net.fetch(request, { bypassCustomProtocolHandlers: true });
   });
 
-  const webPermissions: Partial<Record<Use, string>> = { clipboard: 'clipboard-read', location: 'geolocation', camera: 'media:video', microphone: 'media:audio', screen: 'display-capture' };
+  // Chromium asks for system-exclusive MIDI, which can also change an instrument's settings, for any MIDI access.
+  const webPermissions: Partial<Record<Use, string[]>> = { clipboard: ['clipboard-read'], location: ['geolocation'], camera: ['media:video'], microphone: ['media:audio'], screen: ['display-capture'], usb: ['usb'], serial: ['serial'], hid: ['hid'], midi: ['midi', 'midiSysex'] };
   const allowed = ['clipboard-sanitized-write', 'fullscreen', 'pointerLock', ...use.flatMap(name => webPermissions[name] ?? [])];
   pageSession.setPermissionRequestHandler((_contents, permission, answer, details) => {
     const asked = permission === 'media' && 'mediaTypes' in details ? (details.mediaTypes ?? []).map(type => `media:${type}`) : [permission];
@@ -43,11 +44,47 @@ export function createPageSession(page: string, { use }: Permissions, pageHash: 
   pageSession.setPermissionCheckHandler((_contents, permission, _origin, details) => allowed.includes(permission === 'media' ? `media:${details.mediaType}` : permission));
 
   if (use.includes('screen')) {
-    pageSession.setDisplayMediaRequestHandler(async (_request, answer) => {
-      const [screen] = await desktopCapturer.getSources({ types: ['screen'] });
-      answer({ video: screen });
+    // macOS 15 and later show their own picker, and never call the handler.
+    pageSession.setDisplayMediaRequestHandler(
+      async (_request, answer) => {
+        const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] });
+        const picked = await pickOne('Share which screen or window?', sources.map(source => source.name));
+        answer(picked === null ? {} : { video: sources[picked] });
+      },
+      { useSystemPicker: true }
+    );
+  }
+
+  if (use.includes('usb')) {
+    pageSession.on('select-usb-device', async (event, { deviceList }, choose) => {
+      event.preventDefault();
+      const picked = await pickOne('Give the page which USB device?', deviceList.map(device => device.productName ?? `USB device ${device.vendorId}:${device.productId}`));
+      choose(picked === null ? undefined : deviceList[picked].deviceId);
+    });
+  }
+
+  if (use.includes('serial')) {
+    pageSession.on('select-serial-port', async (event, portList, _contents, choose) => {
+      event.preventDefault();
+      const picked = await pickOne('Give the page which serial port?', portList.map(port => port.displayName ?? port.portName));
+      choose(picked === null ? '' : portList[picked].portId);
+    });
+  }
+
+  if (use.includes('hid')) {
+    pageSession.on('select-hid-device', async (event, { deviceList }, choose) => {
+      event.preventDefault();
+      const picked = await pickOne('Give the page which input device?', deviceList.map(device => device.name));
+      choose(picked === null ? null : deviceList[picked].deviceId);
     });
   }
 
   return pageSession;
+}
+
+// In this process's own dialog, as text: the page cannot draw the choice or make it.
+async function pickOne(message: string, names: string[]) {
+  const { response } = await dialog.showMessageBox({ type: 'question', message, detail: names.length ? '' : 'None found.', buttons: [...names, 'Cancel'], defaultId: names.length, cancelId: names.length });
+
+  return response === names.length ? null : response;
 }

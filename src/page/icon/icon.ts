@@ -1,4 +1,4 @@
-import { BrowserWindow, nativeImage } from 'electron';
+import { BrowserWindow, nativeImage, type NativeImage } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -15,8 +15,10 @@ const IMAGE_TYPES: Record<string, string> = {
   '.webp': 'image/webp',
 };
 
+// Draws the page's favicon as its icon whenever it changes. Returns the icon as last drawn, which notifications show.
 export function followFavicon(win: BrowserWindow, canSee: (file: string) => boolean, madeHere: boolean) {
   let favicons: string[] = [];
+  let drawn: NativeImage | null = null;
 
   const showFavicon = async () => {
     const favicon = favicons.map(url => readFavicon(url, canSee)).find(data => data !== undefined);
@@ -25,7 +27,8 @@ export function followFavicon(win: BrowserWindow, canSee: (file: string) => bool
       return;
     }
 
-    PAGE_PLATFORM.showIcon(win, await drawIcon(favicon), madeHere);
+    drawn = await drawIcon(favicon);
+    PAGE_PLATFORM.showIcon(win, drawn, madeHere);
   };
 
   win.webContents.on('page-favicon-updated', (_event, urls) => {
@@ -33,6 +36,8 @@ export function followFavicon(win: BrowserWindow, canSee: (file: string) => bool
     showFavicon().catch(() => undefined);
   });
   win.webContents.on('did-start-loading', () => showFavicon().catch(() => undefined));
+
+  return () => drawn;
 }
 
 function readFavicon(url: string, canSee: (file: string) => boolean) {

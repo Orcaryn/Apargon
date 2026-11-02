@@ -21,18 +21,25 @@ export type Permissions = {
   node: boolean;
   use: Use[];
   shortcuts: string[];
+  window: WindowSettings | null;
   tags: string[];
 };
 export type Use = (typeof USES)[number];
+// Only the keys the tag sets.
+export type WindowSettings = { width?: number; height?: number; minWidth?: number; minHeight?: number; resizable?: boolean; titleBar?: boolean; frame?: boolean; transparent?: boolean; onTop?: boolean };
 
 const INVISIBLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
-const USES = ['notifications', 'clipboard', 'location', 'sound', 'camera', 'microphone', 'screen'] as const;
+const USES = ['notifications', 'clipboard', 'location', 'sound', 'camera', 'microphone', 'screen', 'background', 'login', 'usb', 'serial', 'hid', 'midi', 'print'] as const;
+const SIZES = { width: 'width', height: 'height', 'min-width': 'minWidth', 'min-height': 'minHeight' } as const;
+const SWITCHES = { resizable: 'resizable', titlebar: 'titleBar', frame: 'frame', transparent: 'transparent', 'on-top': 'onTop' } as const;
 const MODIFIERS: Partial<Record<string, string>> = { commandorcontrol: 'CommandOrControl', cmdorctrl: 'CommandOrControl', command: 'Command', cmd: 'Command', control: 'Control', ctrl: 'Control', alt: 'Alt', option: 'Alt', altgr: 'AltGr', shift: 'Shift', super: 'Super', meta: 'Super' };
 const KEYS = [...Array.from({ length: 24 }, (_, i) => `F${i + 1}`), 'Space', 'Tab', 'Backspace', 'Delete', 'Insert', 'Return', 'Enter', 'Up', 'Down', 'Left', 'Right', 'Home', 'End', 'PageUp', 'PageDown', 'Escape', 'Esc'];
+// Taken alone: no app types with them.
+const MEDIA_KEYS = ['MediaPlayPause', 'MediaNextTrack', 'MediaPreviousTrack', 'MediaStop'];
 
 export function declaredPermissions(page: string, html = fs.readFileSync(page, 'utf8')) {
   const dir = path.dirname(page);
-  const permissions: Permissions = { own: null, read: [], write: [], net: [], open: [], run: {}, env: [], sockets: [], hidden: [], node: false, use: [], shortcuts: [], tags: [] };
+  const permissions: Permissions = { own: null, read: [], write: [], net: [], open: [], run: {}, env: [], sockets: [], hidden: [], node: false, use: [], shortcuts: [], window: null, tags: [] };
   const head = html.replace(/<!--[\s\S]*?-->/g, '').split(/<script\b|<body\b|<\/head\b/i)[0];
 
   for (const [, attrs] of head.matchAll(/<meta\s+([^>]*)>/gi)) {
@@ -84,8 +91,12 @@ export function declaredPermissions(page: string, html = fs.readFileSync(page, '
       permissions.use.push(useName(value));
     } else if (kind === 'shortcut') {
       permissions.shortcuts.push(shortcut(value));
+    } else if (kind === 'window' && permissions.window) {
+      throw new Error('Two papp-window tags. Put every setting in one, as in content="width=900, height=600".');
+    } else if (kind === 'window') {
+      permissions.window = windowSettings(value);
     } else {
-      throw new Error(`Unknown tag papp-${kind}. The tags are papp-read, papp-write, papp-net, papp-open, papp-run, papp-env, papp-socket, papp-use, papp-shortcut and papp-node.`);
+      throw new Error(`Unknown tag papp-${kind}. The tags are papp-read, papp-write, papp-net, papp-open, papp-run, papp-env, papp-socket, papp-use, papp-shortcut, papp-window and papp-node.`);
     }
   }
 
@@ -241,6 +252,31 @@ function socketPath(value: string, dir: string) {
   return fs.realpathSync.native(absolute);
 }
 
+// As the viewport tag: key=value pairs, separated by commas.
+function windowSettings(value: string) {
+  const settings: WindowSettings = {};
+  const seen = new Set<string>();
+  const keys = [...Object.keys(SIZES), ...Object.keys(SWITCHES)].join(', ');
+
+  for (const setting of value.split(',')) {
+    const [key, given] = setting.split('=').map(part => part.trim().toLowerCase());
+
+    if (seen.has(key)) {
+      throw new Error(`papp-window sets ${key} twice. Keep one.`);
+    } else if (Object.hasOwn(SIZES, key) && /^[1-9]\d{1,3}$/.test(given)) {
+      settings[SIZES[key as keyof typeof SIZES]] = +given;
+    } else if (Object.hasOwn(SWITCHES, key) && (given === 'yes' || given === 'no')) {
+      settings[SWITCHES[key as keyof typeof SWITCHES]] = given === 'yes';
+    } else {
+      throw new Error(`Bad papp-window setting "${setting.trim()}". Write key=value pairs, such as width=900, height=600, titlebar=no. The keys are ${keys}: sizes in pixels, the rest yes or no.`);
+    }
+
+    seen.add(key);
+  }
+
+  return settings;
+}
+
 function useName(value: string) {
   const name = value.toLowerCase() as Use;
 
@@ -257,11 +293,11 @@ function shortcut(value: string) {
   const named = parts.slice(0, -1).map(part => MODIFIERS[part.toLowerCase()]);
   const modifiers = named.filter(name => name !== undefined);
   const keysHeld = new Set(modifiers.map(name => PERMISSIONS_PLATFORM.sameKey[name] ?? name));
-  const key = KEYS.find(known => known.toLowerCase() === last.toLowerCase()) ?? (/^[a-z0-9]$/i.test(last) ? last.toUpperCase() : undefined);
+  const key = [...KEYS, ...MEDIA_KEYS].find(known => known.toLowerCase() === last.toLowerCase()) ?? (/^[a-z0-9]$/i.test(last) ? last.toUpperCase() : undefined);
 
   if (modifiers.length < named.length || key === undefined) {
     throw new Error(`Bad papp-shortcut value "${value}". Write modifiers and one key, such as CommandOrControl+Shift+N or Alt+F9.`);
-  } else if (/^F\d+$/.test(key) ? keysHeld.size === 0 : keysHeld.size < 2 || [...keysHeld].every(name => PERMISSIONS_PLATFORM.typingModifiers.includes(name))) {
+  } else if (!MEDIA_KEYS.includes(key) && (/^F\d+$/.test(key) ? keysHeld.size === 0 : keysHeld.size < 2 || [...keysHeld].every(name => PERMISSIONS_PLATFORM.typingModifiers.includes(name)))) {
     throw new Error(`papp-shortcut ${value} would catch keys meant for the app in front. Use two different modifiers, not only ${PERMISSIONS_PLATFORM.typingModifiers.join(' and ')}, or one with a function key.`);
   }
 

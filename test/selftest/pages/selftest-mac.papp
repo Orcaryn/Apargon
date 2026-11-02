@@ -7,6 +7,7 @@
 <meta name="papp-run" content="/usr/sbin/ipconfig">
 <meta name="papp-run" content="/usr/bin/defaults">
 <meta name="papp-write" content="./results/result-mac.json">
+<meta name="papp-window" content="width=700, height=500, resizable=no">
 <title>Apargon selftest (macOS programs)</title>
 <body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
 
@@ -20,6 +21,7 @@
     result.program_open_app_blocked = (await papp.run('open', ['-g', '-a', 'Finder'])).status !== 0;
     // activate, not a query: a query also fails without the sandbox, on the Automation permission, so it would not notice the rule gone.
     result.program_apple_event_blocked = (await papp.run('osascript', ['-e', 'tell application "Finder" to activate'])).status !== 0;
+    result.window_size_declared = innerWidth === 700;
     result.program_preference_write_blocked = (await papp.run('defaults', ['write', 'com.apargon.selftest', 'leaked', '-bool', 'true'])).status !== 0;
   } catch (err) {
     result.error = err.message;

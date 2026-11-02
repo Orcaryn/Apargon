@@ -74,7 +74,8 @@
         "NSCameraUsageDescription": "A page you opened in Apargon asked to use the camera.",
         "NSMicrophoneUsageDescription": "A page you opened in Apargon asked to use the microphone.",
         "NSLocationUsageDescription": "A page you opened in Apargon asked for this computer's location.",
-        "NSLocationWhenInUseUsageDescription": "A page you opened in Apargon asked for this computer's location."
+        "NSLocationWhenInUseUsageDescription": "A page you opened in Apargon asked for this computer's location.",
+        "NSBluetoothAlwaysUsageDescription": "A page you opened in Apargon asked for a serial port; macOS lists Bluetooth ones among them."
       }
     },
     "deb": {

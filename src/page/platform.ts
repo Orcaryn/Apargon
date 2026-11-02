@@ -5,7 +5,8 @@ import { windows } from './platform/windows.ts';
 
 export type PagePlatform = {
   isOffline(): boolean | Promise<boolean>;
-  notify(text: { title: string; body: string }, toFront: () => void): void;
+  // Whether this process can show a notification itself; otherwise it asks the trampoline to.
+  notifiesHere: boolean;
   beforeReady?(page: string): void;
   pin?(win: BrowserWindow, page: string): void;
   appMenu: boolean;

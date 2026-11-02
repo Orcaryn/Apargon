@@ -27,7 +27,7 @@
 - **Hidden files** (dot names) are never matched by `*`. A tag must name them.
 - **A page can only write a `.papp`** through a `papp-write` pattern that ends in `.papp`. That line is red.
 - **Windows runs programs, though they can leak.** A program can open `\\host\x`. A Windows service then looks up the name outside the sandbox, and the DNS query carries data. This leaked in every MXC mode tested. So Allow needs "I trust this page," and this file and the README say why.
-- **The app's only network call** is the update check. No telemetry, no crash reports, nothing at login.
+- **The app's only network call** is the update check. No telemetry, no crash reports. Nothing starts at login unless a page declares `papp-use login`.
 
 ## How each OS enforces it
 
@@ -39,6 +39,7 @@
 - Keys and logins: denied, even ones made later.
 - Blocked: `nsurlsessiond`, `trustd`, WebKit services. These fetch from outside the sandbox.
 - Blocked, but not for `papp-node`: opening apps, sending Apple Events, `defaults write`.
+- With `papp-use print`, the print server's socket (`/private/var/run/cupsd`) is allowed.
 
 ### Linux
 
@@ -47,7 +48,7 @@
 - Writes: limited by folder.
 - Keys and logins: hidden, but only those that exist when the page opens.
 - `/run`, `/tmp` and `/var/tmp` are emptied. Their socket files bypass `--unshare-net`: D-Bus, DNS, sound, tmux, Docker.
-- Apargon puts back only the display, the page's folders and sockets, and sound with `papp-use sound` or `microphone`.
+- Apargon puts back only the display, the page's folders and sockets, sound with `papp-use sound` or `microphone`, the print server's socket with `papp-use print`, and the udev database (`/run/udev`, read-only) and the device files of each declared kind with `papp-use usb`, `serial`, `hid` or `midi`. For `midi` that is the sequencer, the MIDI ports and each sound card's controls, not its recording and playback files.
 - A tag folder, or the page's own folder, that would expose `/tmp`, `/var/tmp` or `/run` is refused.
 
 ### Windows
@@ -97,10 +98,12 @@
 - A writable folder can hold files other tools run later, like `package.json` scripts or `.git/hooks`. The popup doesn't show these as red.
 - A synced folder sends what the page writes off the machine.
 
-### Saving (`papp.saveAs`)
+### Saving (`papp.saveAs`, `papp.save`)
 
 - Any page can open the save dialog, with no tag, again and again.
-- The trampoline writes only new files, into the folder the user picks.
+- `papp.saveAs` writes only new files, into the folder the user picks.
+- `papp.save` can replace a file. The OS asks first, but the page suggests the name and folder, so the user only has to press Save and Replace.
+- On Windows, `papp.save` follows a link at the chosen name. Windows has no flag that refuses one.
 - Hidden folders and `~/Library` or `AppData` are refused: files saved there can run on their own. macOS cloud drives in `~/Library` (iCloud Drive, `~/Library/CloudStorage`) are allowed: files there only sync.
 - On macOS and Windows, saved files get the download mark, so the OS warns before one runs. Linux has no such mark, nor does a drive that cannot hold one, like a USB stick on Windows: the file is saved without it.
 - A program could swap the picked folder for a link between check and write.
@@ -150,6 +153,17 @@
 - macOS asks once for Apargon, not for each page.
 - A shortcut takes those keys from every app.
 - Any page can show a tray icon, with no tag. It and notifications show under Apargon's name.
+- Notifications show the page's icon and up to three buttons. On Linux and Windows the trampoline decodes the icon's PNG, which the page sends.
+- A page's menus can use any label, also one like Apargon's own.
+- Any page can learn, with no tag, when the computer sleeps, wakes, locks, unlocks or changes to battery, and how long it has been idle.
+- `papp-window` with `frame=no`, `transparent=yes` or `on-top=yes` lets the window pass for another app's. The popup shows these yellow.
+- `papp-use background` keeps the page running with its window hidden, while its tray icon stays; its own `window.close()` hides it too. The tray menu quits it.
+- `papp-use login` opens the page at every login: a launch agent in `~/Library/LaunchAgents` (macOS), an entry in `~/.config/autostart` (Linux) or a Run value (Windows). It goes when the page is revoked, opens without the tag, or is gone at login.
+- With `papp-use usb`, `serial` or `hid`, the user picks one device in Apargon's dialog; the page then gets everything that device does. An input device can be a keyboard. On macOS serial ports include Bluetooth ones, so macOS asks for Bluetooth. On Windows the sandbox gets the device capabilities `usb`, `serialcommunication` and `humaninterfacedevice`; that a real device then opens is untested, as CI runners have none.
+- On Linux, `papp-use midi` gives each sound card's controls, so the page can change its volume and mixer.
+- With `papp-use midi`, the page can also send system-exclusive messages, which change an instrument's settings and can update its firmware: Chromium grants no MIDI without them.
+- With `papp-use print`, the page can print what it shows on every printer the print server knows, network ones too.
+- On Windows the sandbox does not keep any page from the print spooler. `papp.print` and `window.print()` check the tag, but a page that works around Apargon's `window.print` reaches the spooler without it.
 - A page's icon can look like another app. Only the badge shows it is a page.
 - On Linux and Windows a page shows on the dock or taskbar under its own title and icon, and a pin of it reopens the page in Apargon. On Linux this is a hidden launcher entry per page in `~/.local/share/applications`, removed the next time a page opens and its page is gone. The title is the page's to choose, so it can name another app. On macOS the Dock says Apargon for every page.
 

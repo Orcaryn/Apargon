@@ -29,7 +29,7 @@ Further reading and code: https://github.com/Orcaryn/Apargon
 - Open it with `open page.papp` (macOS), `apargon page.papp` (Linux), or a double-click (Windows). A popup asks first, unless the page has no tags and was not downloaded.
 - Saving a `.papp`, `.css` or `.js` in its folder reloads the window. New tags need the page reopened. A downloaded page is approved with its content: after an edit, it must be reopened and approved again.
 - A web link (`<a target="_blank">`, `window.open`, `papp.open`) opens in the browser. Apargon asks first, address shown, unless the page names the site with `papp-open`. `window.open` on the page's own file opens a second window.
-- The window is 1200×800 with a frame. `<title>` names it; the favicon becomes the app icon (see below).
+- The window is 1200×800 with a frame; `papp-window` changes that. It reopens where the user left it. `<title>` names it; the favicon becomes the app icon (see below).
 - `localStorage` and IndexedDB persist, tied to the page's path. They follow the page when it is moved or renamed, if its content is the same as when it was last open: after an edit, open the page once before moving it. A copy starts empty.
 - On Linux, a page cannot sit in `/tmp`, `/var/tmp`, under `/run`, or a folder holding them. Use a folder of its own, such as `/tmp/apargon`.
 - On Windows, Apargon refuses a path that starts with `\\`, has a `:` after the drive letter, or has a name ending in a dot or a space.
@@ -54,6 +54,8 @@ type Bytes = Uint8Array;
 // size and mtimeMs only for files the page may see
 type Stat = { isFile: boolean; isDirectory: boolean; size?: number; mtimeMs?: number };
 type Exit = { status: number | null; signal: string | null };
+// keys as in papp-shortcut, such as 'CommandOrControl+S'
+type MenuItem = { separator: true } | { label: string; id?: string; keys?: string; submenu?: MenuItem[] };
 
 declare const papp: {
   // the page's folder
@@ -79,6 +81,12 @@ declare const papp: {
   pick(options?: { folder?: boolean; multiple?: boolean }): Promise<string[]>;
   // the user picks a folder; never replaces a file: a taken name becomes "name (2)"; [] if cancelled
   saveAs(files: Record<string, string | Bytes>): Promise<string[]>;
+  // file is only a suggestion; the user picks; may replace a file, after the OS asks; null if cancelled
+  save(file: string, data: string | Bytes): Promise<string | null>;
+  // the page as a PDF; no tag needed
+  pdf(): Promise<Bytes>;
+  // needs papp-use print; true once sent
+  print(): Promise<boolean>;
   // an http(s) link in the browser, a folder in the file manager, or a file in its viewer (images, video, audio, PDF, text)
   open(pathOrLink: string): Promise<void>;
   // timeout in ms stops it; encoding null gives bytes
@@ -88,17 +96,28 @@ declare const papp: {
     Promise<{ write(data: string | Bytes): Promise<void>; end(): Promise<void>; kill(): Promise<void>; done: Promise<Exit> }>;
   // file is relative to the page's folder; a new file counts as changed; resolves to a stop function
   watch(path: string, callback: (file: string, kind: 'changed' | 'removed') => void, options?: { recursive?: boolean }): Promise<() => Promise<void>>;
-  // needs papp-use notifications; text only, a click brings the window forward
-  notify(title: string, body?: string): Promise<void>;
-  // a menu-bar icon with a title of up to 24 characters, no menu; a click brings the window forward; null removes it
+  // needs papp-use notifications; up to 3 buttons; the button's index, or null
+  notify(title: string, body?: string, options?: { buttons?: string[] }): Promise<number | null>;
+  // a menu-bar icon, title up to 24 characters, with Show and Quit; null removes it (with papp-use background, only the title)
   tray(title: string | null): Promise<void>;
+  // top-level menus after Apargon's; [] removes them
+  menu(menus: MenuItem[]): Promise<void>;
+  // a menu at the pointer
+  contextMenu(items: MenuItem[]): Promise<void>;
+  // the picked item's id; returns a stop function
+  onMenu(callback: (id: string | undefined) => void): () => void;
+  power(): Promise<{ idleSeconds: number; onBattery: boolean }>;
+  // returns a stop function
+  onSystem(callback: (event: 'suspend' | 'resume' | 'lock-screen' | 'unlock-screen' | 'on-ac' | 'on-battery') => void): () => void;
+  // same as window.close(); with papp-use background, it hides
+  closeWindow(): Promise<void>;
   // runs on a papp-shortcut, after bringing the window forward; returns a stop function right away
   onShortcut(callback: (keys: string) => void): () => void;
 };
 // A call the tags do not allow rejects with an Error naming the tag to add. File errors carry Node's code, such as 'ENOENT'.
 ```
 
-With `papp-node`, the page has Node (`require`, `process`) instead of `papp`. It runs as you, with no file limits; the network stays blocked. `require('@electron/remote')` is Electron's main process, for what `papp` cannot do: windows that float above others, show on every Space or have no frame (`BrowserWindow`), a menu-bar menu (`Tray`, `Menu`), other displays (`screen`), notifications (`Notification`). `require` looks in the page's folder first, so `npm install` next to it works. A `new BrowserWindow` uses the default session and skips the page's navigation limits.
+With `papp-node`, the page has Node (`require`, `process`) instead of `papp`. It runs as you, with no file limits; the network stays blocked. `require('@electron/remote')` is Electron's main process, for what `papp` cannot do: windows on every Space or extra windows (`BrowserWindow`), its own menu-bar menu (`Tray`, `Menu`), other displays (`screen`), notifications (`Notification`). `require` looks in the page's folder first, so `npm install` next to it works. A `new BrowserWindow` uses the default session and skips the page's navigation limits.
 
 ```js
 require('@electron/remote').getCurrentWindow().setAlwaysOnTop(true, 'floating');
@@ -125,8 +144,14 @@ One value per tag, in `<head>` before any `<script>`. Each tag is a line in the 
 | play sound                                        | `papp-use` `sound`                                              |
 | read the clipboard from code                      | `papp-use` `clipboard`                                          |
 | use the camera or microphone                      | `papp-use` `camera`, `papp-use` `microphone`                    |
-| know where it is (macOS only)                     | `papp-use` `location`                                           |
+| know where it is (not on Linux)                   | `papp-use` `location`                                           |
 | capture the screen                                | `papp-use` `screen`                                             |
+| print                                             | `papp-use` `print`                                              |
+| use a USB device, serial port or input device     | `papp-use` `usb`, `papp-use` `serial`, `papp-use` `hid`         |
+| use MIDI instruments                              | `papp-use` `midi`                                               |
+| keep running after its window closes              | `papp-use` `background`                                         |
+| open when the user logs in                        | `papp-use` `login`                                              |
+| set the window's size and look                    | `papp-window` `width=900, height=600, titlebar=no`              |
 | answer a key anywhere                             | `papp-shortcut` `CommandOrControl+Shift+N`                      |
 | use Node, many programs, or what `papp` cannot do | `papp-node` `full`                                              |
 
@@ -135,13 +160,20 @@ One value per tag, in `<head>` before any `<script>`. Each tag is a line in the 
 - **Sound:** without `papp-use sound`, the page plays muted, with no error.
 - **No tag needed** to write to the clipboard, go fullscreen or lock the pointer.
 - **Programs** the page runs keep its network and write limits, but can read every file except keys and logins. On Windows they see less: the page's folders, their own folder, and folders every app can read, like Program Files.
-- **Shortcuts:** two different modifiers, or one modifier with a function key.
+- **Shortcuts:** two different modifiers, or one modifier with a function key. Media keys (`MediaPlayPause`, `MediaNextTrack`, `MediaPreviousTrack`, `MediaStop`) work alone.
+- **Window:** one `papp-window` tag, comma-separated `key=value`. Pixels: `width`, `height`, `min-width`, `min-height`. `yes` or `no`: `resizable`, `titlebar`, `frame`, `transparent`, `on-top`. `titlebar=no` keeps the OS window buttons, drawn over the page. `frame=no`, `transparent=yes` and `on-top=yes` are yellow.
+- **Printing:** without `papp-use print`, `papp.print()` and `window.print()` reject. To skip the tag, save `papp.pdf()` with `papp.saveAs()`.
+- **Devices:** `usb`, `serial` and `hid` turn on WebUSB, Web Serial and WebHID; the user picks the device. `midi` turns on Web MIDI, sysex included.
+- **Background:** closing the last window hides it. The tray icon shows or quits it.
+- **Login:** stops when the approval is taken back, the tag is removed, or the file is gone.
+- **No tag needed** for menus, `papp.power` or `papp.onSystem`.
 - **`papp-node`** already allows every folder, program and variable; do not add `papp-read`, `papp-write`, `papp-run` or `papp-env`.
 - **Windows:**
   - A page with `papp-socket` does not open. `localhost` goes through Apargon's proxy: `fetch` works; a program must honour `http_proxy`.
   - `papp-run` takes only `.exe` and `.com` files, not `.bat` or `.cmd`.
   - Stopping a program (`kill`, a timeout, a reload) does not stop the programs it started.
   - `papp-node` writes only in the folders inside the home folder, and in the page's own folder.
+  - `papp.save` follows a link at the name the user picks.
 
 These show red in the popup:
 

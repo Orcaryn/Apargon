@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webFrame } = require('electron');
 
 const call = async (op, ...args) => {
   const reply = await ipcRenderer.invoke('apargon', op, ...args);
@@ -11,10 +11,20 @@ const call = async (op, ...args) => {
 };
 
 call('reset');
+// A page's own window.close() skips the window's close event; through the API it closes as the user's does, so a page in the background hides instead. And window.print() checks papp-use print, which the Windows sandbox does not.
+webFrame.executeJavaScript('window.close = () => papp.closeWindow(); window.print = () => papp.print();');
 
 const watchCallbacks = new Map();
 const shortcutCallbacks = new Set();
+const menuCallbacks = new Set();
+const systemCallbacks = new Set();
 const jobs = new Map();
+// Subscribes a callback; the function returned takes it off again.
+const listener = callbacks => callback => {
+  callbacks.add(callback);
+
+  return () => callbacks.delete(callback);
+};
 ipcRenderer.on('apargon-change', (_event, id, file, kind) => watchCallbacks.get(id)?.(file, kind));
 ipcRenderer.on('apargon-output', (_event, id, stream, text) => jobs.get(id)?.onOutput?.(stream, text));
 ipcRenderer.on('apargon-exit', (_event, id, exit) => {
@@ -22,6 +32,8 @@ ipcRenderer.on('apargon-exit', (_event, id, exit) => {
   jobs.delete(id);
 });
 ipcRenderer.on('apargon-shortcut', (_event, keys) => shortcutCallbacks.forEach(callback => callback(keys)));
+ipcRenderer.on('apargon-menu', (_event, id) => menuCallbacks.forEach(callback => callback(id)));
+ipcRenderer.on('apargon-system', (_event, event) => systemCallbacks.forEach(callback => callback(event)));
 
 contextBridge.exposeInMainWorld('papp', {
   dir: ipcRenderer.sendSync('apargon-dir'),
@@ -60,11 +72,16 @@ contextBridge.exposeInMainWorld('papp', {
   pick: options => call('pick', options),
   open: target => call('open', target),
   saveAs: files => call('saveAs', files),
-  notify: (title, body) => call('notify', title, body),
+  save: (file, data) => call('save', file, data),
+  pdf: () => call('pdf'),
+  print: () => call('print'),
+  menu: menus => call('menu', menus),
+  contextMenu: items => call('contextMenu', items),
+  onMenu: listener(menuCallbacks),
+  power: () => call('power'),
+  onSystem: listener(systemCallbacks),
+  notify: (title, body, options) => call('notify', title, body, options),
   tray: title => call('tray', title),
-  onShortcut: callback => {
-    shortcutCallbacks.add(callback);
-
-    return () => shortcutCallbacks.delete(callback);
-  },
+  closeWindow: () => call('closeWindow'),
+  onShortcut: listener(shortcutCallbacks),
 });

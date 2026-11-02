@@ -9,8 +9,13 @@ export type Bridge = { port: number; socket: string };
 // replies: a file, where the sandbox passes no more pipes; null when they come on REPLY_FD.
 export type PageConfig = { page: string; permissions: Permissions; pageHash: string | null; proxy: string | null; bridges: Bridge[]; requestFd: number; replies: string | null };
 export type SavedFile = { name: string; data: string };
-export type PageRequest = { open: string } | { revoke: string[] } | { showEgressLog: true } | { automaticUpdates: boolean } | { pageIcon: string } | { notify: { title: string; body: string } } | { tray: string | null } | { saveAs: { id: string; files: SavedFile[] } } | { installSkill: true } | { openLink: string } | { openFile: string };
-export type PageReply = { trayClick: true } | { saved: string; paths: string[] } | { saved: string; error: string };
+export type PageRequest = { open: string } | { revoke: string[] } | { showEgressLog: true } | { automaticUpdates: boolean } | { pageIcon: string } | { notify: { id: string } & Notice } | { tray: string | null } | { saveAs: { id: string; files: SavedFile[] } } | { save: { id: string; file: string; data: string } } | { installSkill: true } | { openLink: string } | { openFile: string };
+// Requests with an id get one answer: what was saved, or the notification button the user picked.
+export type PageReply = { show: true } | { quit: true } | { answered: string; value: string[] | string | number | null } | { answered: string; error: string };
+// icon: the page's icon as base64 PNG, once it has one.
+export type Notice = { title: string; body: string; buttons: string[]; icon: string | null };
+// A request the trampoline answers later, by the id it is given.
+export type Ask = <T>(request: (id: string) => PageRequest) => Promise<T>;
 
 export const REQUEST_FD = 3;
 export const TRAMPOLINE_NETWORK_FD = 4;

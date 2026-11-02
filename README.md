@@ -45,8 +45,9 @@ With no tags, a page sees its own folder and nothing else. It asks for more in i
 <meta name="papp-run"      content="git">                      <!-- one program -->
 <meta name="papp-env"      content="AWS_PROFILE">              <!-- one variable for it -->
 <meta name="papp-socket"   content="/var/run/docker.sock">     <!-- one socket -->
-<meta name="papp-use"      content="notifications">            <!-- or clipboard, location, sound, camera, microphone, screen -->
+<meta name="papp-use"      content="notifications">            <!-- or clipboard, location, sound, camera, microphone, screen, print, usb, serial, hid, midi, background, login -->
 <meta name="papp-shortcut" content="CommandOrControl+Shift+N"> <!-- a key that works in every app -->
+<meta name="papp-window"   content="width=900, height=600">    <!-- the window's size and look -->
 <meta name="papp-node"     content="full">                     <!-- full Node -->
 ```
 
@@ -57,6 +58,8 @@ A popup lists what the tags allow before the page runs. A red line is a way to s
 A page keeps its storage (`localStorage`, IndexedDB) when you move or rename the file, as long as its content is the same as when it was last open. A copy starts empty.
 
 With no tag, a page can still open a link in your browser, and a file (image, video, audio, PDF, text) or a folder in its app. A link asks first, with the address shown, unless the page names the site with `papp-open`.
+
+`papp-use background` keeps a page running after you close it; quit it from its tray icon. `papp-use login` opens a page at login, until you take back its approval.
 
 A `papp-node` page runs as you, with only the network blocked: open one only if you trust it. [SECURITY.md](SECURITY.md) lists what Apargon enforces and what it does not.
 

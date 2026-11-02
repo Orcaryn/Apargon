@@ -5,11 +5,11 @@ import path from 'path';
 import { isInside, patternFolder } from '../../permissions/patterns.ts';
 import { HOME } from '../../permissions/paths.ts';
 import type { Use } from '../../permissions/tags.ts';
-import { APP_ROOT, DATA, INSTALL_FOLDER, PAGE_DATA } from '../../shared/data.ts';
+import { APP_ROOT, DATA, INSTALL_FOLDER, PAGE_DATA, pageAppId } from '../../shared/data.ts';
 import type { TrampolinePlatform } from '../platform.ts';
 import { startProxy } from '../network/proxy.ts';
 
-const DEVICE_CAPABILITIES: Partial<Record<Use, string>> = { camera: 'webcam', microphone: 'microphone', location: 'location' };
+const DEVICE_CAPABILITIES: Partial<Record<Use, string>> = { camera: 'webcam', microphone: 'microphone', location: 'location', usb: 'usb', serial: 'serialcommunication', hid: 'humaninterfacedevice' };
 const WXC_EXEC = app.isPackaged ? path.join(process.resourcesPath, 'mxc', 'wxc-exec.exe') : path.join(APP_ROOT, 'node_modules', '@microsoft', 'mxc-sdk', 'bin', process.arch, 'wxc-exec.exe');
 
 export const windows: TrampolinePlatform = {
@@ -92,6 +92,12 @@ export const windows: TrampolinePlatform = {
       // A drive without file streams, like a USB stick, takes no mark: the file stays, unmarked.
     }
   },
+  // A Run value of its own per page, named as its taskbar button.
+  startAtLogin(page, on) {
+    app.setLoginItemSettings({ openAtLogin: on, path: process.execPath, args: [...(app.isPackaged ? [] : [APP_ROOT]), page].map(arg => `"${arg}"`), name: pageAppId(page) });
+  },
+  // Windows has none; making a link there needs an administrator or developer mode.
+  noFollow: 0,
   autoUpdates: false,
 };
 

@@ -1,7 +1,8 @@
-import { nativeImage, Tray } from 'electron';
+import { Menu, nativeImage, Tray } from 'electron';
 import path from 'path';
 
-export function trayFor(page: string, onClick: () => void) {
+// A menu, not only a click: Linux sends no clicks, and a page in the background is quit from here.
+export function trayFor(page: string, onShow: () => void, onQuit: () => void) {
   let tray: Tray | null = null;
 
   return (title: string | null) => {
@@ -16,7 +17,12 @@ export function trayFor(page: string, onClick: () => void) {
       tray = new Tray(icon);
       tray.setToolTip(path.basename(page));
       tray.setTitle(title);
-      tray.on('click', onClick);
+      tray.setContextMenu(
+        Menu.buildFromTemplate([
+          { label: `Show ${path.basename(page)}`, click: onShow },
+          { label: `Quit ${path.basename(page)}`, click: onQuit },
+        ])
+      );
     }
   };
 }

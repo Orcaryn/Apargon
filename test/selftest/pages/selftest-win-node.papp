@@ -50,9 +50,13 @@
     }, () => true);
   const resolved = new Promise((done) => dns.lookup('example.com', (err) => done(!!err)));
 
-  Promise.all([fetched, resolved]).then(([fetchBlocked, dnsBlocked]) => {
+  // The print spooler, as papp-use print needs it: every Windows runner has Microsoft Print to PDF.
+  const printers = win.webContents.getPrintersAsync().then((list) => list.length > 0, () => false);
+
+  Promise.all([fetched, resolved, printers]).then(([fetchBlocked, dnsBlocked, printersReachable]) => {
     result.fetch_blocked = fetchBlocked;
     result.dns_blocked = dnsBlocked;
+    result.printers_reachable = printersReachable;
     document.body.textContent = JSON.stringify(result);
     fs.writeFileSync(path.join(here, 'results', 'result-win-node.json'), JSON.stringify(result, null, 2) + '\n');
     setTimeout(() => window.close(), 200);

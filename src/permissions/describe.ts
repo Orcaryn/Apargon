@@ -4,7 +4,7 @@ import { LOCAL_HOSTS, privateNetwork } from './network.ts';
 import { BIG_FOLDERS, HOME, LAUNCH_FOLDER, runsOutsideSandbox, SECRETS } from './paths.ts';
 import { isInside, literalBase, PAGE_FILE, patternFolder } from './patterns.ts';
 import { PERMISSIONS_PLATFORM } from './platform.ts';
-import type { Permissions, Use } from './tags.ts';
+import type { Permissions, Use, WindowSettings } from './tags.ts';
 
 // The popup shows short, with text as its tip. Red is a way to send data somewhere the tags do not name.
 export type Line = { id: string; level: 'red' | 'yellow' | 'plain'; text: string; short: string };
@@ -16,7 +16,14 @@ const USE_LINES: Record<Use, Omit<Line, 'id'>> = {
   sound: PERMISSIONS_PLATFORM.soundServerRecords ? { level: 'yellow', text: 'Play sound through the sound server, where its programs can also record', short: 'Sound' } : { level: 'plain', text: 'Play sound', short: 'Sound' },
   camera: { level: 'yellow', text: 'Use the camera', short: 'Camera' },
   microphone: { level: 'yellow', text: 'Use the microphone', short: 'Microphone' },
-  screen: { level: 'yellow', text: 'Record or share your screen', short: 'Screen' },
+  screen: { level: 'yellow', text: 'Record or share a screen or window you pick', short: 'Screen' },
+  background: { level: 'plain', text: 'Keep running after you close its window, with an icon you can quit it from', short: 'Background' },
+  login: { level: 'yellow', text: 'Open when you log in', short: 'At login' },
+  usb: { level: 'yellow', text: 'Use a USB device you pick', short: 'USB' },
+  serial: { level: 'yellow', text: 'Use a serial port you pick', short: 'Serial ports' },
+  hid: { level: 'yellow', text: 'Use an input device you pick, which can be a keyboard', short: 'Input devices' },
+  midi: { level: 'plain', text: 'Use MIDI instruments, and change their settings', short: 'MIDI' },
+  print: { level: 'yellow', text: 'Print what it shows, on any printer this computer can reach', short: 'Printing' },
 };
 const USE_SENDS: Partial<Record<Use, string>> = { clipboard: 'what you copy', location: 'where you are', camera: 'what the camera sees', microphone: 'what the microphone hears', screen: 'what is on your screen' };
 
@@ -48,6 +55,10 @@ export function describe(permissions: Permissions) {
 
   if (permissions.own) {
     lines.push({ id: `own:${permissions.own}`, level: 'plain', text: 'See files', short: permissions.own });
+  }
+
+  if (permissions.window) {
+    lines.push(windowLine(permissions.window));
   }
 
   const order = { red: 0, yellow: 1, plain: 2 };
@@ -100,6 +111,22 @@ function folderLine(kind: 'read' | 'write', pattern: string): Line {
   const short = pattern === path.parse(pattern).root ? 'All your files' : pattern === HOME ? 'Your home folder' : pattern;
 
   return { id: `${kind}:${pattern}`, level, text, short };
+}
+
+// Each setting the tag makes, so none goes unseen. Yellow where the window could pass for another app's: without a frame, see-through, or over every other window.
+function windowLine({ width, height, minWidth, minHeight, resizable, titleBar, frame, transparent, onTop }: WindowSettings): Line {
+  const settings = [
+    (width || height) && `${width ?? 'usual'} × ${height ?? 'usual'}`,
+    (minWidth || minHeight) && `at least ${minWidth ?? 0} × ${minHeight ?? 0}`,
+    resizable !== undefined && (resizable ? 'resizable' : 'fixed size'),
+    titleBar !== undefined && (titleBar ? 'title bar' : 'no title bar'),
+    frame !== undefined && (frame ? 'frame' : 'no frame'),
+    transparent !== undefined && (transparent ? 'see-through' : 'not see-through'),
+    onTop !== undefined && (onTop ? 'stays on top of other apps' : 'not on top'),
+  ].filter(text => typeof text === 'string');
+  const looksLikeAnotherApp = frame === false || transparent === true || onTop === true;
+
+  return { id: `window:${settings.join(', ')}`, level: looksLikeAnotherApp ? 'yellow' : 'plain', text: `Window: ${settings.join(', ')}`, short: 'Window' };
 }
 
 function hostLine(pattern: string): Line {

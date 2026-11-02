@@ -6,7 +6,7 @@ import path from 'path';
 import { localPorts } from '../../permissions/network.ts';
 import { patternFolder } from '../../permissions/patterns.ts';
 import { PRIVATE } from '../../permissions/platform/linux.ts';
-import type { Permissions } from '../../permissions/tags.ts';
+import type { Permissions, Use } from '../../permissions/tags.ts';
 import { REQUEST_FD, relay, type Bridge } from '../../shared/channel.ts';
 import { APP_ROOT, DATA, NET_DATA, PAGE_DATA, pageAppId } from '../../shared/data.ts';
 import type { TrampolinePlatform } from '../platform.ts';
@@ -15,6 +15,11 @@ import { startProxy } from '../network/proxy.ts';
 const RUNTIME = process.env.XDG_RUNTIME_DIR ?? `/run/user/${os.userInfo().uid}`;
 const APPLICATIONS = path.join(process.env.XDG_DATA_HOME ?? path.join(os.homedir(), '.local', 'share'), 'applications');
 const ICONS = path.join(DATA, 'icons');
+const AUTOSTART = path.join(process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), '.config'), 'autostart');
+// The files in /dev each kind of device gets.
+const DEVICE_FILES: Partial<Record<Use, RegExp>> = { hid: /^hidraw\d+$/, serial: /^tty(USB|ACM)\d+$/, camera: /^video\d+$/ };
+// MIDI's own files in /dev/snd: the rest record from every microphone.
+const MIDI_FILES = /^(seq|timer|controlC\d+|midiC\d+D\d+)$/;
 
 export const linux: TrampolinePlatform = {
   // The page's network holds only its own loopback, so the proxy and declared ports reach it as socket files.
@@ -57,6 +62,18 @@ export const linux: TrampolinePlatform = {
     fs.writeFileSync(path.join(ICONS, `${pageAppId(page)}.png`), Buffer.from(png, 'base64'));
     writeLauncherEntry(page);
   },
+  // A copy of the page's launcher entry, which prepare writes first.
+  startAtLogin(page, on) {
+    const entry = `${pageAppId(page)}.desktop`;
+
+    if (on) {
+      fs.mkdirSync(AUTOSTART, { recursive: true });
+      fs.copyFileSync(path.join(APPLICATIONS, entry), path.join(AUTOSTART, entry));
+    } else {
+      fs.rmSync(path.join(AUTOSTART, entry), { force: true });
+    }
+  },
+  noFollow: fs.constants.O_NOFOLLOW,
   autoUpdates: false,
 };
 
@@ -81,6 +98,7 @@ function writeLauncherEntry(page: string) {
 
     if (other && !fs.existsSync(other)) {
       fs.rmSync(path.join(APPLICATIONS, entry));
+      fs.rmSync(path.join(AUTOSTART, entry), { force: true });
       fs.rmSync(path.join(ICONS, entry.replace(/\.desktop$/, '.png')), { force: true });
     }
   }
@@ -124,16 +142,25 @@ function bwrapArgs(page: string, permissions: Permissions, socketFolder: string 
   const disk = permissions.node ? '--dev-bind' : '--ro-bind';
   const sound = permissions.use.includes('sound') || permissions.use.includes('microphone');
   const soundSockets = sound ? ['pipewire-0', 'pulse'].map(name => path.join(RUNTIME, name)).filter(file => fs.existsSync(file)) : [];
-  const named = [path.dirname(page), ...permissions.read.map(patternFolder), ...permissions.sockets, ...displaySockets(), ...soundSockets];
+  const printSocket = permissions.use.includes('print') && fs.existsSync('/run/cups/cups.sock') ? ['/run/cups/cups.sock'] : [];
+  // The udev database lists devices; its control socket takes only root.
+  const udev = permissions.use.some(name => ['usb', 'serial', 'hid', 'midi'].includes(name)) && fs.existsSync('/run/udev') ? ['/run/udev'] : [];
+  const devicePatterns = Object.entries(DEVICE_FILES).filter(([use]) => permissions.use.includes(use as Use)).map(([, pattern]) => pattern);
+  const devices = [
+    '/dev/dri',
+    ...(sound ? ['/dev/snd'] : []),
+    ...(permissions.use.includes('midi') && !sound && fs.existsSync('/dev/snd') ? fs.readdirSync('/dev/snd').filter(name => MIDI_FILES.test(name)).map(name => `/dev/snd/${name}`) : []),
+    ...(permissions.use.includes('usb') ? ['/dev/bus/usb'] : []),
+    ...fs.readdirSync('/dev').filter(name => devicePatterns.some(pattern => pattern.test(name))).map(name => `/dev/${name}`),
+  ].filter(file => fs.existsSync(file));
+  const named = [path.dirname(page), ...permissions.read.map(patternFolder), ...permissions.sockets, ...displaySockets(), ...soundSockets, ...printSocket, ...udev];
   [...writable, PAGE_DATA].forEach(folder => fs.mkdirSync(folder, { recursive: true }));
   const covered = permissions.hidden.filter(file => fs.existsSync(file)).flatMap(file => (fs.statSync(file).isDirectory() ? ['--tmpfs', file] : ['--ro-bind', '/dev/null', file]));
 
   // Later mounts cover earlier ones: Apargon's own data must stay last.
   return [
     ...['--unshare-net', '--unshare-pid', '--unshare-user', '--disable-userns', '--new-session', '--die-with-parent', disk, '/', '/', '--dev', '/dev', '--proc', '/proc'],
-    ...(fs.existsSync('/dev/dri') ? ['--dev-bind', '/dev/dri', '/dev/dri'] : []),
-    ...(sound && fs.existsSync('/dev/snd') ? ['--dev-bind', '/dev/snd', '/dev/snd'] : []),
-    ...(permissions.use.includes('camera') ? fs.readdirSync('/dev').filter(name => /^video\d+$/.test(name)).flatMap(name => ['--dev-bind', `/dev/${name}`, `/dev/${name}`]) : []),
+    ...devices.flatMap(file => ['--dev-bind', file, file]),
     ...PRIVATE.flatMap(folder => ['--tmpfs', folder]),
     ...named.flatMap(file => [disk, file, file]),
     ...(permissions.node ? [] : writable.flatMap(folder => ['--bind', folder, folder])),

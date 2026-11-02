@@ -6,8 +6,8 @@ import type { PagePlatform } from '../platform.ts';
 
 export const linux: PagePlatform = {
   isOffline: inEmptyNetwork,
-  // Notifications need D-Bus, which the fence hides, so the trampoline shows them.
-  notify: text => tellTrampoline({ notify: text }),
+  // Notifications need D-Bus, which the fence hides.
+  notifiesHere: false,
   // The window's class on X11 and app id on Wayland, which the desktop matches to the launcher entry the trampoline wrote for this page.
   beforeReady(page) {
     app.setName(pageAppId(page));

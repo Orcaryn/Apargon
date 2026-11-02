@@ -102,6 +102,11 @@
     await papp.rm('scratch-copy.txt');
     result.copy_refused = await refused(() => papp.copyFile('../../../package.json', 'scratch-copy.txt')) && await refused(() => papp.copyFile('subfolder/note.txt', 'own.txt')) && await refused(() => papp.copyFile('selftest.papp', 'scratch.papp'));
     await papp.rm('scratch.txt');
+    const pdf = await papp.pdf();
+    result.pdf_rendered = new TextDecoder().decode(pdf.slice(0, 5)) === '%PDF-';
+    result.menu_set = (await papp.menu([{ label: 'Selftest', submenu: [{ label: 'Run', id: 'run', keys: 'CmdOrCtrl+Shift+9' }, { separator: true }, { label: 'Role smuggled', id: 'quit', role: 'quit' }] }])) === undefined;
+    const power = await papp.power();
+    result.power_read = typeof power.idleSeconds === 'number' && typeof power.onBattery === 'boolean';
     result.save_names_refused = (await Promise.all([{}, { '../out.txt': 'x' }, { 'sub/out.txt': 'x' }, { '.zshrc': 'x' }, { 'ok.txt': 'x', 'page.papp': 'x' }, { 'ok.txt': 'x', '': 'x' }].map((files) => refused(() => papp.saveAs(files))))).every(Boolean);
 
     result.outside_read_refused = await refused(() => papp.readFile('../../../package.json'));
@@ -110,7 +115,7 @@
     result.hidden_write_refused = await refused(() => papp.writeFile('.hidden', 'x'));
     result.run_refused = await refused(() => papp.run('ls'));
     result.spawn_refused = await refused(() => papp.spawn('ls'));
-    result.use_refused = await refused(() => papp.notify('selftest', 'should not show'));
+    result.use_refused = await refused(() => papp.notify('selftest', 'should not show')) && await refused(() => papp.print()) && await refused(() => window.print());
     result.open_type_refused = await refused(() => papp.open('selftest.papp')) && await refused(() => papp.open('subfolder/frame.html')) && await refused(() => papp.open('subfolder/bundle.app'));
     result.open_outside_refused = await refused(() => papp.open('../../../package.json'));
     result.open_scheme_refused = (await Promise.all(['vscode://file/etc/passwd', 'file:///etc/passwd', 'javascript:1'].map((href) => refused(() => papp.open(href))))).every(Boolean);

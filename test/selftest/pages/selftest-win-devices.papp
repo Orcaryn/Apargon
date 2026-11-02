@@ -3,6 +3,10 @@
 <meta name="papp-use" content="camera">
 <meta name="papp-use" content="microphone">
 <meta name="papp-use" content="location">
+<meta name="papp-use" content="usb">
+<meta name="papp-use" content="serial">
+<meta name="papp-use" content="hid">
+<meta name="papp-use" content="midi">
 <meta name="papp-run" content="tokencaps">
 <meta name="papp-write" content="./results/result-win-devices.json">
 <meta name="papp-write" content="./results/devices-win.json">
@@ -16,12 +20,18 @@
   const seen = {};
 
   try {
-    const output = (await papp.run('tokencaps', ['webcam', 'microphone', 'location'])).stdout;
+    const capabilities = ['webcam', 'microphone', 'location', 'usb', 'serialcommunication', 'humaninterfacedevice'];
+    const output = (await papp.run('tokencaps', capabilities)).stdout;
     const held = [...output.matchAll(/^capability (\S+)/gm)].map(([, sid]) => sid);
     const derived = Object.fromEntries([...output.matchAll(/^derived (\S+) (\S+)/gm)].map(([, name, sid]) => [name, sid]));
-    for (const name of ['webcam', 'microphone', 'location']) {
+    for (const name of capabilities) {
       result[`${name}_capability`] = held.includes(derived[name]);
     }
+    // The runner has no such devices: each API must answer, with an empty list.
+    result.usb_api = Array.isArray(await navigator.usb.getDevices());
+    result.serial_api = Array.isArray(await navigator.serial.getPorts());
+    result.hid_api = Array.isArray(await navigator.hid.getDevices());
+    result.midi_api = (await navigator.requestMIDIAccess()).inputs !== undefined;
     seen.tokencaps = output.trim().split(/\r?\n/);
     seen.devices = (await navigator.mediaDevices.enumerateDevices()).map((device) => device.kind);
     for (const [name, constraints] of Object.entries({ camera: { video: true }, microphone: { audio: true } })) {

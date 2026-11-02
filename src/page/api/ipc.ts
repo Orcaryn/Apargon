@@ -2,19 +2,17 @@ import { ipcMain, type BrowserWindow } from 'electron';
 import remote from '@electron/remote/main/index.js';
 import { randomUUID } from 'crypto';
 import type { Permissions } from '../../permissions/tags.ts';
-import { tellTrampoline, type PageReply } from '../../shared/channel.ts';
+import { tellTrampoline, type Ask, type PageReply, type PageRequest } from '../../shared/channel.ts';
 import type { pageAccess } from './access.ts';
-import { pageApi } from './api.ts';
+import { pageApi, type PageProcess } from './api.ts';
 
-export function serveApi(dir: string, permissions: Permissions, access: ReturnType<typeof pageAccess> | null, toFront: () => void) {
-  // The trampoline shows the dialog and writes: this process may not write where the user picks.
-  const savesWaiting = new Map<string, { resolve: (paths: string[]) => void; reject: (err: Error) => void }>();
-  const saveAs = (files: Record<string, string | Uint8Array>) =>
-    new Promise<string[]>((resolve, reject) => {
+export function serveApi(dir: string, permissions: Permissions, access: ReturnType<typeof pageAccess> | null, shared: Omit<PageProcess, 'ask'>) {
+  const waiting = new Map<string, { resolve: (value: unknown) => void; reject: (err: Error) => void }>();
+  const ask: Ask = <T>(request: (id: string) => PageRequest) =>
+    new Promise<T>((resolve, reject) => {
       const id = randomUUID();
-      const encoded = Object.entries(files).map(([name, data]) => ({ name, data: Buffer.from(data).toString('base64') }));
-      savesWaiting.set(id, { resolve, reject });
-      tellTrampoline({ saveAs: { id, files: encoded } });
+      waiting.set(id, { resolve: resolve as (value: unknown) => void, reject });
+      tellTrampoline(request(id));
     });
   const apiBySender = new Map<number, Record<string, (...args: unknown[]) => unknown>>();
 
@@ -40,7 +38,7 @@ export function serveApi(dir: string, permissions: Permissions, access: ReturnTy
   return {
     enable(win: BrowserWindow) {
       if (access) {
-        const api = pageApi(dir, permissions, access, win, toFront, saveAs);
+        const api = pageApi(dir, permissions, access, win, { ...shared, ask });
         const id = win.webContents.id;
         apiBySender.set(id, api as Record<string, (...args: unknown[]) => unknown>);
         win.on('closed', () => {
@@ -51,12 +49,12 @@ export function serveApi(dir: string, permissions: Permissions, access: ReturnTy
         remote.enable(win.webContents);
       }
     },
-    saved(reply: Extract<PageReply, { saved: string }>) {
-      const { resolve, reject } = savesWaiting.get(reply.saved)!;
-      savesWaiting.delete(reply.saved);
+    answered(reply: Extract<PageReply, { answered: string }>) {
+      const { resolve, reject } = waiting.get(reply.answered)!;
+      waiting.delete(reply.answered);
 
-      if ('paths' in reply) {
-        resolve(reply.paths);
+      if ('value' in reply) {
+        resolve(reply.value);
       } else {
         reject(new Error(reply.error));
       }

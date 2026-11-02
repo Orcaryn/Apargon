@@ -17,7 +17,8 @@ export async function approve(file: string) {
   const site = downloadAddress === null ? null : (URL.parse(downloadAddress)?.hostname ?? '');
   const downloadedFrom = site === '' ? 'another computer' : site;
   const lines = describe(permissions);
-  const opensWithoutAsking = downloadedFrom === null && lines.every(line => line.id.startsWith('own:'));
+  // Its own folder and a plain window are what any page made here has.
+  const opensWithoutAsking = downloadedFrom === null && lines.every(line => line.id.startsWith('own:') || (line.id.startsWith('window:') && line.level === 'plain'));
   const pageHash = downloadedFrom === null ? null : createHash('sha256').update(html).digest('hex');
   const grant = lines.map(line => line.id).concat(pageHash ? `content:${pageHash}` : []).sort();
   const grants = readJson<Grants>(GRANTS_FILE);
@@ -68,6 +69,8 @@ export async function approve(file: string) {
 }
 
 export function revoke(pages: string[]) {
+  pages.forEach(page => TRAMPOLINE_PLATFORM.startAtLogin(page, false));
+
   for (const file of [GRANTS_FILE, LINKS_FILE]) {
     const kept = Object.entries(readJson<Grants>(file)).filter(([approved]) => !pages.includes(approved));
     writeJson(file, Object.fromEntries(kept));

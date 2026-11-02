@@ -3,12 +3,13 @@ import { spawnSync } from 'child_process';
 import { createHash, randomUUID } from 'crypto';
 import fs from 'fs';
 import type { AddressInfo } from 'net';
+import os from 'os';
 import path from 'path';
 import { localPorts } from '../../permissions/network.ts';
 import { changeableSources, PAGE_SOURCE } from '../../permissions/patterns.ts';
 import type { Permissions } from '../../permissions/tags.ts';
 import { REQUEST_FD } from '../../shared/channel.ts';
-import { DATA, INSTALL_FOLDER, PAGE_DATA } from '../../shared/data.ts';
+import { APP_ROOT, DATA, INSTALL_FOLDER, PAGE_DATA, pageAppId } from '../../shared/data.ts';
 import type { TrampolinePlatform } from '../platform.ts';
 import { startProxy } from '../network/proxy.ts';
 
@@ -49,6 +50,24 @@ export const macos: TrampolinePlatform = {
   markDownloaded(file) {
     spawnSync('/usr/bin/xattr', ['-w', 'com.apple.quarantine', `0083;${Math.floor(Date.now() / 1000).toString(16)};Apargon;${randomUUID().toUpperCase()}`, file]);
   },
+  // A launch agent: login items take no arguments, so they could not name the page. Written only when it changes, as macOS tells the user each time.
+  startAtLogin(page, on) {
+    const label = `com.${pageAppId(page)}`;
+    const agent = path.join(os.homedir(), 'Library', 'LaunchAgents', `${label}.plist`);
+    const args = [process.execPath, ...(app.isPackaged ? [] : [APP_ROOT]), page].map(arg => `<string>${arg.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</string>`);
+    const plist = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict><key>Label</key><string>${label}</string><key>ProgramArguments</key><array>${args.join('')}</array><key>RunAtLoad</key><true/></dict></plist>
+`;
+
+    if (!on) {
+      fs.rmSync(agent, { force: true });
+    } else if (!fs.existsSync(agent) || fs.readFileSync(agent, 'utf8') !== plist) {
+      fs.mkdirSync(path.dirname(agent), { recursive: true });
+      fs.writeFileSync(agent, plist);
+    }
+  },
+  noFollow: fs.constants.O_NOFOLLOW,
   autoUpdates: true,
 };
 
@@ -58,6 +77,8 @@ function seatbeltProfile(permissions: Permissions, proxyPort: number | null) {
     fs.readFileSync(path.join(import.meta.dirname, 'profiles', 'macos.sb'), 'utf8'),
     ...ports.map(port => `(allow network-outbound (remote ip "localhost:${port}"))`),
     ...permissions.sockets.map(socket => `(allow network-outbound (${fs.statSync(socket).isDirectory() ? 'subpath' : 'literal'} "${socket}"))`),
+    // The print server, which sends jobs on to the printers it knows.
+    ...(permissions.use.includes('print') ? ['(allow network-outbound (literal "/private/var/run/cupsd"))'] : []),
   ];
 
   if (!permissions.node) {

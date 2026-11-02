@@ -12,6 +12,10 @@ export type TrampolinePlatform = {
   downloadAddress(page: string): string | null;
   pageIcon?(page: string, png: string): void;
   markDownloaded?(file: string): void;
+  // Opens the page each time the user logs in, or no longer.
+  startAtLogin(page: string, on: boolean): void;
+  // The open flag that refuses a link, so a save never writes where one leads.
+  noFollow: number;
   autoUpdates: boolean;
 };
 

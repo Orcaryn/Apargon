@@ -3,6 +3,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import { once } from 'events';
 import fs from 'fs';
 import path from 'path';
+import { pipeline } from 'stream/promises';
 import { PROGRAM_ENV } from '../../permissions/env.ts';
 import { linkHost, viewable } from '../../permissions/open.ts';
 import { absolutePath, HOME, realPath } from '../../permissions/paths.ts';
@@ -120,7 +121,7 @@ export function pageApi(dir: string, permissions: Permissions, access: ReturnTyp
       need(canChange(destination), destination, 'change');
 
       // Only the bytes: a copied mode could make the page a program to run.
-      await fs.promises.writeFile(destination, await fs.promises.readFile(source));
+      await pipeline(fs.createReadStream(source), fs.createWriteStream(destination));
     },
     async readdir(file: string, { stats = false }: { stats?: boolean } = {}) {
       const target = where(file);

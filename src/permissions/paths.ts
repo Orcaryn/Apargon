@@ -55,7 +55,8 @@ export function runsOutsideSandbox(file: string) {
 }
 
 export function absolutePath(value: string, dir: string) {
-  const absolute = path.resolve(dir, value === '~' ? HOME : value.replace(/^~\//, HOME + '/'));
+  // As a function: a $ in the home folder's name would otherwise be read as a replacement pattern.
+  const absolute = path.resolve(dir, value === '~' ? HOME : value.replace(/^~\//, () => HOME + '/'));
   const refusal = PERMISSIONS_PLATFORM.refusePath(absolute);
 
   if (refusal) {

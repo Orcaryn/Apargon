@@ -153,6 +153,9 @@ function hostPattern(value: string) {
 
   if (!/^(\*|(\*\.)?[a-z0-9][a-z0-9.-]*):(\*|[1-9]\d*)$/.test(pattern) || +port < 1 || +port > 65535) {
     throw new Error(`Bad papp-net value "${value}". One host:port per <meta>, such as api.example.com:443 or *.example.com:443.`);
+  } else if (!net.isIPv4(host) && host.split('.').every(label => /^(\d+|0x[0-9a-f]*)$/.test(label))) {
+    // To the resolver 16843009, 1.1 and 0x7f.1 are addresses; the popup would show them as names.
+    throw new Error(`Bad papp-net value "${value}". A host of numbers must be a full address, such as 1.1.1.1:${port === '*' ? '443' : port}.`);
   } else if (host !== '127.0.0.1' && /^(0|127|169\.254)\./.test(host)) {
     throw new Error(`Apargon never reaches ${host}, which is this computer or a link-local address, where cloud machines keep their keys. For a program on this computer, declare localhost:<port>.`);
   } else if (net.isIPv4(host) && Object.values(os.networkInterfaces()).flat().some(own => own?.address === host && !own.internal)) {

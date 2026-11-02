@@ -4,10 +4,13 @@ import type { AddressInfo } from 'net';
 import path from 'path';
 import { isInside, patternFolder } from '../../permissions/patterns.ts';
 import { HOME } from '../../permissions/paths.ts';
+import type { Use } from '../../permissions/tags.ts';
 import { APP_ROOT, DATA, INSTALL_FOLDER, PAGE_DATA } from '../../shared/data.ts';
 import type { TrampolinePlatform } from '../platform.ts';
 import { startProxy } from '../network/proxy.ts';
 
+// Windows gives a device to a sandboxed app only if it holds the device's capability.
+const DEVICE_CAPABILITIES: Partial<Record<Use, string>> = { camera: 'webcam', microphone: 'microphone', location: 'location' };
 // MXC's executor, from the package in development and from the app's resources once built.
 const WXC_EXEC = app.isPackaged ? path.join(process.resourcesPath, 'mxc', 'wxc-exec.exe') : path.join(APP_ROOT, 'node_modules', '@microsoft', 'mxc-sdk', 'bin', process.arch, 'wxc-exec.exe');
 
@@ -63,7 +66,7 @@ export const windows: TrampolinePlatform = {
             : { network: { egress: { default: 'deny' }, ingress: { default: 'allow', hostLoopback: 'allow' } }, runtimeConfig: { networkProxy: `http://127.0.0.1:${proxyPort}` } }),
           // Chromium decides what the page may read from the clipboard; the user's own paste needs the rest.
           ui: { disable: false, clipboard: 'all' },
-          processContainer: { filesystem: { enumeratePaths: [...parents] } },
+          processContainer: { filesystem: { enumeratePaths: [...parents] }, capabilities: permissions.use.flatMap(name => DEVICE_CAPABILITIES[name] ?? []) },
         };
 
         return [WXC_EXEC, '--config-base64', Buffer.from(JSON.stringify(request)).toString('base64')];

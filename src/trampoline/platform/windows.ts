@@ -86,11 +86,13 @@ export const windows: TrampolinePlatform = {
       return null;
     }
   },
-  // The mark of the web a browser's download gets: SmartScreen then warns before the file runs. A drive without file streams, like a USB stick, takes no mark: the file stays, unmarked.
+  // The mark of the web a browser's download gets: SmartScreen then warns before the file runs.
   markDownloaded(file) {
     try {
       fs.writeFileSync(`${file}:Zone.Identifier`, '[ZoneTransfer]\r\nZoneId=3\r\n');
-    } catch {}
+    } catch {
+      // A drive without file streams, like a USB stick, takes no mark: the file stays, unmarked.
+    }
   },
   autoUpdates: false,
 };

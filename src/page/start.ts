@@ -13,7 +13,6 @@ import { installMenu } from './menu.ts';
 import { PAGE_PLATFORM } from './platform.ts';
 import { createPageSession } from './session.ts';
 
-// Before the app is ready: the page process keeps its own data, reaches the network only through the proxy, and quits with its last window.
 export function preparePage({ page, proxy }: PageConfig) {
   app.setPath('userData', PAGE_DATA);
 
@@ -77,7 +76,6 @@ export async function startPage({ page, permissions, pageHash, bridges }: PageCo
     if (!isPage(event.url) && (event.isMainFrame || new URL(event.url).protocol === 'file:')) {
       event.preventDefault();
 
-      // The trampoline opens an http(s) link in the browser, or asks; the window stays on the page.
       if (event.isMainFrame) {
         tellTrampoline({ openLink: event.url });
       }

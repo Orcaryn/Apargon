@@ -1,7 +1,7 @@
 import { app, BrowserWindow, nativeTheme, screen } from 'electron';
 import path from 'path';
 
-// Shows one of the windows in html/, filled in by its render(), as tall as it needs up to the screen, where its <main> scrolls; true when the user picks #allow.
+// Each window in html/ fills itself in with render(); true when the user picks #allow.
 export async function ask(file: string, content: object) {
   const width = 480;
   const win = new BrowserWindow({

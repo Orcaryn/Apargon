@@ -5,7 +5,6 @@ import { PAGE_FILE } from './permissions/patterns.ts';
 import { PAGE_CONFIG, tellTrampoline } from './shared/channel.ts';
 import { openPage, startTrampoline } from './trampoline/start.ts';
 
-// One app, two processes: the trampoline, with network, and the page process it starts in the sandbox with PAGE_CONFIG.
 if (PAGE_CONFIG) {
   preparePage(PAGE_CONFIG);
 }

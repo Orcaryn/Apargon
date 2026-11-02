@@ -10,7 +10,7 @@ export const macos: PagePlatform = {
   },
   processGroups: true,
   appMenu: true,
-  // In the Dock, and on the file of a page made here: the trampoline sets it, as this process may not write there.
+  // The trampoline sets the file's icon: this process may not write there.
   showIcon(_win, icon, madeHere) {
     app.dock?.setIcon(icon);
 

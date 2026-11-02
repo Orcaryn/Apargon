@@ -6,7 +6,6 @@ import { tellTrampoline, type PageReply } from '../../shared/channel.ts';
 import type { pageAccess } from './access.ts';
 import { pageApi } from './api.ts';
 
-// The papp API reaches each window over IPC. A papp-node page gets Electron's own instead, through @electron/remote.
 export function serveApi(dir: string, permissions: Permissions, access: ReturnType<typeof pageAccess> | null, toFront: () => void) {
   // The trampoline shows the dialog and writes: this process may not write where the user picks.
   const savesWaiting = new Map<string, { resolve: (paths: string[]) => void; reject: (err: Error) => void }>();
@@ -52,7 +51,6 @@ export function serveApi(dir: string, permissions: Permissions, access: ReturnTy
         remote.enable(win.webContents);
       }
     },
-    // The trampoline's answer to a saveAs.
     saved(reply: Extract<PageReply, { saved: string }>) {
       const { resolve, reject } = savesWaiting.get(reply.saved)!;
       savesWaiting.delete(reply.saved);

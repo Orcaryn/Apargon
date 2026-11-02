@@ -26,18 +26,17 @@ export const linux: TrampolinePlatform = {
     const proxyBridge = socketFolder ? { port: unusedPort(localBridges), socket: path.join(socketFolder, 'proxy.sock') } : null;
     const proxy = proxyBridge ? await startProxy(permissions.net, proxyBridge.socket) : null;
     const localRelays = await Promise.all(localBridges.map(({ port, socket }) => relay({ path: socket }, { host: '127.0.0.1', port })));
-    // The page proves it is offline against the trampoline's network, at TRAMPOLINE_NETWORK_FD.
-    const networkFd = fs.openSync('/proc/self/ns/net', 'r');
+    const trampolineNetworkFd = fs.openSync('/proc/self/ns/net', 'r');
 
     return {
       command: apargon => ['bwrap', ...bwrapArgs(page, permissions, socketFolder), ...apargon],
-      stdio: ['ignore', 'pipe', 'pipe', 'pipe', networkFd, 'pipe'],
+      stdio: ['ignore', 'pipe', 'pipe', 'pipe', trampolineNetworkFd, 'pipe'],
       requestFd: REQUEST_FD,
       repliesInFile: false,
       proxyPort: proxyBridge?.port ?? null,
       bridges: proxyBridge ? [proxyBridge, ...localBridges] : [],
       close() {
-        fs.closeSync(networkFd);
+        fs.closeSync(trampolineNetworkFd);
         proxy?.close();
         localRelays.forEach(server => server.close());
 
@@ -48,7 +47,6 @@ export const linux: TrampolinePlatform = {
     };
   },
   installHint: '. Install Apargon from the .deb: it brings bwrap and the AppArmor profile Ubuntu needs.',
-  // Browsers mark a download with where it came from.
   downloadAddress(page) {
     const mark = spawnSync('getfattr', ['--only-values', '-n', 'user.xdg.origin.url', page], { encoding: 'utf8' });
 
@@ -62,7 +60,7 @@ export const linux: TrampolinePlatform = {
   autoUpdates: false,
 };
 
-// The dock names a window after the launcher entry its class matches, and shows that entry's icon: one per page, under its title, that reopens it. Hidden from the app grid, so opening a page installs nothing visible. Entries of pages that are gone go with it.
+// The dock names a window after the launcher entry its class matches, and shows that entry's icon: one per page, under its title, that reopens it. Hidden from the app grid, so opening a page installs nothing visible.
 function writeLauncherEntry(page: string) {
   const id = pageAppId(page);
   const icon = path.join(ICONS, `${id}.png`);
@@ -90,7 +88,6 @@ function writeLauncherEntry(page: string) {
   fs.writeFileSync(path.join(APPLICATIONS, `${id}.desktop`), lines.join('\n') + '\n');
 }
 
-// The page's <title>, on one line, or its file name.
 function pageTitle(page: string) {
   const title = /<title[^>]*>([^<]*)<\/title>/i.exec(fs.readFileSync(page, 'utf8'))?.[1] ?? '';
   const text = title

@@ -22,7 +22,6 @@ export const windows: PermissionsPlatform = {
   // Programs need them as much as the page.
   programEnv: 'SYSTEMROOT WINDIR SYSTEMDRIVE USERPROFILE HOMEDRIVE HOMEPATH USERNAME APPDATA LOCALAPPDATA TEMP TMP PROGRAMDATA PROGRAMFILES PATHEXT COMSPEC PROCESSOR_ARCHITECTURE NUMBER_OF_PROCESSORS'.split(' '),
   pageEnv: [],
-  // Apargon has no relay for a socket into the sandbox here.
   refusedTags: { socket: 'Apargon cannot give a page papp-socket on Windows yet. Remove the tag to open the page there.' },
   refuse: () => null,
   // Windows looks up the server of a network path itself, outside the sandbox, before anyone can refuse it. A colon after the drive names a stream of a file, as page.papp::$DATA is the page, and Windows drops a name's trailing dots and spaces: either reaches a file under a name the checks do not see.

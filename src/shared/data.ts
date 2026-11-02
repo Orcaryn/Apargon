@@ -22,7 +22,7 @@ export const UPDATE_FILE = path.join(DATA, 'update.json');
 export const REPLIES_DATA = path.join(DATA, 'replies');
 export const EGRESS_LOG = path.join(app.getPath('logs'), 'egress.log');
 
-// A page as an app of its own on the taskbar or dock, named after its path: the same after an edit, another for a copy.
+// Named after the path: the same app after an edit, another for a copy.
 export function pageAppId(page: string) {
   return `apargon-page-${createHash('sha256').update(page).digest('hex').slice(0, 16)}`;
 }

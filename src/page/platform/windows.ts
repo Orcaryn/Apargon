@@ -27,6 +27,7 @@ export const windows: PagePlatform = {
       win.setIcon(icon);
     }
   },
+  // taskkill finds children through WMI, which the sandbox cannot reach: a kill ends the program, not what it started.
   processGroups: false,
 };
 

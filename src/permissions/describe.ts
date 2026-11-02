@@ -120,10 +120,8 @@ function hostLine(pattern: string): Line {
 }
 
 function openLine(host: string): Line {
-  // Red as in papp-net: a whole top-level domain, this computer, or an address in numbers, the local network's included.
   const red = host === '*' || (host.startsWith('*.') && !host.slice(2).includes('.')) || host === 'localhost' || net.isIPv4(host);
   const level = red ? 'red' : host.startsWith('*.') ? 'yellow' : 'plain';
 
   return { id: `open:${host}`, level, text: host === '*' ? 'Open any link in your browser' : 'Open in your browser', short: host === '*' ? 'Any site' : host };
 }
-

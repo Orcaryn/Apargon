@@ -52,7 +52,6 @@ if (process.platform === 'win32') {
       return !(err as Error).message.includes(reason);
     }
   });
-  // Programs, Node and a local port open, a program found as Windows names it.
   fs.writeFileSync(page, '<meta name="papp-run" content="cmd">\n<meta name="papp-env" content="APARGON_TEST_ENV">');
   const cmd = declaredPermissions(page).run.cmd;
   fs.writeFileSync(page, '<meta name="papp-node" content="full">');

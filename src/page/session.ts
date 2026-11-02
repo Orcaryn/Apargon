@@ -6,7 +6,6 @@ import { realPath } from '../permissions/paths.ts';
 import { PAGE_FILE } from '../permissions/patterns.ts';
 import type { Permissions, Use } from '../permissions/tags.ts';
 
-// The page's own session: its storage, the files it may load, and the web permissions its tags allow.
 export function createPageSession(page: string, { use }: Permissions, pageHash: string | null, canSee: (file: string) => boolean) {
   const pageSession = session.fromPartition(`persist:${createHash('sha256').update(page).digest('hex')}`);
 

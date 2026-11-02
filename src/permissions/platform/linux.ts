@@ -27,9 +27,8 @@ export const linux: PermissionsPlatform = {
     return null;
   },
   refusePath: () => null,
-  // Startup files are hidden names, which are red already.
   launchFolder: null,
-  // bwrap binds each writable folder whole, hidden files in it too, and they can run outside the sandbox.
+  // bwrap binds each writable folder whole.
   writesWholeFolders: true,
   soundServerRecords: true,
   programFolders: ['/usr/local/bin'],

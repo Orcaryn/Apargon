@@ -17,7 +17,6 @@ export function pageApi(dir: string, permissions: Permissions, access: ReturnTyp
   const watchers = new Map<string, fs.FSWatcher>();
   const jobs = new Map<string, ChildProcessWithoutNullStreams>();
   const runs = new Set<ChildProcessWithoutNullStreams>();
-  // What the user picked in this window's dialog, until the page reloads.
   const picked: RegExp[] = [];
   let resets = 0;
   const canSee = (file: string) => access.canSee(file) || (picked.some(pattern => pattern.test(file)) && !access.isOffLimits(file));
@@ -59,7 +58,6 @@ export function pageApi(dir: string, permissions: Permissions, access: ReturnTyp
     const folder = where(cwd);
     need(canList(folder), folder, 'see');
 
-    // No console window on Windows.
     return spawn(permissions.run[name], args, { cwd: folder, env, detached: PAGE_PLATFORM.processGroups, windowsHide: true });
   };
 
@@ -267,7 +265,6 @@ export function pageApi(dir: string, permissions: Permissions, access: ReturnTyp
       return filePaths;
     },
     saveAs,
-    // A link goes to the browser through the trampoline, which asks unless the host is declared or remembered. A file goes to its viewer: nothing leaves the machine.
     open(target: string) {
       if (linkHost(target)) {
         tellTrampoline({ openLink: target });

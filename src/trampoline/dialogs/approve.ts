@@ -67,7 +67,6 @@ export async function approve(file: string) {
   return approved;
 }
 
-// The pages revoked forget their approval and the hosts ticked "Always" for them.
 export function revoke(pages: string[]) {
   for (const file of [GRANTS_FILE, LINKS_FILE]) {
     const kept = Object.entries(readJson<Grants>(file)).filter(([approved]) => !pages.includes(approved));

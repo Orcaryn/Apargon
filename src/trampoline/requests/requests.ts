@@ -8,7 +8,6 @@ import { TRAMPOLINE_PLATFORM } from '../platform.ts';
 import { openFile, openLink } from './open.ts';
 import { saveFiles } from './save.ts';
 
-// What a page asks the trampoline to do, as its own process may not.
 export function handleRequest(request: PageRequest, { page, permissions, reply, setTray, openPage }: { page: string; permissions: Permissions; reply(reply: PageReply): void; setTray(title: string | null): void; openPage(file: string): void }) {
   if ('open' in request) {
     openPage(request.open);

@@ -36,7 +36,7 @@ export async function openLink(page: string, { open }: Permissions, url: string)
   shell.openExternal(url);
 }
 
-// A file goes to its viewer outside the sandbox; nothing leaves the machine. The real path: a symlink without an extension could lead to an app.
+// The real path: a symlink without an extension could lead to an app.
 export function openFile(file: string, { hidden }: Permissions) {
   const target = realPath(file);
 

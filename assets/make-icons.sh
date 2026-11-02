@@ -23,7 +23,6 @@ echo "icons:"
 icns icon
 icns papp
 
-# Windows wants an .ico for the .papp file: PNGs behind an ICO header.
 node - assets/papp.svg "$out/papp.ico" <<'JS'
 const { execFileSync } = require('child_process');
 const fs = require('fs');
@@ -36,7 +35,6 @@ header.writeUInt16LE(sizes.length, 4);
 let offset = header.length;
 sizes.forEach((size, i) => {
   const entry = 6 + 16 * i;
-  // 256 is written as 0.
   header.writeUInt8(size % 256, entry);
   header.writeUInt8(size % 256, entry + 1);
   header.writeUInt16LE(1, entry + 4);

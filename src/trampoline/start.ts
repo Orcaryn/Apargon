@@ -17,7 +17,6 @@ import { trayFor } from './requests/tray/tray.ts';
 import { followMove, noteContent } from './storage.ts';
 
 let openPages = 0;
-// The path of each page with a window, once per window.
 const running: string[] = [];
 
 export async function startTrampoline(pages: string[]) {

@@ -9,13 +9,10 @@ import { APP_ROOT, DATA, INSTALL_FOLDER, PAGE_DATA } from '../../shared/data.ts'
 import type { TrampolinePlatform } from '../platform.ts';
 import { startProxy } from '../network/proxy.ts';
 
-// Windows gives a device to a sandboxed app only if it holds the device's capability.
 const DEVICE_CAPABILITIES: Partial<Record<Use, string>> = { camera: 'webcam', microphone: 'microphone', location: 'location' };
-// MXC's executor, from the package in development and from the app's resources once built.
 const WXC_EXEC = app.isPackaged ? path.join(process.resourcesPath, 'mxc', 'wxc-exec.exe') : path.join(APP_ROOT, 'node_modules', '@microsoft', 'mxc-sdk', 'bin', process.arch, 'wxc-exec.exe');
 
 export const windows: TrampolinePlatform = {
-  // ProcessContainer: Windows' own sandbox, through MXC. The page reaches no address but the proxy's.
   async prepare(page, permissions) {
     const written = permissions.write.map(patternFolder);
     const reachesData = written.find(folder => isInside(DATA, folder) || isInside(folder, DATA));
@@ -81,7 +78,6 @@ export const windows: TrampolinePlatform = {
     };
   },
   installHint: '. Apargon needs Windows 11 24H2 or later, updated to September 2026 or later.',
-  // Windows marks a download in a stream beside the file, with the address it came from.
   downloadAddress(page) {
     try {
       return /^(?:HostUrl|ReferrerUrl)=(.+)$/m.exec(fs.readFileSync(`${page}:Zone.Identifier`, 'utf8'))?.[1].trim() ?? '';
@@ -89,7 +85,6 @@ export const windows: TrampolinePlatform = {
       return null;
     }
   },
-  // The mark of the web a browser's download gets: SmartScreen then warns before the file runs.
   markDownloaded(file) {
     try {
       fs.writeFileSync(`${file}:Zone.Identifier`, '[ZoneTransfer]\r\nZoneId=3\r\n');
@@ -100,7 +95,7 @@ export const windows: TrampolinePlatform = {
   autoUpdates: false,
 };
 
-// Every folder in root but kept, as whole folders where it can: a folder that holds one of kept is opened and its own folders given instead. Links lead elsewhere and are left out.
+// Links lead elsewhere and are left out.
 function foldersBut(root: string, kept: string[]): string[] {
   return fs
     .readdirSync(root, { withFileTypes: true })

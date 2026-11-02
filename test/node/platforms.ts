@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 
-// What differs by OS lives in each folder's platform/macos.ts, linux.ts and windows.ts, picked in the platform.ts beside it: no other file asks which OS this is. Naming it, as in ${process.platform}, is not asking.
 const src = path.join(import.meta.dirname, '..', '..', 'src');
 const asks = fs
   .readdirSync(src, { recursive: true, encoding: 'utf8' })
@@ -12,6 +11,7 @@ const asks = fs
       .split('\n')
       .map((line, i) => ({ where: `src/${file}:${i + 1}`, line }))
   )
+  // Naming the OS, as in ${process.platform}, is not asking which it is.
   .filter(({ line }) => /process\.platform(?!\})/.test(line));
 
 asks.forEach(({ where, line }) => console.log(`FAIL ${where}: ${line.trim()}`));

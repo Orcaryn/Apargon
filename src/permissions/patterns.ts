@@ -2,7 +2,6 @@ import fs from 'fs';
 import path from 'path';
 import type { Permissions } from './tags.ts';
 
-// A pattern is a real path, so each name sits between separators: \ on Windows, / elsewhere.
 const SEPARATOR = path.sep === '/' ? '/' : '\\\\';
 
 // Seatbelt misreads [^./], so [^.]: paths here are normalized and never meet a separator.
@@ -13,9 +12,9 @@ export function patternSource(pattern: string, withContents = true) {
     .split(path.sep)
     .filter(Boolean)
     .map(name => (name.startsWith('*') ? '[^.]' : '') + name.split('*').map(text => text.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join(`[^${SEPARATOR}]*`));
+  const drive = root.slice(0, -1);
 
-  // The root without its separator: nothing on macOS and Linux, the drive, such as C:, on Windows.
-  return `^${root.slice(0, -1)}${names.map(name => SEPARATOR + name).join('')}${withContents ? `(${SEPARATOR}[^.][^${SEPARATOR}]*)*` : ''}${SEPARATOR}?$`;
+  return `^${drive}${names.map(name => SEPARATOR + name).join('')}${withContents ? `(${SEPARATOR}[^.][^${SEPARATOR}]*)*` : ''}${SEPARATOR}?$`;
 }
 
 export function literalBase(pattern: string) {

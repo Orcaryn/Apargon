@@ -2,7 +2,7 @@ import fs from 'fs';
 import { createRequire } from 'module';
 import path from 'path';
 
-// node-preload.cjs adds Apargon's modules to a papp-node page's require. A page outside Apargon's folder finds @electron/remote only through them.
+// A page outside Apargon's folder finds @electron/remote only through the paths node-preload.cjs adds.
 const page = { paths: [] as string[] };
 Object.assign(globalThis, { module: page });
 createRequire(import.meta.url)('../../src/page/api/preload/node-preload.cjs');

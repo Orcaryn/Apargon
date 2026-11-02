@@ -42,7 +42,6 @@ export const SECRETS = Object.entries({
   ...PERMISSIONS_PLATFORM.secrets,
 }).map(([name, holds]) => ({ path: path.join(HOME, name), holds }));
 
-// Files written here can run outside the sandbox: launch agents on macOS, the Startup folder on Windows, and hidden names, such as a shell's startup file, a git hook or an autostart entry.
 export const LAUNCH_FOLDER = PERMISSIONS_PLATFORM.launchFolder && path.join(HOME, PERMISSIONS_PLATFORM.launchFolder);
 // macOS keeps iCloud Drive, Dropbox, OneDrive and Google Drive in ~/Library. Files there only sync.
 const CLOUD_FOLDERS = ['Library/Mobile Documents', 'Library/CloudStorage'].map(name => path.join(HOME, name));
@@ -66,7 +65,6 @@ export function absolutePath(value: string, dir: string) {
   return absolute;
 }
 
-// The path as on disk, links followed, for a file that may not exist yet.
 export function realPath(file: string): string {
   const refusal = PERMISSIONS_PLATFORM.refusePath(file);
 

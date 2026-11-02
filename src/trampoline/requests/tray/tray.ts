@@ -1,7 +1,6 @@
 import { nativeImage, Tray } from 'electron';
 import path from 'path';
 
-// The page's title in the menu bar: set to show or change it, null to remove it. A click calls onClick.
 export function trayFor(page: string, onClick: () => void) {
   let tray: Tray | null = null;
 

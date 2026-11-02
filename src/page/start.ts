@@ -122,7 +122,7 @@ export async function startPage({ page, permissions, pageHash, bridges }: PageCo
   });
 
   let pendingReload: NodeJS.Timeout | undefined = undefined;
-  fs.watch(dir, { recursive: dir !== HOME && dir !== path.parse(dir).root }, (_event, name) => {
+  const edits = fs.watch(dir, { recursive: dir !== HOME && dir !== path.parse(dir).root }, (_event, name) => {
     if (!name || !/\.(papp|css|js)$/.test(name) || /(^|[\\/])(\.[^\\/]*|node_modules)([\\/]|$)/.test(name)) {
       return;
     }
@@ -130,4 +130,6 @@ export async function startPage({ page, permissions, pageHash, bridges }: PageCo
     clearTimeout(pendingReload);
     pendingReload = setTimeout(() => pageWindows().forEach(other => other.webContents.reloadIgnoringCache()), 100);
   });
+  // On Linux a recursive watch can run out of inotify watches in a large folder; the page then no longer reloads on an edit.
+  edits.on('error', () => edits.close());
 }

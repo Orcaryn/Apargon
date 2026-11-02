@@ -53,7 +53,7 @@ export async function openPage(file: string) {
 
 async function startPageProcess({ page, permissions, pageHash }: Pick<PageConfig, 'page' | 'permissions' | 'pageHash'>) {
   followMove(page, PAGE_DATA, SEEN_FILE, running);
-  noteContent(page, SEEN_FILE);
+  noteContent(page, PAGE_DATA, SEEN_FILE);
   const sandbox = await TRAMPOLINE_PLATFORM.prepare(page, permissions);
   const proxy = sandbox.proxyPort === null ? null : `127.0.0.1:${sandbox.proxyPort}`;
   // By name, as Windows finds Path for PATH.
@@ -111,7 +111,7 @@ async function startPageProcess({ page, permissions, pageHash }: Pick<PageConfig
   running.push(page);
   child.on('close', () => {
     running.splice(running.indexOf(page), 1);
-    noteContent(page, SEEN_FILE);
+    noteContent(page, PAGE_DATA, SEEN_FILE);
     setTray(null);
     sandbox.close();
 

@@ -8,13 +8,12 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apargon-moved-'));
 const pageData = path.join(root, 'data');
 const seenFile = path.join(root, 'seen.json');
 
-// A page opened at one path, with storage, then the file is moved or copied to another.
 function setUp(content: string) {
   const dir = path.join(root, content);
   fs.mkdirSync(dir);
   const [old, moved] = [path.join(dir, 'old.papp'), path.join(dir, 'new.papp')];
   fs.writeFileSync(old, content);
-  noteContent(old, seenFile);
+  noteContent(old, pageData, seenFile);
   fs.mkdirSync(storage(old), { recursive: true });
   fs.writeFileSync(path.join(storage(old), 'data'), 'kept');
 
@@ -63,7 +62,7 @@ const cases: [string, () => boolean][] = [
     () => {
       const { old, moved } = setUp('d');
       fs.writeFileSync(old, 'd, edited');
-      noteContent(old, seenFile);
+      noteContent(old, pageData, seenFile);
       fs.renameSync(old, moved);
       followMove(moved, pageData, seenFile, []);
 
@@ -94,6 +93,20 @@ const cases: [string, () => boolean][] = [
       followMove(moved, pageData, seenFile, []);
 
       return has(old) && !has(moved);
+    },
+  ],
+  [
+    'forgotten only when file and data are both gone',
+    () => {
+      const gone = setUp('g');
+      const movedAway = setUp('h');
+      fs.rmSync(gone.old);
+      fs.rmSync(storage(gone.old), { recursive: true });
+      fs.renameSync(movedAway.old, movedAway.moved);
+      noteContent(movedAway.moved, pageData, seenFile);
+      const seen: Record<string, string> = JSON.parse(fs.readFileSync(seenFile, 'utf8'));
+
+      return !(gone.old in seen) && movedAway.old in seen && movedAway.moved in seen;
     },
   ],
 ];

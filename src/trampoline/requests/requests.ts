@@ -21,7 +21,8 @@ export function handleRequest(request: PageRequest, { page, permissions, reply, 
   } else if ('showEgressLog' in request) {
     shell.openPath(EGRESS_LOG);
   } else if ('notify' in request) {
-    new Notification(request.notify).show();
+    // Title and body only: a papp-node page writes the line itself, and could add Electron's icon or actions.
+    new Notification({ title: request.notify.title, body: request.notify.body }).show();
   } else if ('tray' in request) {
     setTray(request.tray);
   } else if ('openLink' in request) {

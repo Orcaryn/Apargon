@@ -96,7 +96,12 @@ async function startPageProcess({ page, permissions, pageHash }: Pick<PageConfig
       const request = fd === sandbox.requestFd && line.startsWith('{') ? parseRequest(line) : null;
 
       if (request) {
-        handleRequest(request, { page, permissions, reply, setTray, openPage });
+        // A papp-node page writes the line itself: one that throws is logged, not shown as an error box.
+        try {
+          handleRequest(request, { page, permissions, reply, setTray, openPage });
+        } catch (err) {
+          console.error(`Apargon: ${path.basename(page)} sent a bad request: ${(err as Error).message}`);
+        }
       } else if (line.trim()) {
         (fd === 2 ? console.error : console.log)(line.replace(/[\p{Cc}\p{Cf}]/gu, ''));
       }

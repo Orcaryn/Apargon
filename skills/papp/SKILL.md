@@ -7,9 +7,9 @@ description: Use when the user wants an app with a window on their own computer,
 
 ## What it is
 
-Apargon runs a `.papp` file, one HTML file, as a desktop app on macOS, Linux or Windows. The page gets exactly what its tags ask for: files, servers, programs, devices. Everything else is blocked; the network by the OS itself.
+A `.papp` file is an ordinary HTML page, plus `<meta>` tags that ask for files, servers, programs or devices. Apargon runs it as a desktop app on macOS, Linux or Windows. Scripts, modules, styles and images load as in any page, from the page's folder. The page gets only what its tags ask for. The OS blocks all network access except to the hosts in `papp-net` (see Meta tags).
 
-Further reading and code: https://github.com/Orcaryn/Apargon
+Further reading and code: [https://github.com/Orcaryn/Apargon](https://github.com/Orcaryn/Apargon)
 
 ## How to use
 
@@ -26,12 +26,12 @@ Further reading and code: https://github.com/Orcaryn/Apargon
 </script>
 ```
 
-- Open it with `open page.papp` (macOS), `apargon page.papp` (Linux), or a double-click (Windows). A popup asks first, unless the page has no tags and was not downloaded.
-- Saving a `.papp`, `.css` or `.js` in its folder reloads the window. New tags need the page reopened. A downloaded page is approved with its content: after an edit, it must be reopened and approved again.
-- A web link (`<a target="_blank">`, `window.open`, `papp.open`) opens in the browser. Apargon asks first, address shown, unless the page names the site with `papp-open`. `window.open` on the page's own file opens a second window.
-- The window is 1200×800 with a frame; `papp-window` changes that. It reopens where the user left it. `<title>` names it; the favicon becomes the app icon (see below).
-- `localStorage` and IndexedDB persist, tied to the page's path. They follow the page when it is moved or renamed, if its content is the same as when it was last open: after an edit, open the page once before moving it. A copy starts empty.
-- On Linux, a page cannot sit in `/tmp`, `/var/tmp`, under `/run`, or a folder holding them. Use a folder of its own, such as `/tmp/apargon`.
+- Open it with `open page.papp` (macOS), `apargon page.papp` (Linux) or a double-click (Windows). A popup asks the user first, and again when the tags change. A page made on this computer with no tags opens without a popup.
+- Saving a `.papp`, `.css` or `.js` file in the page's folder reloads the window. The reload keeps the old tags: reopen the page for new ones. A downloaded page that changed does not load until it is reopened and approved again.
+- A web link opens in the browser, after the user agrees. `window.open` on the page's own file opens a second window.
+- The window opens at 1200×800 with a frame, later where the user left it. `<title>` names it.
+- `localStorage` and IndexedDB persist. They follow a moved or renamed page if it was not edited since it was last closed. A copy starts empty.
+- On Linux, a page cannot sit in `/tmp`, `/var/tmp`, under `/run`, or in a folder that holds them, such as `/`. Use a folder of its own, such as `/tmp/apargon`.
 - On Windows, Apargon refuses a path that starts with `\\`, has a `:` after the drive letter, or has a name ending in a dot or a space.
 
 ### Icon
@@ -48,14 +48,15 @@ The favicon is the app icon, and on macOS the `.papp` file's icon too. Without o
 
 ### `window.papp`
 
-The page reaches files and programs only through `papp`. A relative path starts at the page's folder.
+The page reaches files and programs only through `papp`.
+A relative path starts at the page's folder.
 
 ```ts
 type Bytes = Uint8Array;
 // size and mtimeMs only for files the page may see
 type Stat = { isFile: boolean; isDirectory: boolean; size?: number; mtimeMs?: number };
 type Exit = { status: number | null; signal: string | null };
-// keys as in papp-shortcut, such as 'CommandOrControl+S'
+// keys as in papp-global-shortcut, such as 'CommandOrControl+S'
 type MenuItem = { separator: true } | { label: string; id?: string; keys?: string; submenu?: MenuItem[] };
 
 declare const papp: {
@@ -112,17 +113,51 @@ declare const papp: {
   onSystem(callback: (event: 'suspend' | 'resume' | 'lock-screen' | 'unlock-screen' | 'on-ac' | 'on-battery') => void): () => void;
   // same as window.close(); with papp-use background, it hides
   closeWindow(): Promise<void>;
-  // runs on a papp-shortcut, after bringing the window forward; returns a stop function right away
+  // runs on a papp-global-shortcut, after bringing the window forward; returns a stop function right away
   onShortcut(callback: (keys: string) => void): () => void;
 };
 // A call the tags do not allow rejects with an Error naming the tag to add. File errors carry Node's code, such as 'ENOENT'.
 ```
 
-With `papp-node`, the page has Node (`require`, `process`) instead of `papp`. It runs as you, with no file limits; the network stays blocked. `require('@electron/remote')` is Electron's main process, for what `papp` cannot do: windows on every Space or extra windows (`BrowserWindow`), its own menu-bar menu (`Tray`, `Menu`), other displays (`screen`), notifications (`Notification`). `require` looks in the page's folder first, so `npm install` next to it works. A `new BrowserWindow` uses the default session and skips the page's navigation limits.
+### `papp-system`
+
+The page becomes a Node script with a window. Its files stay limited like any page's.
+
+**What changes**
+
+- The page gets Node (`require`, `process`) and Electron's main process (`require('@electron/remote')`) instead of `window.papp`. Use `fs` and `child_process` directly.
+- Programs: any, with all your environment variables.
+- Writes: only what `papp-write` names. A program it runs, like `npm` or `git`, too: name the caches and settings it writes.
+- Reads: every file but keys and logins (Windows: only its folder and `papp-read`).
+- All other tags work as usual.
+
+**What it unlocks**
+
+- Node and npm in the page: `fs`, `child_process`, native modules. `require` looks in the page's folder first, so `npm install` there works.
+- Programs not known in advance.
+- Electron APIs that `papp` lacks:
+  - `screen`: the displays
+  - `BrowserWindow`: a window with other content, or on every Space. It uses the default session and skips the page's navigation limits.
+  - `Tray`, `Menu`: a tray icon with its own menu (`papp.tray` has only a title, Show and Quit)
 
 ```js
-require('@electron/remote').getCurrentWindow().setAlwaysOnTop(true, 'floating');
+require('@electron/remote').getCurrentWindow().setVisibleOnAllWorkspaces(true);
 ```
+
+**When to use it.** Only when tags and `papp` cannot do the job.
+Its popup line is red and needs "I trust this page".
+
+**`papp-system` vs `papp-run node`**
+
+|              | `papp-run node`                                        | `papp-system`      |
+| ------------ | ------------------------------------------------------ | ------------------ |
+| Node runs    | as a program the page calls (`papp.run`, `papp.spawn`) | in the page itself |
+| The page has | `papp`                                                 | Node and Electron  |
+| Programs     | only those in `papp-run`                               | any                |
+| Variables    | only `papp-env`                                        | all yours          |
+| Popup        | yellow; red on Windows, and on Linux with `papp-write` | red                |
+
+For a Node script the page calls, like a build or a converter, use `papp-run node`.
 
 ## Meta tags
 
@@ -130,55 +165,54 @@ One value per tag, in `<head>` before any `<script>`. Each tag is a line in the 
 
 | The page needs to                                 | Tag                                                             |
 | ------------------------------------------------- | --------------------------------------------------------------- |
-| see files next to it, or below                    | nothing, unless it sits in `~`, Desktop, Documents or Downloads |
-| save next to it                                   | `papp-write` `./notes.txt`, `./data`                            |
-| see a folder elsewhere                            | `papp-read` `~/logs`                                            |
-| change files elsewhere                            | `papp-write` `~/notes/*.md`                                     |
-| call a web API                                    | `papp-net` `api.example.com:443`                                |
-| talk to a server on this computer                 | `papp-net` `localhost:11434`                                    |
-| talk to a device on the network                   | `papp-net` `192.168.1.5:8123`                                   |
-| open its links without asking                     | `papp-open` `x.com`, `*.example.com`                            |
-| use a command-line tool                           | `papp-run` `git`                                                |
-| pass that tool a variable                         | `papp-env` `AWS_PROFILE`                                        |
-| talk to Docker or an SSH agent                    | `papp-socket` `/var/run/docker.sock`                            |
-| show a notification                               | `papp-use` `notifications`                                      |
-| play sound                                        | `papp-use` `sound`                                              |
-| read the clipboard from code                      | `papp-use` `clipboard`                                          |
-| use the camera or microphone                      | `papp-use` `camera`, `papp-use` `microphone`                    |
-| know where it is (not on Linux)                   | `papp-use` `location`                                           |
-| capture the screen                                | `papp-use` `screen`                                             |
-| print                                             | `papp-use` `print`                                              |
-| use a USB device, serial port or input device     | `papp-use` `usb`, `papp-use` `serial`, `papp-use` `hid`         |
-| use MIDI instruments                              | `papp-use` `midi`                                               |
-| keep running after its window closes              | `papp-use` `background`                                         |
-| open when the user logs in                        | `papp-use` `login`                                              |
-| set the window's size and look                    | `papp-window` `width=900, height=600, titlebar=no`              |
-| answer a key anywhere                             | `papp-shortcut` `CommandOrControl+Shift+N`                      |
-| use Node, many programs, or what `papp` cannot do | `papp-node` `full`                                              |
+| See files next to it, or below                    | Nothing, unless it sits in `~`, Desktop, Documents or Downloads |
+| Save next to it                                   | `papp-write` `./notes.txt`, `./data`                            |
+| See a folder elsewhere                            | `papp-read` `~/logs`                                            |
+| Change files elsewhere                            | `papp-write` `~/notes/*.md`                                     |
+| Call a web API                                    | `papp-net` `api.example.com`                                    |
+| Talk to a server on this computer                 | `papp-net` `localhost:11434`                                    |
+| Talk to a device on the network                   | `papp-net` `192.168.1.5:8123`                                   |
+| Open its links without asking                     | `papp-open` `x.com`, `*.example.com`                            |
+| Use a command-line tool                           | `papp-run` `git`                                                |
+| Pass that tool a variable                         | `papp-env` `AWS_PROFILE`                                        |
+| Talk to Docker or an SSH agent                    | `papp-socket` `/var/run/docker.sock`                            |
+| Show a notification                               | `papp-use` `notifications`                                      |
+| Play sound                                        | `papp-use` `sound`                                              |
+| Read the clipboard from code                      | `papp-use` `clipboard`                                          |
+| Use the camera and microphone                     | `papp-use` `camera, microphone`                                 |
+| Know where it is (not on Linux)                   | `papp-use` `location`                                           |
+| Capture the screen                                | `papp-use` `screen`                                             |
+| Print                                             | `papp-use` `print`                                              |
+| Use a USB device, serial port or input device     | `papp-use` `usb`, `serial` or `hid`                             |
+| Use MIDI instruments                              | `papp-use` `midi`                                               |
+| Keep running after its window closes              | `papp-use` `background`                                         |
+| Open when the user logs in                        | `papp-use` `login`                                              |
+| Set the window's size and look                    | `papp-window` `size=900x600, title-bar=no`                      |
+| Answer a key anywhere                             | `papp-global-shortcut` `CommandOrControl+Shift+N`               |
+| Use Node, many programs, or what `papp` cannot do | `papp-system` `full`                                            |
 
 - **Folders:** relative to the page, `~/…` or absolute; subfolders are included. `*` matches within one name, and the part before it must exist.
-- **Hosts:** `papp-net` takes `host:port`, no scheme. `papp-open` takes the host alone. Scripts, fonts and images from another site need its host in `papp-net`. With any `papp-net` tag, `fetch` to a declared host skips CORS.
+- **Hosts:** `papp-net` takes a host, no scheme, and `:port` when it is not 443: `api.example.com`, `example.com:8080`. A host on this computer or the local network always needs its port. Any server is `*:443` or `*:*`. `papp-open` takes the host alone. Scripts, fonts and images from another site need its host in `papp-net`. With any `papp-net` tag, `fetch` to a declared host skips CORS.
 - **Sound:** without `papp-use sound`, the page plays muted, with no error.
 - **No tag needed** to write to the clipboard, go fullscreen or lock the pointer.
 - **Programs** the page runs keep its network and write limits, but can read every file except keys and logins. On Windows they see less: the page's folders, their own folder, and folders every app can read, like Program Files.
-- **Shortcuts:** two different modifiers, or one modifier with a function key. Media keys (`MediaPlayPause`, `MediaNextTrack`, `MediaPreviousTrack`, `MediaStop`) work alone.
-- **Window:** one `papp-window` tag, comma-separated `key=value`. Pixels: `width`, `height`, `min-width`, `min-height`. `yes` or `no`: `resizable`, `titlebar`, `frame`, `transparent`, `on-top`. `titlebar=no` keeps the OS window buttons, drawn over the page. `frame=no`, `transparent=yes` and `on-top=yes` are yellow.
+- **Global shortcuts:** two different modifiers, or one modifier with a function key. Media keys (`MediaPlayPause`, `MediaNextTrack`, `MediaPreviousTrack`, `MediaStop`) work alone.
+- **Window:** one `papp-window` tag, comma-separated `key=value`. `size=900x600` sets width and height. Pixels: `width`, `height`, `min-width`, `min-height`. `yes` or `no`: `resizable`, `title-bar`, `frame`, `transparent`, `on-top`. `title-bar=no` keeps the OS window buttons, drawn over the page. `frame=no`, `transparent=yes` and `on-top=yes` are yellow.
 - **Printing:** without `papp-use print`, `papp.print()` and `window.print()` reject. To skip the tag, save `papp.pdf()` with `papp.saveAs()`.
 - **Devices:** `usb`, `serial` and `hid` turn on WebUSB, Web Serial and WebHID; the user picks the device. `midi` turns on Web MIDI, sysex included.
 - **Background:** closing the last window hides it. The tray icon shows or quits it.
 - **Login:** stops when the approval is taken back, the tag is removed, or the file is gone.
 - **No tag needed** for menus, `papp.power` or `papp.onSystem`.
-- **`papp-node`** already allows every folder, program and variable; do not add `papp-read`, `papp-write`, `papp-run` or `papp-env`.
+- **`papp-system`** already allows every program and variable; do not add `papp-run` or `papp-env`.
 - **Windows:**
   - A page with `papp-socket` does not open. `localhost` goes through Apargon's proxy: `fetch` works; a program must honour `http_proxy`.
   - `papp-run` takes only `.exe` and `.com` files, not `.bat` or `.cmd`.
   - Stopping a program (`kill`, a timeout, a reload) does not stop the programs it started.
-  - `papp-node` writes only in the folders inside the home folder, and in the page's own folder.
   - `papp.save` follows a link at the name the user picks.
 
 These show red in the popup:
 
-- `papp-node`
+- `papp-system`
 - `papp-socket`
 - `papp-write` on a hidden file or folder, on `~/Library` or a folder that holds it (such as `~`), or on a `.papp` page
 - `papp-net` to this computer, the local network, an IPv4 address, any host (`*`), any port (`*`) or a whole top-level domain (`*.com`)
@@ -187,4 +221,4 @@ These show red in the popup:
 
 A red line, `papp-run`, or any `papp-net` or `papp-open` host makes the popup demand an extra "I trust this page" tick.
 
-Use `papp-node` when the tags and `papp` cannot do what the app needs, never just to avoid writing tags. If a dialog says the process can still open sockets, do not work around it: that is the safety check working.
+If a dialog says the process can still open sockets, do not work around it: that is the safety check working.

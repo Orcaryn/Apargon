@@ -139,7 +139,6 @@ function unusedPort(declared: Bridge[]) {
 function bwrapArgs(page: string, permissions: Permissions, socketFolder: string | null) {
   const temp = fs.realpathSync(app.getPath('temp'));
   const writable = [...(PRIVATE.includes(temp) ? [] : [temp]), ...permissions.write.map(patternFolder)];
-  const disk = permissions.node ? '--dev-bind' : '--ro-bind';
   const sound = permissions.use.includes('sound') || permissions.use.includes('microphone');
   const soundSockets = sound ? ['pipewire-0', 'pulse'].map(name => path.join(RUNTIME, name)).filter(file => fs.existsSync(file)) : [];
   const printSocket = permissions.use.includes('print') && fs.existsSync('/run/cups/cups.sock') ? ['/run/cups/cups.sock'] : [];
@@ -159,11 +158,11 @@ function bwrapArgs(page: string, permissions: Permissions, socketFolder: string 
 
   // Later mounts cover earlier ones: Apargon's own data must stay last.
   return [
-    ...['--unshare-net', '--unshare-pid', '--unshare-user', '--disable-userns', '--new-session', '--die-with-parent', disk, '/', '/', '--dev', '/dev', '--proc', '/proc'],
+    ...['--unshare-net', '--unshare-pid', '--unshare-user', '--disable-userns', '--new-session', '--die-with-parent', '--ro-bind', '/', '/', '--dev', '/dev', '--proc', '/proc'],
     ...devices.flatMap(file => ['--dev-bind', file, file]),
     ...PRIVATE.flatMap(folder => ['--tmpfs', folder]),
-    ...named.flatMap(file => [disk, file, file]),
-    ...(permissions.node ? [] : writable.flatMap(folder => ['--bind', folder, folder])),
+    ...named.flatMap(file => ['--ro-bind', file, file]),
+    ...writable.flatMap(folder => ['--bind', folder, folder]),
     ...covered,
     ...['--ro-bind', DATA, DATA, '--tmpfs', NET_DATA, ...(socketFolder ? ['--ro-bind', socketFolder, socketFolder] : []), '--bind', PAGE_DATA, PAGE_DATA],
   ];

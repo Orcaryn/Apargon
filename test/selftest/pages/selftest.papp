@@ -51,15 +51,15 @@
     localStorage.setItem('apargon-selftest', 'kept by selftest.papp');
     result.storage_own = localStorage.getItem('apargon-selftest') === 'kept by selftest.papp';
 
-    result.own_folder_read = (await papp.readFile('selftest.papp')).includes('Apargon selftest') && (await papp.readdir('.')).includes('selftest-node.papp');
+    result.own_folder_read = (await papp.readFile('selftest.papp')).includes('Apargon selftest') && (await papp.readdir('.')).includes('selftest-system.papp');
     result.own_subfolder_read = (await papp.readFile('subfolder/note.txt')).includes('subfolder');
     result.own_folder_write_refused = await refused(() => papp.writeFile('own.txt', 'x'));
     result.own_subfolder_write_refused = await refused(() => papp.writeFile('subfolder/x.txt', 'x')) && await refused(() => papp.mkdir('sub'));
 
     await papp.writeFile('scratch.txt', 'hi');
     result.granted_write = await papp.readFile('scratch.txt') === 'hi' && (await papp.readdir('.')).includes('scratch.txt');
-    result.page_write_refused = await refused(() => papp.writeFile('scratch.papp', 'x')) && await refused(() => papp.writeFile('selftest-node.papp', 'x'));
-    result.page_rename_refused = await refused(() => papp.rename('scratch.txt', 'scratch.papp')) && await refused(() => papp.rename('selftest-node.papp', 'scratch.txt'));
+    result.page_write_refused = await refused(() => papp.writeFile('scratch.papp', 'x')) && await refused(() => papp.writeFile('selftest-system.papp', 'x'));
+    result.page_rename_refused = await refused(() => papp.rename('scratch.txt', 'scratch.papp')) && await refused(() => papp.rename('selftest-system.papp', 'scratch.txt'));
     result.options_refused = await refused(() => papp.readFile('scratch.txt', { flag: 'w' })) && await papp.readFile('scratch.txt') === 'hi';
 
     result.watch_folder = await changeSeen('.', () => papp.writeFile('scratch.txt', 'again')) === 'scratch.txt changed';
@@ -96,7 +96,7 @@
     await papp.writeFile('scratch.txt', 'a');
     await papp.appendFile('scratch.txt', 'b');
     result.append = await papp.readFile('scratch.txt') === 'ab';
-    result.append_refused = await refused(() => papp.appendFile('own.txt', 'x')) && await refused(() => papp.appendFile('selftest-node.papp', 'x'));
+    result.append_refused = await refused(() => papp.appendFile('own.txt', 'x')) && await refused(() => papp.appendFile('selftest-system.papp', 'x'));
     await papp.copyFile('subfolder/note.txt', 'scratch-copy.txt');
     result.copy = await papp.readFile('scratch-copy.txt') === note;
     await papp.rm('scratch-copy.txt');

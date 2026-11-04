@@ -2,7 +2,8 @@ import fs from 'fs';
 import net from 'net';
 import os from 'os';
 import path from 'path';
-import { describe, worstCase } from '../../src/permissions/describe.ts';
+import { describe, needsTrust, seenFiles } from '../../src/permissions/describe.ts';
+import { PERMISSIONS_PLATFORM } from '../../src/permissions/platform.ts';
 import { hostMatches } from '../../src/permissions/network.ts';
 import { linkHost, OPENABLE } from '../../src/permissions/open.ts';
 import { HOME, LAUNCH_FOLDER, runsOutsideSandbox } from '../../src/permissions/paths.ts';
@@ -54,7 +55,7 @@ if (process.platform === 'win32') {
   });
   fs.writeFileSync(page, '<meta name="papp-run" content="cmd">\n<meta name="papp-env" content="APARGON_TEST_ENV">');
   const cmd = declaredPermissions(page).run.cmd;
-  fs.writeFileSync(page, '<meta name="papp-node" content="full">');
+  fs.writeFileSync(page, '<meta name="papp-system" content="full">');
   declaredPermissions(page);
   fs.writeFileSync(page, '<meta name="papp-net" content="localhost:11434">');
   declaredPermissions(page);
@@ -84,6 +85,8 @@ const refusals = [
   { tag: '<meta name="papp-run" content="/bin/ls\n•  Nothing else.">', reason: 'invisible character' },
   { tag: '<meta name="papp-read" content="./data/*\u202Etxt">', reason: 'invisible character' },
   { tag: '<meta name="papp-env" content="AWS_PROFILE">', reason: 'Add papp-run' },
+  { tag: '<meta name="papp-system" content="full">\n<meta name="papp-run" content="/bin/ls">', reason: 'Remove papp-run and papp-env' },
+  { tag: '<meta name="papp-system" content="full">\n<meta name="papp-env" content="AWS_PROFILE">', reason: 'Remove papp-run and papp-env' },
   { tag: '<meta name="papp-run" content="/bin/ls">\n<meta name="papp-env" content="AWS_*">', reason: 'Bad papp-env value' },
   { tag: '<meta name="papp-socket" content="./data/*.sock">', reason: 'no wildcards' },
   { tag: '<meta name="papp-socket" content="./data/missing.sock">', reason: 'does not exist' },
@@ -98,7 +101,18 @@ const refusals = [
   { tag: '<meta name="papp-net" content="1.1:443">', reason: 'full address' },
   { tag: '<meta name="papp-net" content="0x7f.0.0.1:443">', reason: 'full address' },
   { tag: '<meta name="papp-net" content="1.0xa:443">', reason: 'full address' },
+  { tag: '<meta name="papp-net" content="*">', reason: '"*:*" for any port' },
+  { tag: '<meta name="papp-net" content="localhost">', reason: 'Write localhost:<port>' },
+  { tag: '<meta name="papp-net" content="192.168.1.5">', reason: 'Write 192.168.1.5:<port>' },
   { tag: '<meta name="papp-use" content="bluetooth">', reason: 'Bad papp-use value' },
+  { tag: '<meta name="papp-use" content="camera, bluetooth">', reason: 'Bad papp-use value "bluetooth"' },
+  { tag: '<meta name="papp-use" content="camera,">', reason: 'Bad papp-use value ""' },
+  { tag: '<meta name="papp-shortcut" content="Ctrl+Shift+N">', reason: 'Unknown tag papp-shortcut' },
+  { tag: '<meta name="papp-window" content="titlebar=no">', reason: 'Bad papp-window setting' },
+  { tag: '<meta name="papp-window" content="size=900x600, width=800">', reason: 'sets width twice' },
+  { tag: '<meta name="papp-window" content="height=600, size=900x600">', reason: 'sets height twice' },
+  { tag: '<meta name="papp-window" content="size=900x600, size=800x600">', reason: 'sets size twice' },
+  { tag: '<meta name="papp-window" content="size=900x5">', reason: 'Bad papp-window setting' },
   { tag: '<meta name="papp-window" content="width=wide">', reason: 'Bad papp-window setting' },
   { tag: '<meta name="papp-window" content="width=5">', reason: 'Bad papp-window setting' },
   { tag: '<meta name="papp-window" content="size=900">', reason: 'Bad papp-window setting' },
@@ -106,13 +120,13 @@ const refusals = [
   { tag: '<meta name="papp-window" content="">', reason: 'Bad papp-window setting' },
   { tag: '<meta name="papp-window" content="width=900, width=800">', reason: 'twice' },
   { tag: '<meta name="papp-window" content="width=900">\n<meta name="papp-window" content="height=600">', reason: 'Two papp-window' },
-  { tag: '<meta name="papp-shortcut" content="MediaPlay">', reason: 'Bad papp-shortcut value' },
-  { tag: '<meta name="papp-shortcut" content="Ctrl+C">', reason: 'app in front' },
-  { tag: '<meta name="papp-shortcut" content="Ctrl+Shift+*">', reason: 'Bad papp-shortcut value' },
-  { tag: '<meta name="papp-shortcut" content="F5">', reason: 'app in front' },
-  { tag: '<meta name="papp-shortcut" content="Shift+Shift+A">', reason: 'app in front' },
-  { tag: '<meta name="papp-shortcut" content="CmdOrCtrl+Command+C">', reason: 'app in front' },
-  { tag: `<meta name="papp-shortcut" content="${process.platform === 'darwin' ? 'Alt' : 'AltGr'}+Shift+K">`, reason: 'app in front' },
+  { tag: '<meta name="papp-global-shortcut" content="MediaPlay">', reason: 'Bad papp-global-shortcut value' },
+  { tag: '<meta name="papp-global-shortcut" content="Ctrl+C">', reason: 'app in front' },
+  { tag: '<meta name="papp-global-shortcut" content="Ctrl+Shift+*">', reason: 'Bad papp-global-shortcut value' },
+  { tag: '<meta name="papp-global-shortcut" content="F5">', reason: 'app in front' },
+  { tag: '<meta name="papp-global-shortcut" content="Shift+Shift+A">', reason: 'app in front' },
+  { tag: '<meta name="papp-global-shortcut" content="CmdOrCtrl+Command+C">', reason: 'app in front' },
+  { tag: `<meta name="papp-global-shortcut" content="${process.platform === 'darwin' ? 'Alt' : 'AltGr'}+Shift+K">`, reason: 'app in front' },
   ...(ownAddress ? [{ tag: `<meta name="papp-net" content="${ownAddress}:80">`, reason: 'own addresses' }] : []),
   { tag: '<meta name="papp-read" content=./data>', reason: 'quoted name and content' },
   { tag: '<meta name=papp-read content="./data">', reason: 'quoted name and content' },
@@ -137,32 +151,24 @@ const refusals = [
     return { tag, refused: (err as Error).message.includes(reason) };
   }
 });
-const worst = [
-  { tags: '', expected: null },
-  { tags: '<meta name="papp-read" content="./data">', expected: null },
-  { tags: '<meta name="papp-net" content="api.github.com:443">\n<meta name="papp-net" content="api.github.com:80">', expected: 'It can send the files it sees to api.github.com.' },
-  { tags: '<meta name="papp-net" content="*">', expected: 'It can send the files it sees to any server.' },
-  { tags: '<meta name="papp-run" content="/bin/ls">\n<meta name="papp-run" content="/bin/cat">', expected: 'It can run ls, cat.' },
-  { tags: '<meta name="papp-open" content="x.com">', expected: 'It can send the files it sees to x.com.' },
-  { tags: '<meta name="papp-open" content="*">', expected: 'It can send the files it sees to any server.' },
-  { tags: '<meta name="papp-node" content="full">', expected: 'It can do anything you can, and send your files anywhere.' },
-  { tags: '<meta name="papp-socket" content="./data">', expected: 'It can talk to data.' },
-  {
-    tags: '<meta name="papp-net" content="api.github.com:443">\n<meta name="papp-use" content="clipboard">\n<meta name="papp-use" content="location">',
-    expected: 'It can send the files it sees and what you copy and where you are to api.github.com.',
-  },
-  {
-    tags: '<meta name="papp-net" content="api.github.com:443">\n<meta name="papp-use" content="camera">\n<meta name="papp-use" content="microphone">',
-    expected: 'It can send the files it sees and what the camera sees and what the microphone hears to api.github.com.',
-  },
-  {
-    tags: '<meta name="papp-net" content="api.github.com:443">\n<meta name="papp-use" content="screen">',
-    expected: 'It can send the files it sees and what is on your screen to api.github.com.',
-  },
+const trust = [
+  { tags: '', expected: false },
+  { tags: '<meta name="papp-read" content="./data">', expected: false },
+  { tags: '<meta name="papp-net" content="api.github.com">', expected: true },
+  { tags: '<meta name="papp-open" content="x.com">', expected: true },
+  { tags: '<meta name="papp-use" content="camera">', expected: false },
+  { tags: '<meta name="papp-read" content="./.tool/state.json">', expected: false },
+  { tags: '<meta name="papp-write" content="./.tool/state.json">', expected: true },
+  { tags: '<meta name="papp-run" content="/bin/ls">', expected: true },
+  { tags: '<meta name="papp-system" content="full">', expected: true },
+  { tags: '<meta name="papp-system" content="full">\n<meta name="papp-write" content="./data">\n<meta name="papp-read" content="./data">', expected: true },
+  { tags: '<meta name="papp-socket" content="./data/a.sock">', expected: true },
 ].map(({ tags, expected }) => {
   fs.writeFileSync(page, tags);
 
-  return { tags, expected, said: worstCase(declaredPermissions(page)) };
+  const permissions = declaredPermissions(page);
+
+  return { tags, expected, said: needsTrust(permissions, describe(permissions)) };
 });
 const colours = [
   { tags: '<meta name="papp-run" content="/bin/ls">\n<meta name="papp-env" content="OPENAI_API_KEY">', kind: 'env:', level: 'yellow', says: '' },
@@ -173,7 +179,12 @@ const colours = [
   { tags: '<meta name="papp-read" content="./.tool/state.json">', kind: 'read:', level: 'yellow', says: 'See files' },
   { tags: '<meta name="papp-write" content="./.tool/state.json">', kind: 'write:', level: 'red', says: 'change' },
   { tags: '<meta name="papp-socket" content="./data/a.sock">', kind: 'socket:', level: 'red', says: 'program' },
-  { tags: '<meta name="papp-net" content="1.1.1.1:443">', kind: 'net:', level: 'red', says: 'data' },
+  { tags: '<meta name="papp-net" content="api.github.com">', kind: 'net:api.github.com:443', level: 'plain', says: 'data' },
+  { tags: '<meta name="papp-net" content="api.github.com.">', kind: 'net:api.github.com:443', level: 'plain', says: 'data' },
+  { tags: '<meta name="papp-net" content="*.example.com">', kind: 'net:*.example.com:443', level: 'yellow', says: 'data' },
+  { tags: '<meta name="papp-net" content="*:443">', kind: 'net:*:443', level: 'red', says: 'data' },
+  { tags: '<meta name="papp-net" content="*:*">', kind: 'net:*:*', level: 'red', says: 'any port' },
+  { tags: '<meta name="papp-net" content="1.1.1.1">', kind: 'net:1.1.1.1:443', level: 'red', says: 'data' },
   { tags: '<meta name="papp-net" content="127.0.0.1:8080">', kind: 'net:', level: 'red', says: 'on this computer' },
   { tags: '<meta name="papp-net" content="localhost.:80">', kind: 'net:', level: 'red', says: 'on this computer' },
   { tags: '<meta name="papp-net" content="10.0.0.1:80">', kind: 'net:', level: 'red', says: 'data' },
@@ -189,9 +200,11 @@ const colours = [
   { tags: '<meta name="papp-use" content="notifications">', kind: 'use:', level: 'plain', says: 'notifications' },
   { tags: '<meta name="papp-use" content="camera">', kind: 'use:', level: 'yellow', says: 'camera' },
   { tags: '<meta name="papp-use" content="screen">', kind: 'use:', level: 'yellow', says: 'screen' },
-  { tags: '<meta name="papp-shortcut" content="cmdorctrl+shift+n">', kind: 'shortcut:', level: 'yellow', says: 'every app' },
-  { tags: '<meta name="papp-shortcut" content="mediaplaypause">', kind: 'shortcut:MediaPlayPause', level: 'yellow', says: 'every app' },
-  { tags: '<meta name="papp-window" content="width=900, height=600, titlebar=no, resizable=no">', kind: 'window:', level: 'plain', says: '900 × 600, fixed size, no title bar' },
+  { tags: '<meta name="papp-use" content="notifications, Clipboard">', kind: 'use:clipboard', level: 'yellow', says: 'copy' },
+  { tags: '<meta name="papp-global-shortcut" content="cmdorctrl+shift+n">', kind: 'shortcut:', level: 'yellow', says: 'every app' },
+  { tags: '<meta name="papp-global-shortcut" content="mediaplaypause">', kind: 'shortcut:MediaPlayPause', level: 'yellow', says: 'every app' },
+  { tags: '<meta name="papp-window" content="width=900, height=600, title-bar=no, resizable=no">', kind: 'window:', level: 'plain', says: '900 × 600, fixed size, no title bar' },
+  { tags: '<meta name="papp-window" content="size=900x600, title-bar=no">', kind: 'window:', level: 'plain', says: '900 × 600, no title bar' },
   { tags: '<meta name="papp-window" content="Min-Width=400">', kind: 'window:', level: 'plain', says: 'at least 400 × 0' },
   { tags: '<meta name="papp-window" content="frame=no">', kind: 'window:', level: 'yellow', says: 'no frame' },
   { tags: '<meta name="papp-window" content="transparent=yes, on-top=yes">', kind: 'window:', level: 'yellow', says: 'see-through, stays on top' },
@@ -209,6 +222,30 @@ const colours = [
 
   return { tags, ok: line.level === level && line.text.includes(says), said: `${line.level}: ${line.short}: ${line.text}` };
 });
+// What the page sees, once: a path in a listed folder, its own included, is left out, unless a hidden name keeps it out.
+const seen = [
+  {
+    tags: '<meta name="papp-read" content="./data">\n<meta name="papp-write" content="./data/out">\n<meta name="papp-read" content="./data/.tool">',
+    all: false,
+    shows: ['', path.join('data', '.tool')],
+  },
+  { tags: '<meta name="papp-read" content="./data/*.txt">\n<meta name="papp-read" content="./data/a.txt">', all: false, shows: [''] },
+  {
+    tags: '<meta name="papp-system" content="full">\n<meta name="papp-write" content="./data">\n<meta name="papp-read" content="~/.ssh">',
+    all: PERMISSIONS_PLATFORM.systemSeesAll,
+    shows: [path.join(HOME, '.ssh')],
+  },
+]
+  // A machine without ~/.ssh cannot declare it.
+  .filter(({ shows }) => shows.every(file => fs.existsSync(file)))
+  .map(({ tags, all, shows }) => {
+    fs.writeFileSync(page, tags);
+    const said = seenFiles(declaredPermissions(fs.realpathSync(page)));
+    const files = said.lines.map(line => line.id.slice('read:'.length));
+    const expected = shows.map(file => path.resolve(fs.realpathSync(dir), file));
+
+    return { tags, ok: said.all === all && files.join('\n') === expected.join('\n'), said: `${said.all ? 'all, ' : ''}${files.join(', ')}` };
+  });
 fs.writeFileSync(page, '<meta\n  name="papp-read"\n  content="./data">\n<meta charset="utf-8">');
 const written = declaredPermissions(page).tags;
 const tagsAsWritten = written.length === 1 && written[0] === '<meta name="papp-read" content="./data">';
@@ -219,13 +256,13 @@ fs.writeFileSync(
     '<!doctype html><html><head><meta charset="utf-8">',
     '<!-- <meta name="papp-net" content="*"> -->',
     '<meta name="papp-read" content="./Jon\'s notes">',
-    '<script>const tpl = `<meta name="papp-node" content="full">`;</script>',
+    '<script>const tpl = `<meta name="papp-system" content="full">`;</script>',
     '</head><body><meta name="papp-write" content="./data"></body></html>',
   ].join('\n')
 );
 const head = declaredPermissions(page);
-const headOnly = head.tags.length === 1 && head.read[0].endsWith("/Jon's notes") && !head.net.length && !head.write.length && !head.node;
-fs.writeFileSync(page, `<meta data-name="papp-net" name="description" content="*">\n<meta name="x" lang=' name="papp-node" content="full" '>`);
+const headOnly = head.tags.length === 1 && head.read[0].endsWith("/Jon's notes") && !head.net.length && !head.write.length && !head.system;
+fs.writeFileSync(page, `<meta data-name="papp-net" name="description" content="*">\n<meta name="x" lang=' name="papp-system" content="full" '>`);
 const smuggled = declaredPermissions(page).tags;
 fs.writeFileSync(page, '<meta name="papp-open" content="X.com">\n<meta name="papp-open" content="*.example.com">');
 const { open } = declaredPermissions(page);
@@ -269,8 +306,12 @@ for (const { tag, refused } of refusals) {
   console.log(`${refused ? 'ok  ' : 'FAIL'} popup refuses ${JSON.stringify(tag)}`);
 }
 
-for (const { tags, expected, said } of worst) {
-  console.log(`${said === expected ? 'ok  ' : 'FAIL'} popup worst case for ${JSON.stringify(tags)}: ${said}`);
+for (const { tags, expected, said } of trust) {
+  console.log(`${said === expected ? 'ok  ' : 'FAIL'} popup asks for trust with ${JSON.stringify(tags)}: ${said}`);
+}
+
+for (const { tags, ok, said } of seen) {
+  console.log(`${ok ? 'ok  ' : 'FAIL'} popup sees ${JSON.stringify(tags)}: ${said}`);
 }
 
 for (const { tags, ok, said } of colours) {
@@ -293,8 +334,9 @@ process.exit(
   (
     lines.every(line => line.level === 'red') &&
       refusals.every(({ refused }) => refused) &&
-      worst.every(({ expected, said }) => said === expected) &&
+      trust.every(({ expected, said }) => said === expected) &&
       colours.every(({ ok }) => ok) &&
+      seen.every(({ ok }) => ok) &&
       tagsAsWritten &&
       headOnly &&
       !smuggled.length &&

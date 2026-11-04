@@ -63,7 +63,7 @@ async function startPageProcess({ page, permissions, pageHash }: Pick<PageConfig
   TRAMPOLINE_PLATFORM.startAtLogin(page, permissions.use.includes('login'));
   const proxy = sandbox.proxyPort === null ? null : `127.0.0.1:${sandbox.proxyPort}`;
   // By name, as Windows finds Path for PATH.
-  const passed = permissions.node ? Object.keys(process.env) : [...PAGE_ENV, ...permissions.env];
+  const passed = permissions.system ? Object.keys(process.env) : [...PAGE_ENV, ...permissions.env];
   const inherited = passed.filter(name => name in process.env).map(name => [name, process.env[name]]);
   const replies = sandbox.repliesInFile ? path.join(REPLIES_DATA, `${randomUUID()}.jsonl`) : null;
 
@@ -110,7 +110,7 @@ async function startPageProcess({ page, permissions, pageHash }: Pick<PageConfig
       const request = fd === sandbox.requestFd && line.startsWith('{') ? parseRequest(line) : null;
 
       if (request) {
-        // A papp-node page writes the line itself: one that throws is logged, not shown as an error box.
+        // A papp-system page writes the line itself: one that throws is logged, not shown as an error box.
         try {
           handleRequest(request, { page, permissions, reply, setTray, openPage });
         } catch (err) {

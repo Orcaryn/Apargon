@@ -1,12 +1,6 @@
 <!doctype html>
 <meta charset="utf-8">
-<meta name="papp-use" content="camera">
-<meta name="papp-use" content="microphone">
-<meta name="papp-use" content="location">
-<meta name="papp-use" content="usb">
-<meta name="papp-use" content="serial">
-<meta name="papp-use" content="hid">
-<meta name="papp-use" content="midi">
+<meta name="papp-use" content="camera, microphone, location, usb, serial, hid, midi">
 <meta name="papp-run" content="tokencaps">
 <meta name="papp-write" content="./results/result-win-devices.json">
 <meta name="papp-write" content="./results/devices-win.json">

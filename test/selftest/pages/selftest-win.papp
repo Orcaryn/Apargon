@@ -2,7 +2,7 @@
 <meta charset="utf-8">
 <meta name="papp-write" content="./results/result-win.json">
 <meta name="papp-write" content="./scratch*">
-<meta name="papp-net" content="example.com:443">
+<meta name="papp-net" content="example.com">
 <meta name="papp-net" content="localhost:47181">
 <title>Apargon selftest for Windows</title>
 <link rel="dns-prefetch" href="https://apg-leak-prefetch.example.com">

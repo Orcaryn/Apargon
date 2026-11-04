@@ -37,7 +37,7 @@ export async function startPage({ page, permissions, pageHash, bridges }: PageCo
   await Promise.all(bridges.map(({ port, socket }) => relay({ port, host: '127.0.0.1' }, { path: socket })));
 
   const dir = path.dirname(page);
-  const access = permissions.node ? null : pageAccess(permissions);
+  const access = permissions.system ? null : pageAccess(permissions);
   const canSee = (file: string) => access === null || file === page || access.canSee(file);
   const pageSession = createPageSession(page, permissions, pageHash, canSee);
   const menus = installMenu(page, describe(permissions), Object.keys({ ...readJson<Links>(LINKS_FILE), ...readJson<Grants>(GRANTS_FILE) }));

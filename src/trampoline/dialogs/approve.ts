@@ -2,8 +2,9 @@ import { app } from 'electron';
 import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { describe, worstCase } from '../../permissions/describe.ts';
+import { describe, needsTrust, seenFiles, type Line } from '../../permissions/describe.ts';
 import { HOME } from '../../permissions/paths.ts';
+import { isInside } from '../../permissions/patterns.ts';
 import { declaredPermissions } from '../../permissions/tags.ts';
 import { GRANTS_FILE, LINKS_FILE, readJson, writeJson, type Grants, type Links } from '../../shared/data.ts';
 import { TRAMPOLINE_PLATFORM } from '../platform.ts';
@@ -23,35 +24,71 @@ export async function approve(file: string) {
   const grant = lines.map(line => line.id).concat(pageHash ? `content:${pageHash}` : []).sort();
   const grants = readJson<Grants>(GRANTS_FILE);
   const previous = grants[page];
-  const worst = worstCase(permissions);
   const approved = { page, permissions, pageHash };
 
   if (opensWithoutAsking || previous?.join('\n') === grant.join('\n')) {
     return approved;
   }
 
-  const seesFiles = permissions.own !== null || permissions.read.length > 0 || permissions.write.length > 0;
+  const folder = path.dirname(page);
+
+  // A path in the page's folder shows as ./name: the header names the folder once.
+  const shortOf = (line: Line) => {
+    const kind = line.id.split(':')[0];
+    const file = line.id.slice(kind.length + 1);
+
+    if (!['read', 'write', 'socket'].includes(kind) || !isInside(file, folder)) {
+      return line.short.replaceAll(HOME + path.sep, `~${path.sep}`);
+    }
+
+    return file === folder ? 'This folder' : `.${path.sep}${path.relative(folder, file)}`;
+  };
+
+  const seen = seenFiles(permissions);
+  const seenPaths = seen.lines.map(shortOf).join(', ');
+  const seenShort =
+    !seen.all ? seenPaths
+    : seenPaths === '' ? 'All your files, except passwords and keys'
+    : `All your files, including ${seenPaths}, except other passwords and keys`;
+  const seenLevel: Line['level'] = seen.all || seen.lines.some(line => line.level === 'yellow') ? 'yellow' : 'plain';
+  const order = { red: 0, yellow: 1, plain: 2 };
   const popup = {
     source: downloadedFrom === null ? 'Made on this computer' : `Downloaded from ${downloadedFrom}`,
     downloaded: downloadedFrom !== null,
     name: path.basename(page),
     changed: previous?.some(id => id.startsWith('content:') && id !== `content:${pageHash}`) ? 'This page changed since you allowed it.' : null,
-    worst,
-    lines: lines.map(line => ({
-      level: line.level,
-      id: line.id,
-      short: line.short.replaceAll(HOME + path.sep, `~${path.sep}`),
-      text: line.text.replaceAll(HOME + path.sep, `~${path.sep}`),
-      isNew: previous !== undefined && !previous.includes(line.id),
-    })),
-    note: seesFiles ? `Hidden files (names starting with a dot), keys and logins (~/.ssh and others) are left out unless named.${permissions.write.length ? ' Pages (.papp) can be changed only if named.' : ''}` : null,
-    folder: (path.dirname(page) + path.sep).replaceAll(HOME + path.sep, `~${path.sep}`),
+    // What it sees is one line, under Can see. Each write stays a line, under Can change and delete.
+    lines: [
+      ...lines
+        .filter(line => !/^(read|own):/.test(line.id))
+        .map(line => ({
+          level: line.level,
+          id: line.id,
+          short: shortOf(line),
+          text: line.text.replaceAll(HOME + path.sep, `~${path.sep}`),
+          isNew: previous !== undefined && !previous.includes(line.id),
+          isFolder: line.id.startsWith('write:') && fs.statSync(line.id.slice('write:'.length), { throwIfNoEntry: false })?.isDirectory() === true,
+        })),
+      ...(seenShort === '' ? [] : [
+        {
+          level: seenLevel,
+          id: 'sees',
+          short: seenShort,
+          text: '',
+          isNew: previous !== undefined && ((seen.all && !previous.includes('system')) || lines.some(line => /^(read|write|own):/.test(line.id) && !previous.includes(line.id))),
+          isFolder: true,
+        },
+      ]),
+    ].sort((a, b) => order[a.level] - order[b.level]),
+    // A papp-system page's line already says so.
+    note: seen.lines.length > 0 && !seen.all ? 'Hidden files, passwords and keys stay out unless named.' : null,
+    folder: (folder + path.sep).replaceAll(HOME + path.sep, `~${path.sep}`),
     tags: permissions.tags,
-    trust: worst !== null || lines.some(line => line.level === 'red'),
+    trust: needsTrust(permissions, lines),
   };
 
   if (!app.isPackaged && process.env.APARGON_TEST_ALLOW === '1') {
-    console.log(['Apargon: allowed for the test:', popup.source, popup.name, popup.changed ?? [], worst ?? [], popup.lines.map(line => `${line.level}: ${line.short} [${line.text}]`)].flat().join('\n  '));
+    console.log(['Apargon: allowed for the test:', popup.source, popup.name, popup.changed ?? [], popup.lines.map(line => `${line.level}: ${line.short} [${line.text}]`)].flat().join('\n  '));
 
     return approved;
   } else if (!(await ask('popup.html', popup))) {

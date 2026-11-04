@@ -2,15 +2,15 @@
 
 ## In short
 
-| Page             | Network                 | Files                         | Keys and logins      |
-| ---------------- | ----------------------- | ----------------------------- | -------------------- |
-| no tags          | none                    | its own folder, read only     | hidden               |
-| with tags        | only what the tags name | only what the tags name       | hidden, unless named |
-| with `papp-node` | only what the tags name | everything but Apargon's data | all yours            |
+| Page               | Network                 | Files                                                     | Keys and logins      |
+| ------------------ | ----------------------- | --------------------------------------------------------- | -------------------- |
+| no tags            | none                    | its own folder, read only                                 | hidden               |
+| with tags          | only what the tags name | only what the tags name                                   | hidden, unless named |
+| with `papp-system` | only what the tags name | sees all (Windows: less); changes only what the tags name | hidden, unless named |
 
 - The OS blocks all network. Only Apargon's proxy, declared `localhost` ports and declared socket files get through.
 - The proxy only goes to declared hosts.
-- A `papp-node` page runs as you. Trust it like a script.
+- A `papp-system` page runs any program, with all your variables. Trust it like a script.
 - Windows: only the proxy gets through. Declared `localhost` ports go through it too. `papp-socket` is refused. A page's programs can send data out through Windows itself, see "Not enforced".
 - A page in `/`, `~`, `~/Desktop`, `~/Documents` or `~/Downloads` gets no own folder.
 
@@ -35,10 +35,10 @@
 
 - Sandbox: Seatbelt (`sandbox-exec`). The profile starts from `(allow default)`, because the GUI needs it.
 - Offline check: binding a loopback port must fail with `EPERM`.
-- Writes: limited by pattern. Not for `papp-node`.
+- Writes: limited by pattern.
 - Keys and logins: denied, even ones made later.
 - Blocked: `nsurlsessiond`, `trustd`, WebKit services. These fetch from outside the sandbox.
-- Blocked, but not for `papp-node`: opening apps, sending Apple Events, `defaults write`.
+- Blocked: opening apps, sending Apple Events, `defaults write`.
 - With `papp-use print`, the print server's socket (`/private/var/run/cupsd`) is allowed.
 
 ### Linux
@@ -58,7 +58,6 @@
 - Writes: limited by folder. A write folder in or around Apargon's data is refused.
 - `localhost` ports: through the proxy. Chromium is told not to bypass it for loopback. A program that ignores `http_proxy` is refused by MXC.
 - Programs: only `.com` and `.exe`. A batch file runs through `cmd.exe`, which reads its arguments as commands.
-- `papp-node`: writes in the folders inside the home folder, and in the page's own folder. Not in Apargon's data or the app. Not in a folder that holds them, like `~` or `~\AppData`: there it writes only in the folders inside. Not on other drives. The list is made when the page opens.
 - Keys and logins: hidden, but only those that exist when the page opens.
 - Apargon refuses `\\` paths, `file://host/`, `:` streams and names ending in a dot or a space.
 
@@ -78,8 +77,8 @@
 
 ## Popup colours
 
-- **Red:** a way to send data somewhere the tags don't name. This includes any server, `*.com`, any port, an IP address, `localhost`, a socket, `papp-node`, and writing hidden files, `~/Library`, `AppData` or pages.
-- **Yellow:** worth a look. This includes `*.example.com`, wide folders, keys and logins, clipboard, location, camera, microphone, screen, shortcuts, and `papp-run`. On Linux and Windows, `papp-run` is red if the page also has `papp-write`.
+- **Red:** a way to send data somewhere the tags don't name. This includes any server, `*.com`, any port, an IP address, `localhost`, a socket, `papp-system`, and writing hidden files, `~/Library`, `AppData` or pages.
+- **Yellow:** worth a look. This includes `*.example.com`, wide folders, a `papp-system` page's "All your files" (macOS and Linux), keys and logins, clipboard, location, camera, microphone, screen, shortcuts, and `papp-run`. `papp-run` is red on Windows, and on Linux if the page also has `papp-write`.
 - **Checkbox:** needed for any red line. Also needed when the page can run programs, or send what it sees to a host.
 
 ## Not enforced
@@ -91,6 +90,7 @@
   - Linux: the same, except `/run`, `/tmp` and `/var/tmp`.
   - Windows: only the granted folders.
 - Listing a folder above a wildcard shows its names.
+- A `papp-system` page reads the same, without an exploit.
 
 ### Writing
 
@@ -135,7 +135,7 @@
 
 ### Windows
 
-- A page's programs, and a `papp-node` page, can send any file they see anywhere: they open `\\<data>.example.com\x`, and Windows looks the name up outside the sandbox. No MXC setting stops this. The popup does not say so; it needs "I trust this page."
+- A page's programs, and a `papp-system` page, can send any file they see anywhere: they open `\\<data>.example.com\x`, and Windows looks the name up outside the sandbox. No MXC setting stops this. The popup shows these programs red, and Allow needs "I trust this page."
 - A page that exploits Chromium can leak data the same way.
 - With OneDrive backup, the PowerShell startup folders are not on the list.
 

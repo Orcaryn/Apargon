@@ -1,6 +1,6 @@
 <!doctype html>
 <meta charset="utf-8">
-<meta name="papp-net" content="example.com:443">
+<meta name="papp-net" content="example.com">
 <meta name="papp-net" content="localhost:47181">
 <meta name="papp-run" content="cmd">
 <meta name="papp-run" content="curl">

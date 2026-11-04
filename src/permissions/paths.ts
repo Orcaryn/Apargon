@@ -12,6 +12,7 @@ const BROWSERS = [
   ...['Google/Chrome', 'Chromium', 'BraveSoftware', 'Microsoft Edge', 'Arc', 'Firefox'].map(name => `Library/Application Support/${name}`),
   ...['.config/google-chrome', '.config/chromium', '.config/BraveSoftware', '.config/microsoft-edge', '.mozilla', 'snap/firefox'],
 ];
+// Each as on disk, as every pattern is: a symlinked key folder is named by where it points.
 export const SECRETS = Object.entries({
   '.ssh': 'SSH keys',
   '.gnupg': 'GPG keys',
@@ -40,7 +41,11 @@ export const SECRETS = Object.entries({
   '.cache/huggingface/token': 'Hugging Face tokens',
   ...Object.fromEntries(BROWSERS.map(name => [name, 'browser logins and cookies'])),
   ...PERMISSIONS_PLATFORM.secrets,
-}).map(([name, holds]) => ({ path: path.join(HOME, name), holds }));
+}).map(([name, holds]) => {
+  const secret = path.join(HOME, name);
+
+  return { path: fs.existsSync(secret) ? fs.realpathSync.native(secret) : secret, holds };
+});
 
 export const LAUNCH_FOLDER = PERMISSIONS_PLATFORM.launchFolder && path.join(HOME, PERMISSIONS_PLATFORM.launchFolder);
 // macOS keeps iCloud Drive, Dropbox, OneDrive and Google Drive in ~/Library. Files there only sync.

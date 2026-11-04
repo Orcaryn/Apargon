@@ -30,6 +30,8 @@ export const linux: PermissionsPlatform = {
   launchFolder: null,
   // bwrap binds each writable folder whole.
   writesWholeFolders: true,
+  programsSendOut: false,
+  systemSeesAll: true,
   soundServerRecords: true,
   programFolders: ['/usr/local/bin'],
   programExtensions: [''],

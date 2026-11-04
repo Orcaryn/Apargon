@@ -1,6 +1,6 @@
 <!doctype html>
 <meta charset="utf-8">
-<meta name="papp-net" content="api.github.com:443">
+<meta name="papp-net" content="api.github.com">
 <meta name="papp-write" content="./electron-latest.json">
 <title>Apargon net</title>
 <style>

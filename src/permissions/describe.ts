@@ -2,11 +2,11 @@ import net from 'net';
 import path from 'path';
 import { LOCAL_HOSTS, privateNetwork } from './network.ts';
 import { BIG_FOLDERS, HOME, LAUNCH_FOLDER, runsOutsideSandbox, SECRETS } from './paths.ts';
-import { isInside, literalBase, PAGE_FILE, patternFolder } from './patterns.ts';
+import { isInside, literalBase, PAGE_FILE, patternFolder, patternSource } from './patterns.ts';
 import { PERMISSIONS_PLATFORM } from './platform.ts';
 import type { Permissions, Use, WindowSettings } from './tags.ts';
 
-// The popup shows short, with text as its tip. Red is a way to send data somewhere the tags do not name.
+// The popup shows short under a heading for its kind, and what the page sees as one line. Red is a way to send data somewhere the tags do not name.
 export type Line = { id: string; level: 'red' | 'yellow' | 'plain'; text: string; short: string };
 
 const USE_LINES: Record<Use, Omit<Line, 'id'>> = {
@@ -25,21 +25,24 @@ const USE_LINES: Record<Use, Omit<Line, 'id'>> = {
   midi: { level: 'plain', text: 'Use MIDI instruments, and change their settings', short: 'MIDI' },
   print: { level: 'yellow', text: 'Print what it shows, on any printer this computer can reach', short: 'Printing' },
 };
-const USE_SENDS: Partial<Record<Use, string>> = { clipboard: 'what you copy', location: 'where you are', camera: 'what the camera sees', microphone: 'what the microphone hears', screen: 'what is on your screen' };
+const USE_SEES: Use[] = ['clipboard', 'location', 'camera', 'microphone', 'screen'];
 
 export function describe(permissions: Permissions) {
   const lines: Line[] = [];
+  const writable = [...new Set(permissions.write.map(patternFolder))];
+  const programsCan = [
+    PERMISSIONS_PLATFORM.programsSendOut && 'send any file it sees anywhere',
+    PERMISSIONS_PLATFORM.writesWholeFolders && writable.length > 0 && `change any file in ${writable.join(', ')}`,
+  ].filter(can => typeof can === 'string');
 
-  if (permissions.node) {
-    lines.push({ id: 'node', level: 'red', text: 'Every file, any program', short: 'Full access' });
+  if (permissions.system) {
+    lines.push({ id: 'system', level: 'red', text: programsCan.length ? `Run any program, which can ${programsCan.join(' and ')}` : 'Run any program', short: 'Any program' });
   }
 
-  const writable = [...new Set(permissions.write.map(patternFolder))];
-  const writeNote = PERMISSIONS_PLATFORM.writesWholeFolders && writable.length ? `, which can change any file in ${writable.join(', ')}` : '';
-
   for (const [program, file] of Object.entries(permissions.run)) {
-    // Red where it can write hidden files, which run outside the sandbox.
-    lines.push({ id: `run:${file}`, level: writeNote ? 'red' : 'yellow', text: `Run ${file}${writeNote}`, short: program });
+    // Red where it can send data out, or write hidden files, which run outside the sandbox.
+    const text = programsCan.length ? `Run ${file}, which can ${programsCan.join(' and ')}` : `Run ${file}`;
+    lines.push({ id: `run:${file}`, level: programsCan.length ? 'red' : 'yellow', text, short: program });
   }
 
   lines.push(
@@ -66,21 +69,22 @@ export function describe(permissions: Permissions) {
   return lines.sort((a, b) => order[a.level] - order[b.level]);
 }
 
-export function worstCase({ node, run, sockets, net, open, own, read, write, use }: Permissions) {
-  const hosts = [...new Set([...net.map(pattern => pattern.split(':')[0]), ...open])];
-  const sends = [...(own || read.length || write.length ? ['the files it sees'] : []), ...use.flatMap(name => USE_SENDS[name] ?? [])];
+// A red line, a program, or what it sees together with a host the tags name.
+export function needsTrust({ run, net, open, own, read, write, use }: Permissions, lines: Line[]) {
+  const sees = own !== null || read.length > 0 || write.length > 0 || use.some(name => USE_SEES.includes(name));
 
-  if (node) {
-    return 'It can do anything you can, and send your files anywhere.';
-  } else if (Object.keys(run).length) {
-    return `It can run ${Object.keys(run).join(', ')}.`;
-  } else if (sockets.length) {
-    return `It can talk to ${sockets.map(socket => path.basename(socket)).join(', ')}.`;
-  } else if (hosts.length && sends.length) {
-    return `It can send ${sends.join(' and ')} to ${hosts.includes('*') ? 'any server' : hosts.join(', ')}.`;
-  }
+  return lines.some(line => line.level === 'red') || Object.keys(run).length > 0 || (sees && (net.length > 0 || open.length > 0));
+}
 
-  return null;
+// What the page sees, each path once: one inside another listed path is left out. A papp-system page sees all but keys and logins, so only those add to it.
+export function seenFiles({ own, read, write, system }: Permissions) {
+  const named = [...new Set([own ?? [], read, write].flat())];
+  const all = system && PERMISSIONS_PLATFORM.systemSeesAll;
+  const listed = named.filter(pattern =>
+    all ? SECRETS.some(secret => isInside(literalBase(pattern), secret.path)) : !named.some(other => other !== pattern && new RegExp(patternSource(other)).test(literalBase(pattern)))
+  );
+
+  return { all, lines: listed.map(pattern => folderLine('read', pattern)) };
 }
 
 function socketLine(socket: string): Line {

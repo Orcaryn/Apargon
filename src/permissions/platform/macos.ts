@@ -12,6 +12,8 @@ export const macos: PermissionsPlatform = {
   // Launch agents.
   launchFolder: 'Library',
   writesWholeFolders: false,
+  programsSendOut: false,
+  systemSeesAll: true,
   soundServerRecords: false,
   programFolders: ['/opt/homebrew/bin', '/usr/local/bin'],
   programExtensions: [''],

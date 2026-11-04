@@ -1,6 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
-<meta name="papp-node" content="full">
+<meta name="papp-system" content="full">
+<meta name="papp-write" content="./results/result-win-system.json">
 <title>Apargon selftest for Windows (full Node)</title>
 <body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
 
@@ -16,10 +17,12 @@
   const result = {};
 
   // The Windows test makes Documents: it may not exist.
-  const outside = path.join(os.homedir(), 'Documents', 'apargon-node.tmp');
-  fs.writeFileSync(outside, 'hi');
-  result.fs_anywhere = fs.readFileSync(outside, 'utf8') === 'hi';
-  fs.unlinkSync(outside);
+  try {
+    fs.writeFileSync(path.join(os.homedir(), 'Documents', 'apargon-node.tmp'), 'hi');
+    result.ungranted_write_refused = false;
+  } catch {
+    result.ungranted_write_refused = true;
+  }
 
   result.child_process = execSync('echo ok', { windowsHide: true }).toString().trim() === 'ok';
   result.storage_apart = localStorage.getItem('apargon-selftest') === null;
@@ -58,7 +61,7 @@
     result.dns_blocked = dnsBlocked;
     result.printers_reachable = printersReachable;
     document.body.textContent = JSON.stringify(result);
-    fs.writeFileSync(path.join(here, 'results', 'result-win-node.json'), JSON.stringify(result, null, 2) + '\n');
+    fs.writeFileSync(path.join(here, 'results', 'result-win-system.json'), JSON.stringify(result, null, 2) + '\n');
     setTimeout(() => window.close(), 200);
   });
 </script>

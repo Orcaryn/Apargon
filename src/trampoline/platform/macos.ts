@@ -73,31 +73,27 @@ export const macos: TrampolinePlatform = {
 
 function seatbeltProfile(permissions: Permissions, proxyPort: number | null) {
   const ports = [proxyPort ?? [], localPorts(permissions)].flat();
+  const { files, pages } = changeableSources(permissions);
   const rules = [
     fs.readFileSync(path.join(import.meta.dirname, 'profiles', 'macos.sb'), 'utf8'),
     ...ports.map(port => `(allow network-outbound (remote ip "localhost:${port}"))`),
     ...permissions.sockets.map(socket => `(allow network-outbound (${fs.statSync(socket).isDirectory() ? 'subpath' : 'literal'} "${socket}"))`),
     // The print server, which sends jobs on to the printers it knows.
     ...(permissions.use.includes('print') ? ['(allow network-outbound (literal "/private/var/run/cupsd"))'] : []),
+    // Another app, or an Apple Event to one, would run outside the sandbox.
+    '(deny lsopen)',
+    // Sending only. The page's process must still receive Apple Events: Dock > Quit, logout, and a page opened while it runs.
+    '(deny appleevent-send)',
+    '(deny user-preference-write)',
+    '(deny file-write*)',
+    `(allow file-write* (subpath "/dev") (subpath "${fs.realpathSync(app.getPath('temp'))}"))`,
+    ...files.map(source => `(allow file-write* (regex #"${source}"))`),
+    `(deny file-write* (regex #"${PAGE_SOURCE}"))`,
+    ...pages.map(source => `(allow file-write* (regex #"${source}"))`),
+    ...permissions.hidden.map(secret => `(deny file-read* file-write* (subpath "${secret}"))`),
+    `(deny file-write* (subpath "${DATA}"))`,
+    `(allow file-write* (subpath "${PAGE_DATA}"))`,
   ];
-
-  if (!permissions.node) {
-    const { files, pages } = changeableSources(permissions);
-    rules.push(
-      '(deny lsopen)',
-      // Sending only. The page's process must still receive Apple Events: Dock > Quit, logout, and a page opened while it runs.
-      '(deny appleevent-send)',
-      '(deny user-preference-write)',
-      '(deny file-write*)',
-      `(allow file-write* (subpath "/dev") (subpath "${fs.realpathSync(app.getPath('temp'))}"))`,
-      ...files.map(source => `(allow file-write* (regex #"${source}"))`),
-      `(deny file-write* (regex #"${PAGE_SOURCE}"))`,
-      ...pages.map(source => `(allow file-write* (regex #"${source}"))`),
-      ...permissions.hidden.map(secret => `(deny file-read* file-write* (subpath "${secret}"))`)
-    );
-  }
-
-  rules.push(`(deny file-write* (subpath "${DATA}"))`, `(allow file-write* (subpath "${PAGE_DATA}"))`);
 
   if (INSTALL_FOLDER) {
     rules.push(`(deny file-write* (subpath "${INSTALL_FOLDER}"))`);

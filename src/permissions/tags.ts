@@ -18,7 +18,7 @@ export type Permissions = {
   env: string[];
   sockets: string[];
   hidden: string[];
-  node: boolean;
+  system: boolean;
   use: Use[];
   shortcuts: string[];
   window: WindowSettings | null;
@@ -31,7 +31,7 @@ export type WindowSettings = { width?: number; height?: number; minWidth?: numbe
 const INVISIBLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 const USES = ['notifications', 'clipboard', 'location', 'sound', 'camera', 'microphone', 'screen', 'background', 'login', 'usb', 'serial', 'hid', 'midi', 'print'] as const;
 const SIZES = { width: 'width', height: 'height', 'min-width': 'minWidth', 'min-height': 'minHeight' } as const;
-const SWITCHES = { resizable: 'resizable', titlebar: 'titleBar', frame: 'frame', transparent: 'transparent', 'on-top': 'onTop' } as const;
+const SWITCHES = { resizable: 'resizable', 'title-bar': 'titleBar', frame: 'frame', transparent: 'transparent', 'on-top': 'onTop' } as const;
 const MODIFIERS: Partial<Record<string, string>> = { commandorcontrol: 'CommandOrControl', cmdorctrl: 'CommandOrControl', command: 'Command', cmd: 'Command', control: 'Control', ctrl: 'Control', alt: 'Alt', option: 'Alt', altgr: 'AltGr', shift: 'Shift', super: 'Super', meta: 'Super' };
 const KEYS = [...Array.from({ length: 24 }, (_, i) => `F${i + 1}`), 'Space', 'Tab', 'Backspace', 'Delete', 'Insert', 'Return', 'Enter', 'Up', 'Down', 'Left', 'Right', 'Home', 'End', 'PageUp', 'PageDown', 'Escape', 'Esc'];
 // Taken alone: no app types with them.
@@ -39,7 +39,7 @@ const MEDIA_KEYS = ['MediaPlayPause', 'MediaNextTrack', 'MediaPreviousTrack', 'M
 
 export function declaredPermissions(page: string, html = fs.readFileSync(page, 'utf8')) {
   const dir = path.dirname(page);
-  const permissions: Permissions = { own: null, read: [], write: [], net: [], open: [], run: {}, env: [], sockets: [], hidden: [], node: false, use: [], shortcuts: [], window: null, tags: [] };
+  const permissions: Permissions = { own: null, read: [], write: [], net: [], open: [], run: {}, env: [], sockets: [], hidden: [], system: false, use: [], shortcuts: [], window: null, tags: [] };
   const head = html.replace(/<!--[\s\S]*?-->/g, '').split(/<script\b|<body\b|<\/head\b/i)[0];
 
   for (const [, attrs] of head.matchAll(/<meta\s+([^>]*)>/gi)) {
@@ -83,25 +83,25 @@ export function declaredPermissions(page: string, html = fs.readFileSync(page, '
       permissions.env.push(envName(value));
     } else if (kind === 'socket') {
       permissions.sockets.push(socketPath(value, dir));
-    } else if (kind === 'node' && value === 'full') {
-      permissions.node = true;
-    } else if (kind === 'node') {
-      throw new Error(`Bad papp-node value "${value}". The only value is "full".`);
+    } else if (kind === 'system' && value === 'full') {
+      permissions.system = true;
+    } else if (kind === 'system') {
+      throw new Error(`Bad papp-system value "${value}". The only value is "full".`);
     } else if (kind === 'use') {
-      permissions.use.push(useName(value));
-    } else if (kind === 'shortcut') {
+      permissions.use.push(...value.split(',').map(name => useName(name.trim())));
+    } else if (kind === 'global-shortcut') {
       permissions.shortcuts.push(shortcut(value));
     } else if (kind === 'window' && permissions.window) {
-      throw new Error('Two papp-window tags. Put every setting in one, as in content="width=900, height=600".');
+      throw new Error('Two papp-window tags. Put every setting in one, as in content="size=900x600, title-bar=no".');
     } else if (kind === 'window') {
       permissions.window = windowSettings(value);
     } else {
-      throw new Error(`Unknown tag papp-${kind}. The tags are papp-read, papp-write, papp-net, papp-open, papp-run, papp-env, papp-socket, papp-use, papp-shortcut, papp-window and papp-node.`);
+      throw new Error(`Unknown tag papp-${kind}. The tags are papp-read, papp-write, papp-net, papp-open, papp-run, papp-env, papp-socket, papp-use, papp-global-shortcut, papp-window and papp-system.`);
     }
   }
 
-  if (permissions.node && (permissions.read.length || permissions.write.length || Object.keys(permissions.run).length || permissions.env.length)) {
-    throw new Error('papp-node already allows every folder, program and variable. Remove papp-read, papp-write, papp-run and papp-env.');
+  if (permissions.system && (Object.keys(permissions.run).length || permissions.env.length)) {
+    throw new Error('papp-system already allows every program and variable. Remove papp-run and papp-env.');
   } else if (permissions.env.length && !Object.keys(permissions.run).length) {
     throw new Error('papp-env passes a variable to the programs a page runs, and this page runs none. Add papp-run, or remove papp-env.');
   }
@@ -120,9 +120,8 @@ export function declaredPermissions(page: string, html = fs.readFileSync(page, '
   }
 
   const named = [...[...read, ...write].map(literalBase), ...sockets];
-  const secrets = SECRETS.map(secret => (fs.existsSync(secret.path) ? fs.realpathSync.native(secret.path) : secret.path));
-  permissions.own = permissions.node || [path.parse(dir).root, HOME, ...BIG_FOLDERS].includes(dir) ? null : dir;
-  permissions.hidden = permissions.node ? [] : secrets.filter(secret => !named.some(base => isInside(base, secret)));
+  permissions.own = [path.parse(dir).root, HOME, ...BIG_FOLDERS].includes(dir) ? null : dir;
+  permissions.hidden = SECRETS.map(secret => secret.path).filter(secret => !named.some(base => isInside(base, secret)));
 
   return permissions;
 }
@@ -159,11 +158,13 @@ function folderPattern(value: string, dir: string) {
 
 function hostPattern(value: string) {
   // A trailing dot names the same host: without it, localhost. would not count as this computer.
-  const pattern = value === '*' ? '*:*' : value.toLowerCase().replace('.:', ':');
+  const pattern = (value.includes(':') ? value : `${value}:443`).toLowerCase().replace('.:', ':');
   const [host, port] = pattern.split(':');
 
   if (!/^(\*|(\*\.)?[a-z0-9][a-z0-9.-]*):(\*|[1-9]\d*)$/.test(pattern) || +port < 1 || +port > 65535) {
-    throw new Error(`Bad papp-net value "${value}". One host:port per <meta>, such as api.example.com:443 or *.example.com:443.`);
+    throw new Error(`Bad papp-net value "${value}". One host per <meta>, with a port after a colon if not 443, such as api.example.com, *.example.com or example.com:8080.`);
+  } else if (value === '*') {
+    throw new Error('Write papp-net "*:443" for any server on port 443, or "*:*" for any port.');
   } else if (!net.isIPv4(host) && host.split('.').every(label => /^(\d+|0x[0-9a-f]*)$/.test(label))) {
     // To the resolver 16843009, 1.1 and 0x7f.1 are addresses; the popup would show them as names.
     throw new Error(`Bad papp-net value "${value}". A host of numbers must be a full address, such as 1.1.1.1:${port === '*' ? '443' : port}.`);
@@ -173,9 +174,9 @@ function hostPattern(value: string) {
     throw new Error(`Apargon never reaches ${host}: it is one of this computer's own addresses. For a program on this computer, declare localhost:<port>.`);
   } else if (host.endsWith('.local')) {
     throw new Error(`Apargon reaches a device on your local network only by its address in numbers, such as 192.168.1.5:${port === '*' ? '80' : port}, not by a name such as ${host}.`);
-  } else if ((LOCAL_HOSTS.includes(host) || privateNetwork().check(host)) && port === '*') {
-    // On this computer, any port would include other pages' proxies, and with them their hosts.
-    throw new Error(`Apargon reaches ${host} on one port only. Write ${host}:<port>.`);
+  } else if ((LOCAL_HOSTS.includes(host) || privateNetwork().check(host)) && (port === '*' || !value.includes(':'))) {
+    // On this computer, any port would include other pages' proxies, and with them their hosts. 443 is a web server's port, not a guess at a local one.
+    throw new Error(`Apargon reaches ${host} on one port only, which you name. Write ${host}:<port>.`);
   }
 
   return pattern;
@@ -198,7 +199,7 @@ function findProgram(value: string) {
   const refusal = PERMISSIONS_PLATFORM.refusePath(value);
 
   if (value.includes('*')) {
-    throw new Error('papp-run takes one program, no wildcards. For any program, use papp-node.');
+    throw new Error('papp-run takes one program, no wildcards. For any program, use papp-system.');
   } else if (path.isAbsolute(value) && path.normalize(value) !== value) {
     throw new Error(`Bad papp-run value "${value}". Write the path without .., . or //, as in ${path.normalize(value)}.`);
   } else if (refusal) {
@@ -256,9 +257,14 @@ function socketPath(value: string, dir: string) {
 function windowSettings(value: string) {
   const settings: WindowSettings = {};
   const seen = new Set<string>();
-  const keys = [...Object.keys(SIZES), ...Object.keys(SWITCHES)].join(', ');
+  const keys = ['size', ...Object.keys(SIZES), ...Object.keys(SWITCHES)].join(', ');
+  const sized = value.replace(/(^|,)\s*size\s*=\s*(\d+)x(\d+)/gi, '$1width=$2, height=$3');
 
-  for (const setting of value.split(',')) {
+  if ((value.match(/\bsize\s*=/gi) ?? []).length > 1) {
+    throw new Error('papp-window sets size twice. Keep one.');
+  }
+
+  for (const setting of sized.split(',')) {
     const [key, given] = setting.split('=').map(part => part.trim().toLowerCase());
 
     if (seen.has(key)) {
@@ -268,7 +274,7 @@ function windowSettings(value: string) {
     } else if (Object.hasOwn(SWITCHES, key) && (given === 'yes' || given === 'no')) {
       settings[SWITCHES[key as keyof typeof SWITCHES]] = given === 'yes';
     } else {
-      throw new Error(`Bad papp-window setting "${setting.trim()}". Write key=value pairs, such as width=900, height=600, titlebar=no. The keys are ${keys}: sizes in pixels, the rest yes or no.`);
+      throw new Error(`Bad papp-window setting "${setting.trim()}". Write key=value pairs, such as size=900x600, title-bar=no. The keys are ${keys}: size as 900x600, the other sizes in pixels, the rest yes or no.`);
     }
 
     seen.add(key);
@@ -281,7 +287,7 @@ function useName(value: string) {
   const name = value.toLowerCase() as Use;
 
   if (!USES.includes(name)) {
-    throw new Error(`Bad papp-use value "${value}". The values are ${USES.join(', ')}.`);
+    throw new Error(`Bad papp-use value "${value}". The values are ${USES.join(', ')}, one or more separated by commas.`);
   }
 
   return name;
@@ -296,9 +302,9 @@ function shortcut(value: string) {
   const key = [...KEYS, ...MEDIA_KEYS].find(known => known.toLowerCase() === last.toLowerCase()) ?? (/^[a-z0-9]$/i.test(last) ? last.toUpperCase() : undefined);
 
   if (modifiers.length < named.length || key === undefined) {
-    throw new Error(`Bad papp-shortcut value "${value}". Write modifiers and one key, such as CommandOrControl+Shift+N or Alt+F9.`);
+    throw new Error(`Bad papp-global-shortcut value "${value}". Write modifiers and one key, such as CommandOrControl+Shift+N or Alt+F9.`);
   } else if (!MEDIA_KEYS.includes(key) && (/^F\d+$/.test(key) ? keysHeld.size === 0 : keysHeld.size < 2 || [...keysHeld].every(name => PERMISSIONS_PLATFORM.typingModifiers.includes(name)))) {
-    throw new Error(`papp-shortcut ${value} would catch keys meant for the app in front. Use two different modifiers, not only ${PERMISSIONS_PLATFORM.typingModifiers.join(' and ')}, or one with a function key.`);
+    throw new Error(`papp-global-shortcut ${value} would catch keys meant for the app in front. Use two different modifiers, not only ${PERMISSIONS_PLATFORM.typingModifiers.join(' and ')}, or one with a function key.`);
   }
 
   return [...new Set(modifiers), key].join('+');

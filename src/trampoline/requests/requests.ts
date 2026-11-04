@@ -21,7 +21,7 @@ export function handleRequest(request: PageRequest, { page, permissions, reply, 
   } else if ('showEgressLog' in request) {
     shell.openPath(EGRESS_LOG);
   } else if ('notify' in request) {
-    // Field by field: a papp-node page writes the line itself, and could add Electron's other options.
+    // Field by field: a papp-system page writes the line itself, and could add Electron's other options.
     const { id, title, body, buttons, icon } = request.notify;
     showNotice({ title, body, buttons, icon }, () => reply({ show: true })).then(button => reply({ answered: id, value: button }));
   } else if ('tray' in request) {

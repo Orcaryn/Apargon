@@ -16,6 +16,10 @@ export type PermissionsPlatform = {
   // Where written files run outside the sandbox, in the home folder; null where hidden names cover it.
   launchFolder: string | null;
   writesWholeFolders: boolean;
+  // A program can send what it sees past the sandbox.
+  programsSendOut: boolean;
+  // A papp-system page reads every file but keys and logins, not only what its tags name.
+  systemSeesAll: boolean;
   soundServerRecords: boolean;
   programFolders: string[];
   // The endings of a file the OS runs as a program, tried in turn after a name; '' where any file can be one.

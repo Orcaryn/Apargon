@@ -42,7 +42,8 @@ The favicon is the app icon, and on macOS the `.papp` file's icon too. Without o
 <link rel="icon" href="./icon.svg">
 ```
 
-- A local image the page may see (SVG, PNG, ICO, JPEG, GIF, WebP) or a `data:image/` URL. Web addresses are ignored.
+- SVG, PNG, ICO, JPEG, GIF or WebP: a file the page may see, a `data:image/` URL, or a web address whose host is in `papp-net`.
+- With several favicons, an SVG wins, else the one with the most pixels.
 - It is drawn on a white rounded square with an Apargon badge. Use a square image without padding.
 
 ### `window.papp`

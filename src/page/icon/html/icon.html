@@ -3,8 +3,17 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; script-src 'unsafe-inline'" />
 <title>Apargon icon</title>
 <script>
-  async function paint(faviconUrl, badgeUrl) {
-    const [favicon, badge] = await Promise.all([faviconUrl, badgeUrl].map(load));
+  // The sharpest favicon: an SVG, else the one with the most pixels. One that does not decode is left out.
+  async function paint(faviconUrls, badgeUrl) {
+    const favicons = (await Promise.all(faviconUrls.map(url => load(url).catch(() => null)))).filter(image => image !== null);
+
+    if (favicons.length === 0) {
+      return null;
+    }
+
+    const pixels = image => (image.src.startsWith('data:image/svg+xml') ? Infinity : image.naturalWidth * image.naturalHeight);
+    const favicon = favicons.reduce((sharpest, image) => (pixels(image) > pixels(sharpest) ? image : sharpest));
+    const badge = await load(badgeUrl);
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = 1024;
     const g = canvas.getContext('2d');

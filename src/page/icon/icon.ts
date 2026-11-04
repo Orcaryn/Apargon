@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { realPath } from '../../permissions/paths.ts';
 import { PAGE_PLATFORM } from '../platform.ts';
 
+const MAX_FAVICON_BYTES = 1024 * 1024;
 const IMAGE_TYPES: Record<string, string> = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
@@ -17,32 +18,50 @@ const IMAGE_TYPES: Record<string, string> = {
 
 // Draws the page's favicon as its icon whenever it changes. Returns the icon as last drawn, which notifications show.
 export function followFavicon(win: BrowserWindow, canSee: (file: string) => boolean, madeHere: boolean) {
-  let favicons: string[] = [];
+  let faviconUrls: string[] = [];
   let drawn: NativeImage | null = null;
 
-  const showFavicon = async () => {
-    const favicon = favicons.map(url => readFavicon(url, canSee)).find(data => data !== undefined);
+  const drawFavicons = async () => {
+    const urls = faviconUrls;
+    const read = await Promise.all(urls.map(url => readFavicon(win, url, canSee).catch(() => undefined)));
+    const favicons = read.filter(favicon => favicon !== undefined);
 
-    if (favicon === undefined) {
+    // The page changed its favicon while a web one downloaded: the newer call draws.
+    if (favicons.length === 0 || urls !== faviconUrls) {
       return;
     }
 
-    drawn = await drawIcon(favicon);
+    const icon = await drawIcon(favicons);
+
+    // None decoded: the icon as last drawn stays.
+    if (icon === null) {
+      return;
+    }
+
+    drawn = icon;
     PAGE_PLATFORM.showIcon(win, drawn, madeHere);
   };
 
   win.webContents.on('page-favicon-updated', (_event, urls) => {
-    favicons = urls;
-    showFavicon().catch(() => undefined);
+    faviconUrls = urls;
+    drawFavicons().catch(() => undefined);
   });
-  win.webContents.on('did-start-loading', () => showFavicon().catch(() => undefined));
+  win.webContents.on('did-start-loading', () => drawFavicons().catch(() => undefined));
 
   return () => drawn;
 }
 
-function readFavicon(url: string, canSee: (file: string) => boolean) {
+// As a data: URL, which the sandboxed icon window can load.
+async function readFavicon(win: BrowserWindow, url: string, canSee: (file: string) => boolean) {
   if (url.startsWith('data:image/')) {
     return url;
+  } else if (/^https?:/.test(url)) {
+    // Through the page's session, so its proxy: only a host in papp-net answers. An image of a favicon's size, or nothing.
+    const response = await win.webContents.session.fetch(url);
+    const type = response.headers.get('content-type') ?? '';
+    const body = Buffer.from(await response.arrayBuffer());
+
+    return response.ok && type.startsWith('image/') && body.byteLength <= MAX_FAVICON_BYTES ? `data:${type};base64,${body.toString('base64')}` : undefined;
   } else if (!url.startsWith('file:')) {
     return undefined;
   }
@@ -53,16 +72,16 @@ function readFavicon(url: string, canSee: (file: string) => boolean) {
   return type !== undefined && canSee(file) ? `data:${type};base64,${fs.readFileSync(file).toString('base64')}` : undefined;
 }
 
-async function drawIcon(favicon: string) {
+async function drawIcon(favicons: string[]) {
   const html = fs.readFileSync(path.join(import.meta.dirname, 'html', 'icon.html')).toString('base64');
   const badge = fs.readFileSync(path.join(import.meta.dirname, 'images', 'badge.svg')).toString('base64');
   const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true } });
 
   try {
     await win.loadURL(`data:text/html;base64,${html}`);
-    const png: string = await win.webContents.executeJavaScript(`paint(${JSON.stringify(favicon)}, 'data:image/svg+xml;base64,${badge}')`);
+    const png: string | null = await win.webContents.executeJavaScript(`paint(${JSON.stringify(favicons)}, 'data:image/svg+xml;base64,${badge}')`);
 
-    return nativeImage.createFromDataURL(png);
+    return png === null ? null : nativeImage.createFromDataURL(png);
   } finally {
     win.destroy();
   }

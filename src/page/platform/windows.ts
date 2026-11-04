@@ -8,10 +8,9 @@ export const windows: PagePlatform = {
   isOffline: async () => (await Promise.all([connectError('127.0.0.1', 9), connectError(UNROUTED, 9)])).every(code => code === 'EACCES'),
   // Windows shows notifications through a service the sandbox may not reach.
   notifiesHere: false,
-  // The GPU process cannot run in the sandbox, and a name Chromium looks up leaves through Windows' own resolver: names go only to the proxy. So does localhost: Chromium would reach it directly, which the sandbox refuses. The taskbar groups windows by app id: each page gets its own button.
+  // A name Chromium looks up leaves through Windows' own resolver: names go only to the proxy. So does localhost: Chromium would reach it directly, which the sandbox refuses. The taskbar groups windows by app id: each page gets its own button.
   beforeReady(page) {
     app.setAppUserModelId(pageAppId(page));
-    app.disableHardwareAcceleration();
     app.commandLine.appendSwitch('host-resolver-rules', 'MAP * ~NOTFOUND, EXCLUDE 127.0.0.1');
     app.commandLine.appendSwitch('proxy-bypass-list', '<-loopback>');
   },

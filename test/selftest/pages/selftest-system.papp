@@ -30,6 +30,13 @@
     result.ssh_hidden = err.code === 'EPERM';
   }
 
+  // Seatbelt denies the folder; on Linux an empty one covers it. selftest.papp left a secret there.
+  try {
+    result.secrets_hidden = fs.readdirSync(path.join(os.homedir(), process.platform === 'darwin' ? 'Library/Application Support/apargon-secrets' : '.config/apargon-secrets')).length === 0;
+  } catch (err) {
+    result.secrets_hidden = err.code === 'EPERM';
+  }
+
   result.child_process = execSync('echo ok').toString().trim() === 'ok';
 
   result.storage_apart = localStorage.getItem('apargon-selftest') === null;

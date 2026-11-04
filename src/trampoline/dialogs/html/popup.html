@@ -318,10 +318,12 @@
     sees: 'Can see',
     write: 'Can change and delete',
     net: 'Can send and receive data with',
+    listen: 'Can answer requests from',
     open: 'Can open in your browser',
     use: 'Can also',
     shortcut: 'Keys that work in every app',
     window: 'Can also',
+    given: 'You gave it',
   };
   const SHOWS_TEXT = ['use', 'window'];
   const ICONS = {
@@ -332,6 +334,7 @@
     file: '<path d="M3.5 2.8c0-.7.5-1.2 1.2-1.2h4.6l3.2 3.2v8.4c0 .7-.5 1.2-1.2 1.2H4.7c-.7 0-1.2-.5-1.2-1.2z"/><path d="M9.3 1.6v3.2h3.2"/>',
     folder: '<path d="M1.5 4.2c0-.7.5-1.2 1.2-1.2h3.4l1.4 1.5h5.8c.7 0 1.2.5 1.2 1.2v6.4c0 .7-.5 1.2-1.2 1.2H2.7c-.7 0-1.2-.5-1.2-1.2z"/>',
     net: '<circle cx="8" cy="8" r="6.2"/><path d="M1.8 8h12.4M8 1.8c1.8 1.9 2.6 4 2.6 6.2S9.8 12.3 8 14.2C6.2 12.3 5.4 10.2 5.4 8S6.2 3.7 8 1.8"/>',
+    listen: '<path d="M2.2 9.4a5.8 5.8 0 0 1 11.6 0M4.6 9.4a3.4 3.4 0 0 1 6.8 0"/><circle cx="8" cy="9.6" r="1.2"/><path d="M8 10.8v3.4"/>',
     open: '<path d="M9.5 2h4.5v4.5M14 2L7.5 8.5M12 9.5v3.3c0 .7-.5 1.2-1.2 1.2H3.2c-.7 0-1.2-.5-1.2-1.2V5.2C2 4.5 2.5 4 3.2 4h3.3"/>',
     'use:notifications': '<path d="M8 2.2a4 4 0 0 1 4 4v3.2l1.3 2H2.7l1.3-2V6.2a4 4 0 0 1 4-4zM6.4 13.4a1.6 1.6 0 0 0 3.2 0"/>',
     'use:clipboard': '<rect x="3" y="2.8" width="10" height="11.4" rx="1.4"/><path d="M6 2.8V2h4v.8M5.5 7h5M5.5 9.8h5"/>',
@@ -351,6 +354,7 @@
     shortcut: '<rect x="1.8" y="4" width="12.4" height="8.4" rx="1.6"/><path d="M4.5 6.8h.01M7 6.8h.01M9.5 6.8h.01M12 6.8h.01M5 9.6h6"/>',
   };
   ICONS.write = ICONS.file;
+  ICONS.given = ICONS.file;
 
   trusted.onchange = () => (allow.disabled = !trusted.checked);
   tags.ontoggle = () => (location.hash = tags.open ? 'tags-open' : 'tags-closed');

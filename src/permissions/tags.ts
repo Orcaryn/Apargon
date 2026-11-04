@@ -4,8 +4,8 @@ import os from 'os';
 import path from 'path';
 import { PROGRAM_ENV } from './env.ts';
 import { LOCAL_HOSTS, privateNetwork } from './network.ts';
-import { absolutePath, BIG_FOLDERS, HOME, SECRETS } from './paths.ts';
-import { isInside, literalBase } from './patterns.ts';
+import { absolutePath, BIG_FOLDERS, HOME, realPath, SECRETS } from './paths.ts';
+import { changeableSources, isInside, literalBase, patternFolder } from './patterns.ts';
 import { PERMISSIONS_PLATFORM } from './platform.ts';
 
 export type Permissions = {
@@ -22,9 +22,12 @@ export type Permissions = {
   use: Use[];
   shortcuts: string[];
   window: WindowSettings | null;
+  listen: Listen | null;
   tags: string[];
 };
 export type Use = (typeof USES)[number];
+// Who may send the page requests: programs on this computer, or devices on the network too.
+export type Listen = 'localhost' | 'network';
 // Only the keys the tag sets.
 export type WindowSettings = { width?: number; height?: number; minWidth?: number; minHeight?: number; resizable?: boolean; titleBar?: boolean; frame?: boolean; transparent?: boolean; onTop?: boolean };
 
@@ -39,7 +42,7 @@ const MEDIA_KEYS = ['MediaPlayPause', 'MediaNextTrack', 'MediaPreviousTrack', 'M
 
 export function declaredPermissions(page: string, html = fs.readFileSync(page, 'utf8')) {
   const dir = path.dirname(page);
-  const permissions: Permissions = { own: null, read: [], write: [], net: [], open: [], run: {}, env: [], sockets: [], hidden: [], system: false, use: [], shortcuts: [], window: null, tags: [] };
+  const permissions: Permissions = { own: null, read: [], write: [], net: [], open: [], run: {}, env: [], sockets: [], hidden: [], system: false, use: [], shortcuts: [], window: null, listen: null, tags: [] };
   const head = html.replace(/<!--[\s\S]*?-->/g, '').split(/<script\b|<body\b|<\/head\b/i)[0];
 
   for (const [, attrs] of head.matchAll(/<meta\s+([^>]*)>/gi)) {
@@ -78,7 +81,7 @@ export function declaredPermissions(page: string, html = fs.readFileSync(page, '
     } else if (kind === 'run' && Object.hasOwn(permissions.run, path.basename(value))) {
       throw new Error(`Two papp-run tags name a program ${path.basename(value)}. The page runs programs by name, so keep one.`);
     } else if (kind === 'run') {
-      permissions.run[path.basename(value)] = findProgram(value);
+      permissions.run[path.basename(value)] = findProgram(value, dir);
     } else if (kind === 'env') {
       permissions.env.push(envName(value));
     } else if (kind === 'socket') {
@@ -95,8 +98,12 @@ export function declaredPermissions(page: string, html = fs.readFileSync(page, '
       throw new Error('Two papp-window tags. Put every setting in one, as in content="size=900x600, title-bar=no".');
     } else if (kind === 'window') {
       permissions.window = windowSettings(value);
+    } else if (kind === 'listen' && permissions.listen) {
+      throw new Error('Two papp-listen tags. Keep one: network includes this computer.');
+    } else if (kind === 'listen') {
+      permissions.listen = listenScope(value);
     } else {
-      throw new Error(`Unknown tag papp-${kind}. The tags are papp-read, papp-write, papp-net, papp-open, papp-run, papp-env, papp-socket, papp-use, papp-global-shortcut, papp-window and papp-system.`);
+      throw new Error(`Unknown tag papp-${kind}. The tags are papp-read, papp-write, papp-net, papp-open, papp-run, papp-env, papp-socket, papp-listen, papp-use, papp-global-shortcut, papp-window and papp-system.`);
     }
   }
 
@@ -106,10 +113,26 @@ export function declaredPermissions(page: string, html = fs.readFileSync(page, '
     throw new Error('papp-env passes a variable to the programs a page runs, and this page runs none. Add papp-run, or remove papp-env.');
   }
 
+  checkPermissions(permissions, page);
+  const { read, write, sockets } = permissions;
+  const named = [...[...read, ...write].map(literalBase), ...sockets];
+  permissions.own = [path.parse(dir).root, HOME, ...BIG_FOLDERS].includes(dir) ? null : dir;
+  permissions.hidden = SECRETS.map(secret => secret.path).filter(secret => !named.some(base => isInside(base, secret)));
+
+  return permissions;
+}
+
+// What the sandbox is built from must pass these, whether a tag or a pick named it: run on the tags here, and again with the picks before the sandbox is built.
+export function checkPermissions(permissions: Permissions, page: string) {
   const { read, write, run, sockets } = permissions;
+  const dir = path.dirname(page);
   const quoted = [...write, ...sockets].find(folder => folder.includes('"'));
   const refusal = PERMISSIONS_PLATFORM.refuse(permissions, dir);
   const invisible = [page, ...read, ...write, ...Object.values(run), ...sockets].find(text => INVISIBLE.test(text));
+  // A program the page can change is any program: "Run tool" would say nothing. As on disk, like the patterns, so a link cannot hide it. Where the sandbox grants whole folders, a program in one counts too.
+  const changeable = changeableSources(permissions).files.map(source => new RegExp(source));
+  const writableFolders = write.map(patternFolder);
+  const rewritable = Object.values(run).find(program => changeable.some(pattern => pattern.test(realPath(program))) || (PERMISSIONS_PLATFORM.writesWholeFolders && writableFolders.some(folder => isInside(realPath(program), folder))));
 
   if (quoted) {
     throw new Error(`${quoted} has a " in its path, which the sandbox cannot take. Rename it.`);
@@ -117,13 +140,9 @@ export function declaredPermissions(page: string, html = fs.readFileSync(page, '
     throw new Error(refusal);
   } else if (invisible) {
     throw new Error(`${JSON.stringify(invisible)} has a line break or another invisible character, which the popup cannot show. Rename the file.`);
+  } else if (rewritable) {
+    throw new Error(`The page could change ${rewritable}, which it runs: a papp-write tag or a pick covers it. Keep a program where the page cannot write.`);
   }
-
-  const named = [...[...read, ...write].map(literalBase), ...sockets];
-  permissions.own = [path.parse(dir).root, HOME, ...BIG_FOLDERS].includes(dir) ? null : dir;
-  permissions.hidden = SECRETS.map(secret => secret.path).filter(secret => !named.some(base => isInside(base, secret)));
-
-  return permissions;
 }
 
 // As the browser reads them: the first of each name wins, in any case. Quoted means name="value", no spaces around the =.
@@ -192,22 +211,30 @@ function openHost(value: string) {
   return host;
 }
 
-function findProgram(value: string) {
+// A name on PATH, a full path, or a path from the page's folder (./bin/tool) for a program the page ships.
+function findProgram(value: string, dir: string) {
   const { programExtensions, programFolders } = PERMISSIONS_PLATFORM;
   const runnable = (file: string) => programExtensions.some(extension => file.toLowerCase().endsWith(extension)) && fs.statSync(file, { throwIfNoEntry: false })?.isFile();
   // Before the file is looked for: Windows would ask the server of a network path, before the popup.
   const refusal = PERMISSIONS_PLATFORM.refusePath(value);
+  const bundled = /^\.[\\/]/.test(value);
 
   if (value.includes('*')) {
     throw new Error('papp-run takes one program, no wildcards. For any program, use papp-system.');
   } else if (path.isAbsolute(value) && path.normalize(value) !== value) {
     throw new Error(`Bad papp-run value "${value}". Write the path without .., . or //, as in ${path.normalize(value)}.`);
+  } else if (bundled && value.slice(2).split(/[\\/]/).some(name => ['', '.', '..'].includes(name))) {
+    throw new Error(`Bad papp-run value "${value}". Write the path from the page's folder without .., . or //, as in ./bin/${path.basename(value)}.`);
   } else if (refusal) {
     throw new Error(refusal);
-  } else if (path.isAbsolute(value) && !runnable(value)) {
-    throw new Error(`Program ${value} was not found, or is a folder or another file that cannot run.`);
-  } else if (path.isAbsolute(value)) {
-    return value;
+  } else if (path.isAbsolute(value) || bundled) {
+    const file = bundled ? absolutePath(value, dir) : value;
+
+    if (!runnable(file)) {
+      throw new Error(`Program ${file} was not found, or is a folder or another file that cannot run.`);
+    }
+
+    return file;
   } else if (!/^[\w.+-]+$/.test(value)) {
     throw new Error(`Bad papp-run value "${value}". Name one program, such as git, or give its full path.`);
   }
@@ -222,6 +249,16 @@ function findProgram(value: string) {
   }
 
   return found;
+}
+
+function listenScope(value: string): Listen {
+  const scope = value.toLowerCase();
+
+  if (scope !== 'localhost' && scope !== 'network') {
+    throw new Error(`Bad papp-listen value "${value}". Write localhost, for programs on this computer, or network, for devices on your network too.`);
+  }
+
+  return scope;
 }
 
 function envName(value: string) {

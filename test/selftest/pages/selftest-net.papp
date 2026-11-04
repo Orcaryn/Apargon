@@ -6,12 +6,15 @@
 <meta name="papp-net" content="*:9">
 <meta name="papp-net" content="10.255.255.2:9">
 <meta name="papp-net" content="localhost:47181">
+<meta name="papp-net" content="localhost:47183">
+<meta name="papp-listen" content="localhost">
 <meta name="papp-socket" content="./results/declared.sock">
 <meta name="papp-run" content="curl">
 <meta name="papp-run" content="touch">
 <meta name="papp-run" content="cat">
 <meta name="papp-run" content="env">
 <meta name="papp-run" content="sh">
+<meta name="papp-run" content="./bin/greet">
 <meta name="papp-env" content="APARGON_TEST_ENV">
 <meta name="papp-read" content="../../../examples">
 <meta name="papp-write" content="./results/result-net.json">
@@ -63,6 +66,7 @@
       result.program_page_write_blocked = (await papp.run('touch', ['touched.papp'])).status !== 0;
     }
 
+    result.program_bundled_runs = (await papp.run('greet', ['x'])).stdout === 'bundled x\n';
     result.program_input = (await papp.run('cat', [], { input: 'piped' })).stdout === 'piped';
     const bytes = (await papp.run('cat', [], { input: new Uint8Array([0, 255, 10, 1]), encoding: null })).stdout;
     result.program_bytes = bytes instanceof Uint8Array && bytes.join() === '0,255,10,1';
@@ -98,6 +102,19 @@
       result.page_process_env_unnamed_left_out = (await papp.run('sh', ['-c', 'tr "\\0" "\\n" < /proc/$PPID/environ 2>/dev/null | grep -c "^APARGON_TEST_ALLOW="'])).stdout.trim() === '0';
     }
     result.options_as_args_refused = await refused(() => papp.run('touch', { cwd: '/' }));
+
+    // Its own listener, on a port the page declares so the sandbox lets it ask.
+    const asked = [];
+    const server = await papp.listen({ port: 47183 }, (request) => {
+      asked.push(`${request.method} ${new URL(request.url).pathname}${new URL(request.url).search} ${request.headers['x-probe']} ${new TextDecoder().decode(request.body)}`);
+      return { status: 201, headers: { 'x-answer': 'yes' }, body: 'answered' };
+    });
+    const answer = await fetch('http://127.0.0.1:47183/path?q=1', { method: 'POST', headers: { 'x-probe': 'p' }, body: 'hello', signal: AbortSignal.timeout(5000) }).catch((err) => err);
+    const answered = answer instanceof Response ? { url: server.url, status: answer.status, header: answer.headers.get('x-answer'), text: await answer.text(), asked: asked.join() } : { url: server.url, error: String(answer), asked: asked.join() };
+    const expected = { url: 'http://127.0.0.1:47183', status: 201, header: 'yes', text: 'answered', asked: 'POST /path?q=1 p hello' };
+    result.listen_answers = JSON.stringify(answered) === JSON.stringify(expected) || answered;
+    await server.close();
+    result.listen_closed = !(await fetchOk('http://127.0.0.1:47183/'));
 
     result.fetch_declared = await fetchOk('https://example.com/');
     result.fetch_declared_http = await fetchOk('http://example.com/');

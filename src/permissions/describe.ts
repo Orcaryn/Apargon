@@ -4,7 +4,8 @@ import { LOCAL_HOSTS, privateNetwork } from './network.ts';
 import { BIG_FOLDERS, HOME, LAUNCH_FOLDER, runsOutsideSandbox, SECRETS } from './paths.ts';
 import { isInside, literalBase, PAGE_FILE, patternFolder, patternSource } from './patterns.ts';
 import { PERMISSIONS_PLATFORM } from './platform.ts';
-import type { Permissions, Use, WindowSettings } from './tags.ts';
+import type { GivenFile } from './given.ts';
+import type { Listen, Permissions, Use, WindowSettings } from './tags.ts';
 
 // The popup shows short under a heading for its kind, and what the page sees as one line. Red is a way to send data somewhere the tags do not name.
 export type Line = { id: string; level: 'red' | 'yellow' | 'plain'; text: string; short: string };
@@ -53,7 +54,8 @@ export function describe(permissions: Permissions) {
     ...permissions.net.map(hostLine),
     ...permissions.open.map(openLine),
     ...permissions.use.map(name => ({ id: `use:${name}`, ...USE_LINES[name] })),
-    ...permissions.shortcuts.map(keys => ({ id: `shortcut:${keys}`, level: 'yellow' as const, text: 'A shortcut that works in every app', short: keys }))
+    ...permissions.shortcuts.map(keys => ({ id: `shortcut:${keys}`, level: 'yellow' as const, text: 'A shortcut that works in every app', short: keys })),
+    ...(permissions.listen ? [listenLine(permissions.listen)] : [])
   );
 
   if (permissions.own) {
@@ -79,12 +81,24 @@ export function needsTrust({ run, net, open, own, read, write, use }: Permission
 // What the page sees, each path once: one inside another listed path is left out. A papp-system page sees all but keys and logins, so only those add to it.
 export function seenFiles({ own, read, write, system }: Permissions) {
   const named = [...new Set([own ?? [], read, write].flat())];
-  const all = system && PERMISSIONS_PLATFORM.systemSeesAll;
+  const all = system && PERMISSIONS_PLATFORM.readsAll;
   const listed = named.filter(pattern =>
     all ? SECRETS.some(secret => isInside(literalBase(pattern), secret.path)) : !named.some(other => other !== pattern && new RegExp(patternSource(other)).test(literalBase(pattern)))
   );
 
   return { all, lines: listed.map(pattern => folderLine('read', pattern)) };
+}
+
+// What the user gave the page in a pick: shown, never part of the approval, as the pick was the user's own choice.
+export function givenLine({ path: file, write }: GivenFile): Line {
+  return { id: `given:${file}`, level: 'plain', text: write ? 'See, change and delete files' : 'See files', short: file };
+}
+
+// Red: whoever asks gets what the page answers, and the tags name no host.
+function listenLine(scope: Listen): Line {
+  return scope === 'localhost' ?
+      { id: 'listen:localhost', level: 'red', text: 'Answer requests from programs on this computer', short: 'This computer' }
+    : { id: 'listen:network', level: 'red', text: 'Answer requests from devices on your network', short: 'Your network' };
 }
 
 function socketLine(socket: string): Line {

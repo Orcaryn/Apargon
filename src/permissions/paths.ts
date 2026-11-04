@@ -41,15 +41,24 @@ export const SECRETS = Object.entries({
   '.cache/huggingface/token': 'Hugging Face tokens',
   ...Object.fromEntries(BROWSERS.map(name => [name, 'browser logins and cookies'])),
   ...PERMISSIONS_PLATFORM.secrets,
-}).map(([name, holds]) => {
-  const secret = path.join(HOME, name);
-
-  return { path: fs.existsSync(secret) ? fs.realpathSync.native(secret) : secret, holds };
-});
+}).map(([name, holds]) => ({ path: realSecret(path.join(HOME, name)), holds }));
 
 export const LAUNCH_FOLDER = PERMISSIONS_PLATFORM.launchFolder && path.join(HOME, PERMISSIONS_PLATFORM.launchFolder);
 // macOS keeps iCloud Drive, Dropbox, OneDrive and Google Drive in ~/Library. Files there only sync.
 const CLOUD_FOLDERS = ['Library/Mobile Documents', 'Library/CloudStorage'].map(name => path.join(HOME, name));
+
+// As on disk where it can be looked up. One that is not there stays as named, and so does one the page's own sandbox already hides from it: that process only shows the name. Not there includes under a file (ENOTDIR) and a link that loops (ELOOP).
+function realSecret(secret: string) {
+  try {
+    return fs.realpathSync.native(secret);
+  } catch (err) {
+    if (!['ENOENT', 'ENOTDIR', 'ELOOP', 'EPERM', 'EACCES'].includes((err as NodeJS.ErrnoException).code!)) {
+      throw err;
+    }
+
+    return secret;
+  }
+}
 
 export function runsOutsideSandbox(file: string) {
   const hidden = file.split(path.sep).some(name => name.startsWith('.'));

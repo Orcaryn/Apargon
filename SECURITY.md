@@ -10,6 +10,7 @@
 
 - The OS blocks all network. Only Apargon's proxy, declared `localhost` ports and declared socket files get through.
 - The proxy only goes to declared hosts.
+- With `papp-listen`, the trampoline listens and passes each request to the page as data. The page's process never listens.
 - A `papp-system` page runs any program, with all your variables. Trust it like a script.
 - Windows: only the proxy gets through. Declared `localhost` ports go through it too. `papp-socket` is refused. A page's programs can send data out through Windows itself, see "Not enforced".
 - A page in `/`, `~`, `~/Desktop`, `~/Documents` or `~/Downloads` gets no own folder.
@@ -21,7 +22,9 @@
 - **Apargon checks reads, not the OS.** Chromium's own sandbox cannot run inside `sandbox-exec`, `bwrap` or MXC. The OS only enforces network, writes, and keys and logins.
 - **Tags are read from the file on disk**, before the page runs. Only the part before the first `<script`, `<body` or `</head` counts. An unknown tag, a bad value or an invisible character refuses the page.
 - **An approval = a path + the exact popup lines.** A downloaded page is also tied to its content. If the content changes, Apargon asks again.
-- **No page can write Apargon's data** (`grants.json`, `links.json`, `seen.json`). The page's file API can't read it either.
+- **No page can write Apargon's data** (`grants.json`, `links.json`, `seen.json`, `given.json`). The page's file API can't read it either.
+- **A pick is kept** in `given.json`, and granted as if a tag named it: the sandbox, the checks and the page's menu follow the same rule. The trampoline shows the dialog, which says what the page gets, and refuses a link, a folder that holds keys and logins or Apargon's data, and for write a hidden file, a page or a launch folder. A pick then passes every check a tag does, when picked and again each time the sandbox is built: no `"` in a written path, no line break or invisible character, on Linux not `/tmp` or `/var/tmp` itself, a folder that holds one, or anything in `/run`, and no write over a program the page runs. A pick that widens the sandbox restarts the page. Taking back the approval forgets the picks.
+- **Secrets** (`papp.secret`) live in `apargon-secrets` beside Apargon's data, one file per page, each value sealed with the OS's store for this user (`safeStorage`). Every sandbox hides the folder, so no page's process, `papp-system` included, reads another page's secrets or its own file. The trampoline answers only the page that asked, by the pipe it asked on. Taking back the approval deletes them.
 - **The sandbox gets no terminal.** Its output reaches the terminal as plain text. On macOS, Seatbelt also denies `/dev/tty`, so a page can't type commands into the shell that started Apargon.
 - **The window shows only the page.** No navigation. No frame of another file.
 - **Hidden files** (dot names) are never matched by `*`. A tag must name them.
@@ -36,7 +39,7 @@
 - Sandbox: Seatbelt (`sandbox-exec`). The profile starts from `(allow default)`, because the GUI needs it.
 - Offline check: binding a loopback port must fail with `EPERM`.
 - Writes: limited by pattern.
-- Keys and logins: denied, even ones made later.
+- Keys and logins: denied, even ones made later. The secrets folder too.
 - Blocked: `nsurlsessiond`, `trustd`, WebKit services. These fetch from outside the sandbox.
 - Blocked: opening apps, sending Apple Events, `defaults write`.
 - With `papp-use print`, the print server's socket (`/private/var/run/cupsd`) is allowed.
@@ -47,7 +50,7 @@
 - Offline check: the network has only `lo` and is not the trampoline's.
 - Writes: limited by folder.
 - Keys and logins: hidden, but only those that exist when the page opens.
-- `/run`, `/tmp` and `/var/tmp` are emptied. Their socket files bypass `--unshare-net`: D-Bus, DNS, sound, tmux, Docker.
+- `/run`, `/tmp` and `/var/tmp` are emptied. Their socket files bypass `--unshare-net`: D-Bus, DNS, sound, tmux, Docker. The secrets folder is emptied too.
 - Apargon puts back only the display, the page's folders and sockets, sound with `papp-use sound` or `microphone`, the print server's socket with `papp-use print`, and the udev database (`/run/udev`, read-only) and the device files of each declared kind with `papp-use usb`, `serial`, `hid` or `midi`. For `midi` that is the sequencer, the MIDI ports and each sound card's controls, not its recording and playback files.
 - A tag folder, or the page's own folder, that would expose `/tmp`, `/var/tmp` or `/run` is refused.
 
@@ -55,7 +58,8 @@
 
 - Sandbox: MXC (an AppContainer). Outbound traffic is denied.
 - Offline check: connecting to `127.0.0.1:9` and to `192.0.2.1:9`, an address no network routes, must both fail with `EACCES`. MXC refuses every address that way at once. A sandbox that only blocks loopback, or no sandbox, answers differently for the second.
-- Writes: limited by folder. A write folder in or around Apargon's data is refused.
+- Writes: limited by folder. A write folder in or around Apargon's data is refused, and a folder that holds the secrets.
+- The secrets folder is on the denied list. Untested: the folder is outside every granted one, so it is unreadable either way.
 - `localhost` ports: through the proxy. Chromium is told not to bypass it for loopback. A program that ignores `http_proxy` is refused by MXC.
 - Programs: only `.com` and `.exe`. A batch file runs through `cmd.exe`, which reads its arguments as commands.
 - Keys and logins: hidden, but only those that exist when the page opens.
@@ -77,7 +81,7 @@
 
 ## Popup colours
 
-- **Red:** a way to send data somewhere the tags don't name. This includes any server, `*.com`, any port, an IP address, `localhost`, a socket, `papp-system`, and writing hidden files, `~/Library`, `AppData` or pages.
+- **Red:** a way to send data somewhere the tags don't name. This includes any server, `*.com`, any port, an IP address, `localhost`, a socket, `papp-listen`, `papp-system`, and writing hidden files, `~/Library`, `AppData` or pages.
 - **Yellow:** worth a look. This includes `*.example.com`, wide folders, a `papp-system` page's "All your files" (macOS and Linux), keys and logins, clipboard, location, camera, microphone, screen, shortcuts, and `papp-run`. `papp-run` is red on Windows, and on Linux if the page also has `papp-write`.
 - **Checkbox:** needed for any red line. Also needed when the page can run programs, or send what it sees to a host.
 
@@ -108,8 +112,28 @@
 - On macOS and Windows, saved files get the download mark, so the OS warns before one runs. Linux has no such mark, nor does a drive that cannot hold one, like a USB stick on Windows: the file is saved without it.
 - A program could swap the picked folder for a link between check and write.
 
+### Picks (`papp.pick`)
+
+- Any page can open the dialog, with no tag, again and again. The dialog names the page and says what it gets.
+- A page with `papp-net` can send what you pick. The pick dialog does not say so; the popup did, when the page asked for the host.
+- A folder you pick with write is granted whole on Linux and Windows, as a `papp-write` folder is.
+
+### Secrets (`papp.secret`)
+
+- The page, and the programs it runs, see a secret while it runs. A page with `papp-net` can send it.
+- On Linux without a keyring, Electron seals them with a fixed key. They are then only obscured on disk.
+- A `papp-system` page cannot read the folder, but could ask the trampoline for its own secrets by writing the request line itself: those are its own.
+
+### Listening (`papp-listen`)
+
+- Whoever reaches the port gets what the page answers. With `network`, that is every device on the network, and the trampoline does not say who asked beyond the request's own headers.
+- The trampoline listens on `0.0.0.0` for `network`: every interface, VPN included.
+- A page's handler that throws answers 500; the reason goes to the page's console.
+- Windows: untested. Windows asks its firewall question for Apargon on the first `network` listener.
+
 ### Programs (`papp-run`)
 
+- A program the page ships (`./bin/tool`) is refused if a `papp-write` tag covers it, by its real path. The page's own folder is read-only otherwise, so the program is what the page came with.
 - They can read every file but keys and logins. Windows: the granted folders, each program's own folder, and what every sandbox may read, like `C:\Windows` and Program Files.
 - They take any arguments, like `git -c core.sshCommand=…`.
 - They can change every page's storage in `pages/`.
@@ -210,12 +234,12 @@ Apargon is not a VM. For a hard "nothing leaves" guarantee, use a VM with no net
 
 `pnpm test` runs every check in the real app. `test/selftest/check.ts` lists them. [AGENTS.md](AGENTS.md#tests) has the Linux `.deb` run.
 
-| Platform      | Last verified                                                                                                                                                                                                                     |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| macOS         | 2026-11-01, `pnpm test` on `3b3d16e` with the uncommitted `listen.ts`, secrets, trailing-dot and download-mark changes: 96 checks                                                                                                 |
-| Linux         | 2026-11-01, installed `.deb` whose sandbox code matches `3b3d16e`, with the `listen.ts` tests, on Ubuntu 24.04 with AppArmor: 90 checks, the refusal test, and the Node tests. The secrets change after it is not yet run there   |
-| Linux desktop | not yet                                                                                                                                                                                                                           |
-| Windows       | 2026-11-01, Windows 11 on arm64 (GitHub `windows-11-arm`, run 41315097711 of the spike repo, this tree on `3b3d16e`): 77 checks from source with no leak in the packet capture, and 77 in the installed arm64 app. x64 not tested |
+| Platform      | Last verified                                                                                                                                                                                                                                                                    |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS         | 2026-11-04, `pnpm test` on `c2eec7a` with the uncommitted picks, secrets, listen and bundled-program changes: 112 checks                                                                                                                                                         |
+| Linux         | 2026-11-01, installed `.deb` whose sandbox code matches `3b3d16e`, with the `listen.ts` tests, on Ubuntu 24.04 with AppArmor: 90 checks, the refusal test, and the Node tests. The changes after it, picks, secrets, listen and bundled programs included, are not yet run there |
+| Linux desktop | not yet                                                                                                                                                                                                                                                                          |
+| Windows       | 2026-11-01, Windows 11 on arm64 (GitHub `windows-11-arm`, run 41315097711 of the spike repo, this tree on `3b3d16e`): 77 checks from source with no leak in the packet capture, and 77 in the installed arm64 app. x64 not tested                                                |
 
 Not tested: the NAT64 refusal, the proxy refusing this Mac's own LAN address, and two pages reaching each other's `localhost` ports.
 

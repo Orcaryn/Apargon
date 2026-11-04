@@ -9,9 +9,32 @@ export type Bridge = { port: number; socket: string };
 // replies: a file, where the sandbox passes no more pipes; null when they come on REPLY_FD.
 export type PageConfig = { page: string; permissions: Permissions; pageHash: string | null; proxy: string | null; bridges: Bridge[]; requestFd: number; replies: string | null };
 export type SavedFile = { name: string; data: string };
-export type PageRequest = { open: string } | { revoke: string[] } | { showEgressLog: true } | { automaticUpdates: boolean } | { pageIcon: string } | { notify: { id: string } & Notice } | { tray: string | null } | { saveAs: { id: string; files: SavedFile[] } } | { save: { id: string; file: string; data: string } } | { installSkill: true } | { openLink: string } | { openFile: string };
-// Requests with an id get one answer: what was saved, or the notification button the user picked.
-export type PageReply = { show: true } | { quit: true } | { answered: string; value: string[] | string | number | null } | { answered: string; error: string };
+export type PickOptions = { folder: boolean; multiple: boolean; write: boolean };
+// Headers by lowercase name, repeats joined with a comma as a browser joins them; a body as base64.
+export type IncomingRequest = { server: string; id: string; method: string; url: string; headers: Record<string, string>; body: string };
+export type PageRequest =
+  | { open: string }
+  | { revoke: string[] }
+  | { showEgressLog: true }
+  | { automaticUpdates: boolean }
+  | { pageIcon: string }
+  | { notify: { id: string } & Notice }
+  | { tray: string | null }
+  | { saveAs: { id: string; files: SavedFile[] } }
+  | { save: { id: string; file: string; data: string } }
+  | { pick: { id: string } & PickOptions }
+  // Without a value, a read; with null, a deletion.
+  | { secret: { id: string; name: string } }
+  | { secret: { id: string; name: string; value: string | null } }
+  | { listen: { id: string; server: string; port: number | null } }
+  | { respond: { id: string; status: number; headers: Record<string, string>; body: string } }
+  | { unlisten: string }
+  | { installSkill: true }
+  | { openLink: string }
+  | { openFile: string };
+// restart quits past the page's beforeunload: the page asked for it with a write pick, and the trampoline opens it again.
+// Requests with an id get one answer: what was saved or picked, a secret, a listener's address, or the notification button the user picked.
+export type PageReply = { show: true } | { quit: true } | { restart: true } | { request: IncomingRequest } | { answered: string; value: string[] | string | number | null } | { answered: string; error: string };
 // icon: the page's icon as base64 PNG, once it has one.
 export type Notice = { title: string; body: string; buttons: string[]; icon: string | null };
 // A request the trampoline answers later, by the id it is given.

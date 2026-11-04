@@ -18,8 +18,8 @@ export type PermissionsPlatform = {
   writesWholeFolders: boolean;
   // A program can send what it sees past the sandbox.
   programsSendOut: boolean;
-  // A papp-system page reads every file but keys and logins, not only what its tags name.
-  systemSeesAll: boolean;
+  // The sandbox lets the page's process read every file but keys and logins, not only what its tags name: a papp-system page sees it all, and a picked file can be read before the sandbox is rebuilt.
+  readsAll: boolean;
   soundServerRecords: boolean;
   programFolders: string[];
   // The endings of a file the OS runs as a program, tried in turn after a name; '' where any file can be one.

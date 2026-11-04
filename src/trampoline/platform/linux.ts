@@ -8,7 +8,7 @@ import { patternFolder } from '../../permissions/patterns.ts';
 import { PRIVATE } from '../../permissions/platform/linux.ts';
 import type { Permissions, Use } from '../../permissions/tags.ts';
 import { REQUEST_FD, relay, type Bridge } from '../../shared/channel.ts';
-import { APP_ROOT, DATA, NET_DATA, PAGE_DATA, pageAppId } from '../../shared/data.ts';
+import { APP_ROOT, DATA, NET_DATA, PAGE_DATA, pageAppId, SECRETS_DATA } from '../../shared/data.ts';
 import type { TrampolinePlatform } from '../platform.ts';
 import { startProxy } from '../network/proxy.ts';
 
@@ -156,7 +156,7 @@ function bwrapArgs(page: string, permissions: Permissions, socketFolder: string 
   [...writable, PAGE_DATA].forEach(folder => fs.mkdirSync(folder, { recursive: true }));
   const covered = permissions.hidden.filter(file => fs.existsSync(file)).flatMap(file => (fs.statSync(file).isDirectory() ? ['--tmpfs', file] : ['--ro-bind', '/dev/null', file]));
 
-  // Later mounts cover earlier ones: Apargon's own data must stay last.
+  // Later mounts cover earlier ones: Apargon's own data and the secrets must stay last.
   return [
     ...['--unshare-net', '--unshare-pid', '--unshare-user', '--disable-userns', '--new-session', '--die-with-parent', '--ro-bind', '/', '/', '--dev', '/dev', '--proc', '/proc'],
     ...devices.flatMap(file => ['--dev-bind', file, file]),
@@ -164,7 +164,7 @@ function bwrapArgs(page: string, permissions: Permissions, socketFolder: string 
     ...named.flatMap(file => ['--ro-bind', file, file]),
     ...writable.flatMap(folder => ['--bind', folder, folder]),
     ...covered,
-    ...['--ro-bind', DATA, DATA, '--tmpfs', NET_DATA, ...(socketFolder ? ['--ro-bind', socketFolder, socketFolder] : []), '--bind', PAGE_DATA, PAGE_DATA],
+    ...['--ro-bind', DATA, DATA, '--tmpfs', NET_DATA, ...(socketFolder ? ['--ro-bind', socketFolder, socketFolder] : []), '--bind', PAGE_DATA, PAGE_DATA, '--tmpfs', SECRETS_DATA],
   ];
 }
 

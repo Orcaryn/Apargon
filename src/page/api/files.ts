@@ -1,12 +1,14 @@
-import { dialog, type BrowserWindow } from 'electron';
+import type { BrowserWindow } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import { pipeline } from 'stream/promises';
-import { HOME, realPath } from '../../permissions/paths.ts';
-import { isInside, patternSource } from '../../permissions/patterns.ts';
+import type { GivenFile } from '../../permissions/given.ts';
+import { patternSource } from '../../permissions/patterns.ts';
+import { PAGE_CONFIG, type Ask } from '../../shared/channel.ts';
+import { GIVEN_FILE, readJson, type Given } from '../../shared/data.ts';
 import type { Scope } from './scope.ts';
 
-export function fileApi(dir: string, { where, canSee, canList, canChange, need, picked }: Scope, win: BrowserWindow) {
+export function fileApi(dir: string, { where, canSee, canList, canChange, need, picked }: Scope, win: BrowserWindow, ask: Ask) {
   const watchers = new Map<string, fs.FSWatcher>();
   let resets = 0;
 
@@ -131,29 +133,20 @@ export function fileApi(dir: string, { where, canSee, canList, canChange, need, 
       watchers.get(id)?.close();
       watchers.delete(id);
     },
-    async pick({ folder = false, multiple = false }: { folder?: boolean; multiple?: boolean } = {}) {
+    // The trampoline shows the dialog and keeps the pick: this process may not write beside the approvals. A pick with write comes back once the sandbox is built again.
+    async pick({ folder = false, multiple = false, write = false }: { folder?: boolean; multiple?: boolean; write?: boolean } = {}) {
       const resetsBefore = resets;
-      const { filePaths } = await dialog.showOpenDialog(win, { properties: [folder ? 'openDirectory' : 'openFile', 'noResolveAliases', ...(multiple ? ['multiSelections' as const] : [])] });
-      // A link the page planted could lead the user to a file they did not mean.
-      const linked = filePaths.find(file => realPath(file) !== file);
-      // patternSource reads * as a wildcard.
-      const starred = filePaths.find(file => file.includes('*'));
-      const holdsHome = folder && filePaths.find(file => isInside(HOME, file));
+      const paths = await ask<string[]>(id => ({ pick: { id, folder: Boolean(folder), multiple: Boolean(multiple), write: Boolean(write) } }));
 
       // A reload while the dialog was open: the page that asked is gone.
-      if (resets !== resetsBefore) {
-        return [];
-      } else if (linked) {
-        throw new Error(`Apargon: ${linked} goes through a link. Pick what it leads to instead.`);
-      } else if (starred) {
-        throw new Error(`Apargon: a picked name may not hold *: ${starred}.`);
-      } else if (holdsHome) {
-        throw new Error(`Apargon: ${holdsHome} holds your whole home folder. Pick a folder inside it.`);
+      if (resets === resetsBefore) {
+        picked.push(...paths.map(file => new RegExp(patternSource(file, folder))));
       }
 
-      picked.push(...filePaths.map(file => new RegExp(patternSource(file, folder))));
-
-      return filePaths;
+      return paths;
+    },
+    given(): GivenFile[] {
+      return readJson<Given>(GIVEN_FILE)[PAGE_CONFIG!.page] ?? [];
     },
     reset() {
       watchers.forEach(watcher => watcher.close());

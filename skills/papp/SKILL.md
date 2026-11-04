@@ -58,6 +58,9 @@ type Stat = { isFile: boolean; isDirectory: boolean; size?: number; mtimeMs?: nu
 type Exit = { status: number | null; signal: string | null };
 // keys as in papp-global-shortcut, such as 'CommandOrControl+S'
 type MenuItem = { separator: true } | { label: string; id?: string; keys?: string; submenu?: MenuItem[] };
+// headers by lowercase name; an answer without status is 200, without body is empty
+type Incoming = { method: string; url: string; headers: Record<string, string>; body: Bytes };
+type Answer = { status?: number; headers?: Record<string, string>; body?: string | Bytes };
 
 declare const papp: {
   // the page's folder
@@ -79,8 +82,16 @@ declare const papp: {
   readdir(path: string, options: { stats: true }): Promise<({ name: string } & Stat)[]>;
   stat(path: string): Promise<Stat>;
   exists(path: string): Promise<boolean>;
-  // the user picks; the page may see the picks until it reloads; [] if cancelled
-  pick(options?: { folder?: boolean; multiple?: boolean }): Promise<string[]>;
+  // the user picks, in a dialog that says what the page gets; kept until the user takes the page's approval back; [] if cancelled
+  // with write, the page restarts once the user picks: read the pick from given() then
+  pick(options?: { folder?: boolean; multiple?: boolean; write?: boolean }): Promise<string[]>;
+  // every pick so far
+  given(): Promise<{ path: string; write: boolean }[]>;
+  // kept by Apargon, sealed with the OS's store, where no page can read it; one argument reads (null if none), null deletes
+  secret(name: string): Promise<string | null>;
+  secret(name: string, value: string | null): Promise<void>;
+  // needs papp-listen; Apargon listens and passes each request to the handler; url is where to reach it; a free port unless one is given
+  listen(options: { port?: number }, handler: (request: Incoming) => Answer | Promise<Answer>): Promise<{ url: string; close(): Promise<void> }>;
   // the user picks a folder; never replaces a file: a taken name becomes "name (2)"; [] if cancelled
   saveAs(files: Record<string, string | Bytes>): Promise<string[]>;
   // file is only a suggestion; the user picks; may replace a file, after the OS asks; null if cancelled
@@ -170,10 +181,13 @@ One value per tag, in `<head>` before any `<script>`. Each tag is a line in the 
 | See a folder elsewhere                            | `papp-read` `~/logs`                                            |
 | Change files elsewhere                            | `papp-write` `~/notes/*.md`                                     |
 | Call a web API                                    | `papp-net` `api.example.com`                                    |
+| Be reached by programs on this computer           | `papp-listen` `localhost`                                       |
+| Be reached by devices on the network, a phone     | `papp-listen` `network`                                         |
 | Talk to a server on this computer                 | `papp-net` `localhost:11434`                                    |
 | Talk to a device on the network                   | `papp-net` `192.168.1.5:8123`                                   |
 | Open its links without asking                     | `papp-open` `x.com`, `*.example.com`                            |
 | Use a command-line tool                           | `papp-run` `git`                                                |
+| Run a program it ships                            | `papp-run` `./bin/ffmpeg`                                       |
 | Pass that tool a variable                         | `papp-env` `AWS_PROFILE`                                        |
 | Talk to Docker or an SSH agent                    | `papp-socket` `/var/run/docker.sock`                            |
 | Show a notification                               | `papp-use` `notifications`                                      |
@@ -195,7 +209,10 @@ One value per tag, in `<head>` before any `<script>`. Each tag is a line in the 
 - **Hosts:** `papp-net` takes a host, no scheme, and `:port` when it is not 443: `api.example.com`, `example.com:8080`. A host on this computer or the local network always needs its port. Any server is `*:443` or `*:*`. `papp-open` takes the host alone. Scripts, fonts and images from another site need its host in `papp-net`. With any `papp-net` tag, `fetch` to a declared host skips CORS.
 - **Sound:** without `papp-use sound`, the page plays muted, with no error.
 - **No tag needed** to write to the clipboard, go fullscreen or lock the pointer.
-- **Programs** the page runs keep its network and write limits, but can read every file except keys and logins. On Windows they see less: the page's folders, their own folder, and folders every app can read, like Program Files.
+- **Programs** the page runs keep its network and write limits, but can read every file except keys and logins. On Windows they see less: the page's folders, their own folder, and folders every app can read, like Program Files. A program from the page's folder (`./bin/ffmpeg`) runs by its name, `ffmpeg`, and is refused if a `papp-write` tag covers it. On macOS, a downloaded program runs only if it is notarized: macOS refuses the rest with its own message.
+- **Picks:** `papp.pick` needs no tag. The dialog is Apargon's and says what the page gets. A pick is kept, so the page sees it on every open; with `write: true`, the page restarts once the user picks, and finds the pick in `papp.given()`. Refused: a link, a folder holding keys and logins (such as `~`), Apargon's own data, and with write a hidden file, a page or a launch folder. Also what a tag may not name: with write a path with a `"` or a folder holding a `papp-run` program, a name with a line break, and on Linux `/tmp` or `/var/tmp` itself, a folder that holds one, or anything in `/run`. The picks show in the popup under "You gave it".
+- **Secrets:** `papp.secret` needs no tag. For keys the page should not keep in `localStorage`, which sits on disk in clear. Apargon keeps them sealed with the OS's store, per page, where no page's process can read, and deletes them with the approval. They follow a moved page as its storage does.
+- **Listening:** `papp-listen localhost` or `network`. Apargon listens, not the page, and passes each request to the handler as plain data: `new TextDecoder().decode(request.body)` reads a text body, `new URL(request.url)` its path and query. The handler returns a plain answer, or throws for a 500. The listener runs until `close()`, a reload or quit, and with `papp-use background` after the window closes. `url` is `http://127.0.0.1:<port>`, or with `network` this computer's first address. Both tags are red. A body over 16 MB gets 413. For a sign-in that sends the browser back to the page, listen, open the sign-in link with the listener's `url` as the return address, and close once it comes back.
 - **Global shortcuts:** two different modifiers, or one modifier with a function key. Media keys (`MediaPlayPause`, `MediaNextTrack`, `MediaPreviousTrack`, `MediaStop`) work alone.
 - **Window:** one `papp-window` tag, comma-separated `key=value`. `size=900x600` sets width and height. Pixels: `width`, `height`, `min-width`, `min-height`. `yes` or `no`: `resizable`, `title-bar`, `frame`, `transparent`, `on-top`. `title-bar=no` keeps the OS window buttons, drawn over the page. `frame=no`, `transparent=yes` and `on-top=yes` are yellow.
 - **Printing:** without `papp-use print`, `papp.print()` and `window.print()` reject. To skip the tag, save `papp.pdf()` with `papp.saveAs()`.
@@ -214,6 +231,7 @@ These show red in the popup:
 
 - `papp-system`
 - `papp-socket`
+- `papp-listen`
 - `papp-write` on a hidden file or folder, on `~/Library` or a folder that holds it (such as `~`), or on a `.papp` page
 - `papp-net` to this computer, the local network, an IPv4 address, any host (`*`), any port (`*`) or a whole top-level domain (`*.com`)
 - `papp-open` for `*`, `*.com`, `localhost` or an IPv4 address

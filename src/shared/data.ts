@@ -2,9 +2,12 @@ import { app } from 'electron';
 import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import type { GivenFile } from '../permissions/given.ts';
 import { PERMISSIONS_PLATFORM } from '../permissions/platform.ts';
 
 export type Grants = Record<string, string[]>;
+// Page to what the user picked for it.
+export type Given = Record<string, GivenFile[]>;
 // Page to the link hosts the user ticked "Always" for.
 export type Links = Record<string, string[]>;
 export type UpdateState = { automatic?: boolean; checked?: string; noticed?: string };
@@ -14,6 +17,9 @@ export const INSTALL_FOLDER = app.isPackaged ? PERMISSIONS_PLATFORM.installFolde
 export const DATA = app.getPath('userData');
 export const PAGE_DATA = path.join(DATA, 'pages');
 export const GRANTS_FILE = path.join(DATA, 'grants.json');
+export const GIVEN_FILE = path.join(DATA, 'given.json');
+// Beside Apargon's data, not in it: every page's sandbox may read the data, and none may read a secret.
+export const SECRETS_DATA = path.join(path.dirname(DATA), 'apargon-secrets');
 export const LINKS_FILE = path.join(DATA, 'links.json');
 export const SEEN_FILE = path.join(DATA, 'seen.json');
 export const NET_DATA = path.join(DATA, 'net');

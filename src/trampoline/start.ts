@@ -6,13 +6,16 @@ import path from 'path';
 import readline from 'readline';
 import type { Readable, Writable } from 'stream';
 import { PAGE_ENV } from '../permissions/env.ts';
+import { withGiven } from '../permissions/given.ts';
 import { REPLY_FD, type PageConfig, type PageReply, type PageRequest } from '../shared/channel.ts';
-import { APP_ROOT, PAGE_DATA, REPLIES_DATA, SEEN_FILE } from '../shared/data.ts';
+import { APP_ROOT, GIVEN_FILE, PAGE_DATA, readJson, REPLIES_DATA, SECRETS_DATA, SEEN_FILE, type Given } from '../shared/data.ts';
 import { approve } from './dialogs/approve.ts';
 import { welcome } from './dialogs/skill.ts';
 import { checkForUpdates } from './network/update.ts';
 import { TRAMPOLINE_PLATFORM } from './platform.ts';
+import { pageListeners } from './requests/listen.ts';
 import { handleRequest } from './requests/requests.ts';
+import { moveSecrets } from './requests/secrets.ts';
 import { trayFor } from './requests/tray/tray.ts';
 import { followMove, noteContent } from './storage.ts';
 
@@ -56,9 +59,17 @@ export async function openPage(file: string) {
   }
 }
 
-async function startPageProcess({ page, permissions, pageHash }: Pick<PageConfig, 'page' | 'permissions' | 'pageHash'>) {
-  followMove(page, PAGE_DATA, SEEN_FILE, running);
+async function startPageProcess({ page, permissions: declared, pageHash }: Pick<PageConfig, 'page' | 'permissions' | 'pageHash'>) {
+  const movedFrom = followMove(page, PAGE_DATA, SEEN_FILE, running);
+
+  if (movedFrom) {
+    moveSecrets(movedFrom, page);
+  }
+
   noteContent(page, PAGE_DATA, SEEN_FILE);
+  // The sandboxes hide the folder, so it must be there to hide.
+  fs.mkdirSync(SECRETS_DATA, { recursive: true });
+  const permissions = withGiven(declared, readJson<Given>(GIVEN_FILE)[page] ?? [], page);
   const sandbox = await TRAMPOLINE_PLATFORM.prepare(page, permissions);
   TRAMPOLINE_PLATFORM.startAtLogin(page, permissions.use.includes('login'));
   const proxy = sandbox.proxyPort === null ? null : `127.0.0.1:${sandbox.proxyPort}`;
@@ -102,6 +113,13 @@ async function startPageProcess({ page, permissions, pageHash }: Pick<PageConfig
   const noTitle = permissions.use.includes('background') ? '' : null;
   const setTray = (title: string | null) => showTray(title ?? noTitle);
   setTray(null);
+  const listeners = pageListeners(permissions, reply);
+  let reopen = false;
+
+  const restart = () => {
+    reopen = true;
+    reply({ restart: true });
+  };
 
   // The page's requests, and its output as plain text: given the terminal itself, it could type commands into the shell that started Apargon.
   new Set([sandbox.requestFd, 1, 2]).forEach(fd => {
@@ -112,7 +130,7 @@ async function startPageProcess({ page, permissions, pageHash }: Pick<PageConfig
       if (request) {
         // A papp-system page writes the line itself: one that throws is logged, not shown as an error box.
         try {
-          handleRequest(request, { page, permissions, reply, setTray, openPage });
+          handleRequest(request, { page, permissions, listeners, reply, setTray, openPage, restart });
         } catch (err) {
           console.error(`Apargon: ${path.basename(page)} sent a bad request: ${(err as Error).message}`);
         }
@@ -127,10 +145,16 @@ async function startPageProcess({ page, permissions, pageHash }: Pick<PageConfig
     running.splice(running.indexOf(page), 1);
     noteContent(page, PAGE_DATA, SEEN_FILE);
     showTray(null);
+    listeners.closeAll();
     sandbox.close();
 
     if (replies) {
       fs.rmSync(replies);
+    }
+
+    // Before openPage counts this one closed, so the app does not quit in between.
+    if (reopen) {
+      openPage(page);
     }
   });
 

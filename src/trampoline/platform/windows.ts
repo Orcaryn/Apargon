@@ -4,7 +4,7 @@ import type { AddressInfo } from 'net';
 import path from 'path';
 import { isInside, patternFolder } from '../../permissions/patterns.ts';
 import type { Use } from '../../permissions/tags.ts';
-import { APP_ROOT, DATA, PAGE_DATA, pageAppId } from '../../shared/data.ts';
+import { APP_ROOT, DATA, PAGE_DATA, pageAppId, SECRETS_DATA } from '../../shared/data.ts';
 import type { TrampolinePlatform } from '../platform.ts';
 import { startProxy } from '../network/proxy.ts';
 
@@ -15,17 +15,20 @@ export const windows: TrampolinePlatform = {
   async prepare(page, permissions) {
     const written = permissions.write.map(patternFolder);
     const reachesData = written.find(folder => isInside(DATA, folder) || isInside(folder, DATA));
+    const reachesSecrets = [...permissions.read.map(patternFolder), ...written].find(folder => isInside(SECRETS_DATA, folder));
 
-    // The sandbox nests no read-only folder in a writable one, and the reverse would let a page write in Apargon's data.
+    // The sandbox nests no read-only folder in a writable one, and the reverse would let a page write in Apargon's data. A folder that holds the secrets would grant them too.
     if (reachesData) {
       throw new Error(`On Windows a page may not change ${reachesData}: it holds or is inside Apargon's data. Name another folder.`);
+    } else if (reachesSecrets) {
+      throw new Error(`On Windows a page may not see ${reachesSecrets}: it holds the secrets pages keep. Name a folder inside it.`);
     }
 
     const pageFolder = path.dirname(page);
     // A folder named twice keeps one grant: one also listed could not be read. So each folder is named once, with the most it needs.
     const writable = [fs.realpathSync(app.getPath('temp')), PAGE_DATA, ...written];
     // Every sandbox may read Windows' own folder already.
-    const programFolders = Object.values(permissions.run).map(program => path.dirname(program)).filter(folder => !isInside(folder, process.env.SYSTEMROOT!));
+    const programFolders = Object.values(permissions.run).map(program => path.dirname(program)).filter(folder => !isInside(folder, process.env.SYSTEMROOT!) && !isInside(folder, pageFolder));
     const readable = [path.dirname(process.execPath), APP_ROOT, DATA, pageFolder, ...permissions.read.map(patternFolder), ...programFolders].filter(folder => !writable.some(writableFolder => isInside(folder, writableFolder)));
     const granted = [...readable, ...writable];
     fs.mkdirSync(PAGE_DATA, { recursive: true });
@@ -50,7 +53,7 @@ export const windows: TrampolinePlatform = {
           version: '1.0.0',
           containment: 'processcontainer',
           process: { commandLine: apargon.map(arg => `"${arg}"`).join(' '), env: Object.entries(env).map(([name, value]) => `${name}=${value}`), timeout: 0 },
-          filesystem: { readonlyPaths: readable, readwritePaths: writable, deniedPaths: permissions.hidden.filter(secret => fs.existsSync(secret)) },
+          filesystem: { readonlyPaths: readable, readwritePaths: writable, deniedPaths: [...permissions.hidden.filter(secret => fs.existsSync(secret)), SECRETS_DATA] },
           // Deny for every page, not MXC's default. A proxy on this computer's loopback needs both directions of the private network allowed; the firewall rules still let the page reach only the proxy.
           ...(proxyPort === null
             ? { network: { egress: { default: 'deny' } } }

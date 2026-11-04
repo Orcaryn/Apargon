@@ -139,6 +139,11 @@ export async function startPage({ page, permissions, pageHash, bridges }: PageCo
       toFront();
     } else if ('quit' in reply) {
       app.quit();
+    } else if ('restart' in reply) {
+      pageWindows().forEach(other => other.webContents.once('will-prevent-unload', event => event.preventDefault()));
+      app.quit();
+    } else if ('request' in reply) {
+      api.request(reply.request);
     } else {
       api.answered(reply);
     }

@@ -2,12 +2,13 @@ import { app } from 'electron';
 import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { describe, needsTrust, seenFiles, type Line } from '../../permissions/describe.ts';
+import { describe, givenLine, needsTrust, seenFiles, type Line } from '../../permissions/describe.ts';
 import { HOME } from '../../permissions/paths.ts';
 import { isInside } from '../../permissions/patterns.ts';
 import { declaredPermissions } from '../../permissions/tags.ts';
-import { GRANTS_FILE, LINKS_FILE, readJson, writeJson, type Grants, type Links } from '../../shared/data.ts';
+import { GIVEN_FILE, GRANTS_FILE, LINKS_FILE, readJson, writeJson, type Given, type Grants, type Links } from '../../shared/data.ts';
 import { TRAMPOLINE_PLATFORM } from '../platform.ts';
+import { forgetSecrets } from '../requests/secrets.ts';
 import { ask } from './ask.ts';
 
 export async function approve(file: string) {
@@ -37,7 +38,7 @@ export async function approve(file: string) {
     const kind = line.id.split(':')[0];
     const file = line.id.slice(kind.length + 1);
 
-    if (!['read', 'write', 'socket'].includes(kind) || !isInside(file, folder)) {
+    if (!['read', 'write', 'socket', 'run', 'given'].includes(kind) || !isInside(file, folder)) {
       return line.short.replaceAll(HOME + path.sep, `~${path.sep}`);
     }
 
@@ -52,6 +53,9 @@ export async function approve(file: string) {
     : `All your files, including ${seenPaths}, except other passwords and keys`;
   const seenLevel: Line['level'] = seen.all || seen.lines.some(line => line.level === 'yellow') ? 'yellow' : 'plain';
   const order = { red: 0, yellow: 1, plain: 2 };
+  const isFolder = (file: string) => fs.statSync(file, { throwIfNoEntry: false })?.isDirectory() === true;
+  // The user's picks: shown so the whole of what the page gets is in one place, but no part of the approval.
+  const given = (readJson<Given>(GIVEN_FILE)[page] ?? []).map(givenLine);
   const popup = {
     source: downloadedFrom === null ? 'Made on this computer' : `Downloaded from ${downloadedFrom}`,
     downloaded: downloadedFrom !== null,
@@ -67,8 +71,9 @@ export async function approve(file: string) {
           short: shortOf(line),
           text: line.text.replaceAll(HOME + path.sep, `~${path.sep}`),
           isNew: previous !== undefined && !previous.includes(line.id),
-          isFolder: line.id.startsWith('write:') && fs.statSync(line.id.slice('write:'.length), { throwIfNoEntry: false })?.isDirectory() === true,
+          isFolder: line.id.startsWith('write:') && isFolder(line.id.slice('write:'.length)),
         })),
+      ...given.map(line => ({ level: line.level, id: line.id, short: shortOf(line), text: line.text, isNew: false, isFolder: isFolder(line.id.slice('given:'.length)) })),
       ...(seenShort === '' ? [] : [
         {
           level: seenLevel,
@@ -105,11 +110,13 @@ export async function approve(file: string) {
   return approved;
 }
 
+// Everything the user gave the page goes with its approval: the links, the picks and the secrets.
 export function revoke(pages: string[]) {
   pages.forEach(page => TRAMPOLINE_PLATFORM.startAtLogin(page, false));
+  pages.forEach(forgetSecrets);
 
-  for (const file of [GRANTS_FILE, LINKS_FILE]) {
-    const kept = Object.entries(readJson<Grants>(file)).filter(([approved]) => !pages.includes(approved));
+  for (const file of [GRANTS_FILE, LINKS_FILE, GIVEN_FILE]) {
+    const kept = Object.entries(readJson<Record<string, unknown>>(file)).filter(([approved]) => !pages.includes(approved));
     writeJson(file, Object.fromEntries(kept));
   }
 }

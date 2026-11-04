@@ -9,7 +9,7 @@ import { localPorts } from '../../permissions/network.ts';
 import { changeableSources, PAGE_SOURCE } from '../../permissions/patterns.ts';
 import type { Permissions } from '../../permissions/tags.ts';
 import { REQUEST_FD } from '../../shared/channel.ts';
-import { APP_ROOT, DATA, INSTALL_FOLDER, PAGE_DATA, pageAppId } from '../../shared/data.ts';
+import { APP_ROOT, DATA, INSTALL_FOLDER, PAGE_DATA, pageAppId, SECRETS_DATA } from '../../shared/data.ts';
 import type { TrampolinePlatform } from '../platform.ts';
 import { startProxy } from '../network/proxy.ts';
 
@@ -91,6 +91,7 @@ function seatbeltProfile(permissions: Permissions, proxyPort: number | null) {
     `(deny file-write* (regex #"${PAGE_SOURCE}"))`,
     ...pages.map(source => `(allow file-write* (regex #"${source}"))`),
     ...permissions.hidden.map(secret => `(deny file-read* file-write* (subpath "${secret}"))`),
+    `(deny file-read* file-write* (subpath "${SECRETS_DATA}"))`,
     `(deny file-write* (subpath "${DATA}"))`,
     `(allow file-write* (subpath "${PAGE_DATA}"))`,
   ];

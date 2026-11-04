@@ -2,7 +2,7 @@ import { ipcMain, type BrowserWindow } from 'electron';
 import remote from '@electron/remote/main/index.js';
 import { randomUUID } from 'crypto';
 import type { Permissions } from '../../permissions/tags.ts';
-import { tellTrampoline, type Ask, type PageReply, type PageRequest } from '../../shared/channel.ts';
+import { tellTrampoline, type Ask, type IncomingRequest, type PageReply, type PageRequest } from '../../shared/channel.ts';
 import type { pageAccess } from './access.ts';
 import { pageApi, type PageProcess } from './api.ts';
 
@@ -48,6 +48,10 @@ export function serveApi(dir: string, permissions: Permissions, access: ReturnTy
       } else {
         remote.enable(win.webContents);
       }
+    },
+    // The window whose listener it is answers; the others have no such server.
+    request(incoming: IncomingRequest) {
+      apiBySender.forEach(api => api.request(incoming));
     },
     answered(reply: Extract<PageReply, { answered: string }>) {
       const { resolve, reject } = waiting.get(reply.answered)!;

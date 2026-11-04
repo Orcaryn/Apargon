@@ -6,10 +6,24 @@ import { showNotice } from '../../shared/notice.ts';
 import { revoke } from '../dialogs/approve.ts';
 import { offerSkill } from '../dialogs/skill.ts';
 import { TRAMPOLINE_PLATFORM } from '../platform.ts';
+import type { pageListeners } from './listen.ts';
 import { openFile, openLink } from './open.ts';
+import { pickFiles } from './pick.ts';
 import { saveFile, saveFiles } from './save.ts';
+import { readSecret, writeSecret } from './secrets.ts';
 
-export function handleRequest(request: PageRequest, { page, permissions, reply, setTray, openPage }: { page: string; permissions: Permissions; reply(reply: PageReply): void; setTray(title: string | null): void; openPage(file: string): void }) {
+type Page = {
+  page: string;
+  permissions: Permissions;
+  listeners: ReturnType<typeof pageListeners>;
+  reply(reply: PageReply): void;
+  setTray(title: string | null): void;
+  openPage(file: string): void;
+  // Quits the page and opens it again, with its sandbox built anew.
+  restart(): void;
+};
+
+export function handleRequest(request: PageRequest, { page, permissions, listeners, reply, setTray, openPage, restart }: Page) {
   if ('open' in request) {
     openPage(request.open);
   } else if ('revoke' in request) {
@@ -44,5 +58,35 @@ export function handleRequest(request: PageRequest, { page, permissions, reply, 
       saved => reply({ answered: id, value: saved }),
       (err: Error) => reply({ answered: id, error: err.message })
     );
+  } else if ('pick' in request) {
+    const { id, ...options } = request.pick;
+    pickFiles(page, permissions, options).then(
+      ({ paths, rebuild }) => {
+        reply({ answered: id, value: paths });
+
+        if (rebuild) {
+          restart();
+        }
+      },
+      (err: Error) => reply({ answered: id, error: err.message })
+    );
+  } else if ('secret' in request) {
+    const { id, name } = request.secret;
+    const done = 'value' in request.secret ? writeSecret(page, name, request.secret.value).then(() => null) : readSecret(page, name);
+    done.then(
+      answer => reply({ answered: id, value: answer }),
+      (err: Error) => reply({ answered: id, error: err.message })
+    );
+  } else if ('listen' in request) {
+    const { id, server, port } = request.listen;
+    listeners.listen(server, port).then(
+      url => reply({ answered: id, value: url }),
+      (err: Error) => reply({ answered: id, error: err.message })
+    );
+  } else if ('respond' in request) {
+    const { id, status, headers, body } = request.respond;
+    listeners.respond(id, status, headers, body);
+  } else if ('unlisten' in request) {
+    listeners.unlisten(request.unlisten);
   }
 }

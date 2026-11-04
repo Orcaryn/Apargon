@@ -43,6 +43,16 @@ export function systemApi(permissions: Permissions, { where, canSee, need }: Sco
     tray(title: string | null) {
       tellTrampoline({ tray: title === null ? null : String(title).slice(0, 24) });
     },
+    // One argument reads; a string sets; null deletes. The trampoline keeps them where no page's process can read.
+    secret(name: string, value?: string | null) {
+      if (typeof name !== 'string' || !name || name.length > 256) {
+        throw new Error('Apargon: secret takes a name of 1 to 256 characters.');
+      } else if (value !== undefined && value !== null && typeof value !== 'string') {
+        throw new Error('Apargon: a secret is a string, or null to delete it.');
+      }
+
+      return ask<string | null>(id => ({ secret: value === undefined ? { id, name } : { id, name, value } }));
+    },
     power() {
       return { idleSeconds: powerMonitor.getSystemIdleTime(), onBattery: powerMonitor.isOnBatteryPower() };
     },

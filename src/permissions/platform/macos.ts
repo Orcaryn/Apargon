@@ -13,7 +13,7 @@ export const macos: PermissionsPlatform = {
   launchFolder: 'Library',
   writesWholeFolders: false,
   programsSendOut: false,
-  systemSeesAll: true,
+  readsAll: true,
   soundServerRecords: false,
   programFolders: ['/opt/homebrew/bin', '/usr/local/bin'],
   programExtensions: [''],

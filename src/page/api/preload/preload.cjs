@@ -19,6 +19,7 @@ const shortcutCallbacks = new Set();
 const menuCallbacks = new Set();
 const systemCallbacks = new Set();
 const jobs = new Map();
+const requestHandlers = new Map();
 // Subscribes a callback; the function returned takes it off again.
 const listener = callbacks => callback => {
   callbacks.add(callback);
@@ -32,6 +33,28 @@ ipcRenderer.on('apargon-exit', (_event, id, exit) => {
   jobs.delete(id);
 });
 ipcRenderer.on('apargon-shortcut', (_event, keys) => shortcutCallbacks.forEach(callback => callback(keys)));
+ipcRenderer.on('apargon-request', async (_event, server, request) => {
+  const handler = requestHandlers.get(server);
+
+  // Closed since: the trampoline has dropped the request.
+  if (!handler) {
+    return;
+  }
+
+  // The page's handler failed, or gave an answer Apargon cannot send: whoever asked gets an error, and the page's console the reason.
+  await Promise.resolve()
+    .then(() => handler(request))
+    .then(answer => {
+      const { status = 200, headers = {}, body = '' } = answer ?? {};
+
+      return call('respond', request.id, status, headers, body);
+    })
+    .catch(err => {
+      console.error(err);
+
+      return call('respond', request.id, 500, {}, '');
+    });
+});
 ipcRenderer.on('apargon-menu', (_event, id) => menuCallbacks.forEach(callback => callback(id)));
 ipcRenderer.on('apargon-system', (_event, event) => systemCallbacks.forEach(callback => callback(event)));
 
@@ -70,6 +93,29 @@ contextBridge.exposeInMainWorld('papp', {
     };
   },
   pick: options => call('pick', options),
+  given: () => call('given'),
+  secret: (name, value) => call('secret', name, value),
+  listen: async (options, handler) => {
+    if (typeof handler !== 'function') {
+      throw new TypeError('papp.listen takes options and a handler: papp.listen({}, request => ({ body: "ok" })).');
+    }
+
+    const server = crypto.randomUUID();
+    requestHandlers.set(server, handler);
+    const url = await call('listen', server, options.port ?? null).catch(err => {
+      requestHandlers.delete(server);
+      throw err;
+    });
+
+    return {
+      url,
+      close: () => {
+        requestHandlers.delete(server);
+
+        return call('unlisten', server);
+      },
+    };
+  },
   open: target => call('open', target),
   saveAs: files => call('saveAs', files),
   save: (file, data) => call('save', file, data),

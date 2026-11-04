@@ -7,6 +7,7 @@ import { PERMISSIONS_PLATFORM } from '../../src/permissions/platform.ts';
 import { hostMatches } from '../../src/permissions/network.ts';
 import { linkHost, OPENABLE } from '../../src/permissions/open.ts';
 import { HOME, LAUNCH_FOLDER, runsOutsideSandbox } from '../../src/permissions/paths.ts';
+import { withGiven } from '../../src/permissions/given.ts';
 import { declaredPermissions } from '../../src/permissions/tags.ts';
 
 if (process.platform === 'linux') {
@@ -23,8 +24,22 @@ if (process.platform === 'linux') {
       return !(err as Error).message.includes('cannot open');
     }
   });
+  // A pick is checked as a tag is: picked, an emptied folder would bring its sockets back too.
+  fs.writeFileSync(page, '');
+  const picked = ['/tmp', '/var/tmp', `/run/user/${os.userInfo().uid}`, '/run']
+    .flatMap(folder => [false, true].map(write => ({ path: folder, write })))
+    .filter(pick => {
+      try {
+        withGiven(declaredPermissions(page), [pick], page);
+
+        return true;
+      } catch (err) {
+        return !(err as Error).message.includes('cannot open');
+      }
+    });
   console.log(opened.length ? `popup: FAIL, opened ${opened.map(([tag, folder]) => `${tag} ${folder}`).join(', ')}` : 'popup: ok, every emptied folder refused');
-  process.exit(opened.length ? 1 : 0);
+  console.log(picked.length ? `popup: FAIL, picks opened ${picked.map(pick => pick.path).join(', ')}` : 'popup: ok, every emptied folder refused as a pick');
+  process.exit(opened.length || picked.length ? 1 : 0);
 }
 
 if (process.platform === 'win32') {
@@ -76,6 +91,7 @@ const lines = describe(declaredPermissions(page)).filter(line => line.id.startsW
 
 fs.mkdirSync(path.join(dir, 'data'));
 fs.mkdirSync(path.join(dir, '.tool'));
+fs.writeFileSync(path.join(dir, 'data', 'tool'), '#!/bin/sh\n', { mode: 0o755 });
 const listener = net.createServer().listen(path.join(dir, 'data', 'a.sock'));
 const ownAddress = Object.values(os.networkInterfaces())
   .flat()
@@ -136,6 +152,15 @@ const refusals = [
   { tag: '<meta name="papp-run" content="/usr/bin/../../bin/sh">', reason: 'without ..' },
   { tag: '<meta name="papp-run" content="/usr/bin">', reason: 'or is a folder' },
   { tag: '<meta name="papp-run" content="/nonexistent/prog">', reason: 'was not found' },
+  { tag: '<meta name="papp-run" content="./data/missing">', reason: 'was not found' },
+  { tag: '<meta name="papp-run" content="./data/../data/tool">', reason: 'without ..' },
+  { tag: '<meta name="papp-run" content="./data//tool">', reason: 'without ..' },
+  { tag: '<meta name="papp-run" content="data/tool">', reason: 'Name one program' },
+  { tag: '<meta name="papp-run" content="./data/tool">\n<meta name="papp-write" content="./data/tool">', reason: 'could change' },
+  { tag: '<meta name="papp-run" content="./data/tool">\n<meta name="papp-write" content="./data/*">', reason: 'could change' },
+  { tag: `<meta name="papp-run" content="${path.join(dir, 'data', 'tool')}">\n<meta name="papp-write" content="./data">`, reason: 'could change' },
+  { tag: '<meta name="papp-listen" content="anyone">', reason: 'Bad papp-listen value' },
+  { tag: '<meta name="papp-listen" content="localhost">\n<meta name="papp-listen" content="network">', reason: 'Two papp-listen' },
   { tag: '<meta name="papp-net" content="example.com:0443">', reason: 'Bad papp-net value' },
   { tag: '<meta name="papp-open" content="https://x.com">', reason: 'Bad papp-open value' },
   { tag: '<meta name="papp-open" content="x.com:443">', reason: 'Bad papp-open value' },
@@ -151,6 +176,35 @@ const refusals = [
     return { tag, refused: (err as Error).message.includes(reason) };
   }
 });
+// A pick passes what a tag must: a " would end the Seatbelt string and the rest of the name would be rules.
+fs.mkdirSync(path.join(dir, 'x"))(allow lsopen)(regex #"'));
+fs.mkdirSync(path.join(dir, 'line\nbreak'));
+fs.writeFileSync(page, '<meta name="papp-run" content="./data/tool">');
+const pickRefusals = [
+  { pick: { path: path.join(dir, 'x"))(allow lsopen)(regex #"'), write: true }, reason: 'has a "' },
+  // As the dialog gives it: checkPick refuses a path through a link, and the temporary folder is one on macOS.
+  { pick: { path: path.join(fs.realpathSync(dir), 'data'), write: true }, reason: 'could change' },
+  { pick: { path: fs.realpathSync(dir), write: true }, reason: 'could change' },
+  { pick: { path: path.join(dir, 'line\nbreak'), write: false }, reason: 'invisible character' },
+].map(({ pick, reason }) => {
+  try {
+    withGiven(declaredPermissions(page), [pick], page);
+
+    return { pick, refused: false };
+  } catch (err) {
+    return { pick, refused: (err as Error).message.includes(reason) };
+  }
+});
+// The control: a plain pick passes, and is granted.
+const plainPick =
+  withGiven(
+    declaredPermissions(page),
+    [
+      { path: path.join(dir, '.tool'), write: false },
+      { path: path.join(dir, 'x"))(allow lsopen)(regex #"'), write: false },
+    ],
+    page
+  ).read.length === 2;
 const trust = [
   { tags: '', expected: false },
   { tags: '<meta name="papp-read" content="./data">', expected: false },
@@ -163,6 +217,7 @@ const trust = [
   { tags: '<meta name="papp-system" content="full">', expected: true },
   { tags: '<meta name="papp-system" content="full">\n<meta name="papp-write" content="./data">\n<meta name="papp-read" content="./data">', expected: true },
   { tags: '<meta name="papp-socket" content="./data/a.sock">', expected: true },
+  { tags: '<meta name="papp-listen" content="localhost">', expected: true },
 ].map(({ tags, expected }) => {
   fs.writeFileSync(page, tags);
 
@@ -176,6 +231,9 @@ const colours = [
   { tags: '<meta name="papp-read" content="~/.netrc">', kind: 'read:', level: 'yellow', says: 'See files' },
   { tags: '<meta name="papp-write" content="~/DOCUMENTS">', kind: 'write:', level: 'yellow', says: 'change' },
   { tags: '<meta name="papp-run" content="/bin/ls">', kind: 'run:', level: 'yellow', says: 'Run' },
+  { tags: '<meta name="papp-run" content="./data/tool">', kind: 'run:', level: 'yellow', says: 'Run' },
+  { tags: '<meta name="papp-listen" content="localhost">', kind: 'listen:localhost', level: 'red', says: 'this computer' },
+  { tags: '<meta name="papp-listen" content="Network">', kind: 'listen:network', level: 'red', says: 'your network' },
   { tags: '<meta name="papp-read" content="./.tool/state.json">', kind: 'read:', level: 'yellow', says: 'See files' },
   { tags: '<meta name="papp-write" content="./.tool/state.json">', kind: 'write:', level: 'red', says: 'change' },
   { tags: '<meta name="papp-socket" content="./data/a.sock">', kind: 'socket:', level: 'red', says: 'program' },
@@ -232,7 +290,7 @@ const seen = [
   { tags: '<meta name="papp-read" content="./data/*.txt">\n<meta name="papp-read" content="./data/a.txt">', all: false, shows: [''] },
   {
     tags: '<meta name="papp-system" content="full">\n<meta name="papp-write" content="./data">\n<meta name="papp-read" content="~/.ssh">',
-    all: PERMISSIONS_PLATFORM.systemSeesAll,
+    all: PERMISSIONS_PLATFORM.readsAll,
     shows: [path.join(HOME, '.ssh')],
   },
 ]
@@ -246,6 +304,8 @@ const seen = [
 
     return { tags, ok: said.all === all && files.join('\n') === expected.join('\n'), said: `${said.all ? 'all, ' : ''}${files.join(', ')}` };
   });
+fs.writeFileSync(page, '<meta name="papp-run" content="./data/tool">');
+const bundled = declaredPermissions(page).run.tool === path.join(dir, 'data', 'tool');
 fs.writeFileSync(page, '<meta\n  name="papp-read"\n  content="./data">\n<meta charset="utf-8">');
 const written = declaredPermissions(page).tags;
 const tagsAsWritten = written.length === 1 && written[0] === '<meta name="papp-read" content="./data">';
@@ -306,6 +366,12 @@ for (const { tag, refused } of refusals) {
   console.log(`${refused ? 'ok  ' : 'FAIL'} popup refuses ${JSON.stringify(tag)}`);
 }
 
+for (const { pick, refused } of pickRefusals) {
+  console.log(`${refused ? 'ok  ' : 'FAIL'} popup refuses the pick ${JSON.stringify(pick)}`);
+}
+
+console.log(`${plainPick ? 'ok  ' : 'FAIL'} popup grants a plain pick`);
+
 for (const { tags, expected, said } of trust) {
   console.log(`${said === expected ? 'ok  ' : 'FAIL'} popup asks for trust with ${JSON.stringify(tags)}: ${said}`);
 }
@@ -318,6 +384,7 @@ for (const { tags, ok, said } of colours) {
   console.log(`${ok ? 'ok  ' : 'FAIL'} popup for ${JSON.stringify(tags)}: ${said}`);
 }
 
+console.log(`${bundled ? 'ok  ' : 'FAIL'} papp-run ./data/tool names the program beside the page`);
 console.log(`${tagsAsWritten ? 'ok  ' : 'FAIL'} popup shows the tags as written: ${JSON.stringify(written)}`);
 console.log(`${headOnly ? 'ok  ' : 'FAIL'} popup reads the head before any script, outside comments: ${JSON.stringify(head.tags)}`);
 console.log(`${smuggled.length ? 'FAIL' : 'ok  '} popup reads papp- only from a name attribute: ${JSON.stringify(smuggled)}`);
@@ -334,9 +401,12 @@ process.exit(
   (
     lines.every(line => line.level === 'red') &&
       refusals.every(({ refused }) => refused) &&
+      pickRefusals.every(({ refused }) => refused) &&
+      plainPick &&
       trust.every(({ expected, said }) => said === expected) &&
       colours.every(({ ok }) => ok) &&
       seen.every(({ ok }) => ok) &&
+      bundled &&
       tagsAsWritten &&
       headOnly &&
       !smuggled.length &&

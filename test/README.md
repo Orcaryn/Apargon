@@ -28,16 +28,17 @@ The app on real pages.
 
 The pages Apargon opens, one per kind of access. Each writes its results to `results/`, and `check.ts` reads them.
 
-| Page                         | Writes                     | Runs as                                                          |
-| ---------------------------- | -------------------------- | ---------------------------------------------------------------- |
-| `selftest.papp`              | `result.json`              | a plain page: reads its own folder, writes two files             |
-| `selftest-system.papp`       | `result-system.json`       | `papp-system`: Node, no network                                  |
-| `selftest-net.papp`          | `result-net.json`          | network, local ports and sockets, programs, variables, clipboard |
-| `selftest-mac.papp`          | `result-mac.json`          | macOS only: programs that exist only there                       |
-| `selftest-win.papp`          | `result-win.json`          | Windows only: network paths, file streams, the proxy             |
-| `selftest-win-programs.papp` | `result-win-programs.json` | Windows only: programs, variables, `curl` through the proxy      |
-| `selftest-win-system.papp`   | `result-win-system.json`   | Windows only: `papp-system`, no network, Apargon's data kept     |
+| Page                         | Writes                     | Runs as                                                                                             |
+| ---------------------------- | -------------------------- | --------------------------------------------------------------------------------------------------- |
+| `selftest.papp`              | `result.json`              | a plain page: reads its own folder, writes two files                                                |
+| `selftest-system.papp`       | `result-system.json`       | `papp-system`: Node, no network                                                                     |
+| `selftest-net.papp`          | `result-net.json`          | network, local ports and sockets, programs, variables, clipboard, a listener, a program from `bin/` |
+| `selftest-mac.papp`          | `result-mac.json`          | macOS only: programs that exist only there                                                          |
+| `selftest-win.papp`          | `result-win.json`          | Windows only: network paths, file streams, the proxy                                                |
+| `selftest-win-programs.papp` | `result-win-programs.json` | Windows only: programs, variables, `curl` through the proxy                                         |
+| `selftest-win-system.papp`   | `result-win-system.json`   | Windows only: `papp-system`, no network, Apargon's data kept                                        |
 
 - `subfolder/` is part of `selftest.papp`'s folder: a file to read, a frame to refuse, a folder named like an app.
+- `bin/greet` is the program `selftest-net.papp` ships, as `papp-run ./bin/greet`.
 - `results/` holds what the run makes, `result*.json`, `leak`, `leak.der` and the sockets, and git ignores all of it.
 - A new check goes in its page and in `check.ts`'s list for its platform.

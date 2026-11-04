@@ -41,8 +41,9 @@ With no tags, a page sees its own folder and nothing else. It asks for more in i
 <meta name="papp-read"            content="~/logs">                   <!-- see a folder -->
 <meta name="papp-write"           content="./notes/*.md">             <!-- change files -->
 <meta name="papp-net"             content="api.example.com">          <!-- one server, port 443 unless you add :port -->
+<meta name="papp-listen"          content="localhost">                <!-- answer programs on this computer; network for devices too -->
 <meta name="papp-open"            content="x.com">                    <!-- its links open without asking -->
-<meta name="papp-run"             content="git">                      <!-- one program -->
+<meta name="papp-run"             content="git">                      <!-- one program, or ./bin/tool for one the page ships -->
 <meta name="papp-env"             content="AWS_PROFILE">              <!-- one variable for it -->
 <meta name="papp-socket"          content="/var/run/docker.sock">     <!-- one socket -->
 <meta name="papp-use"             content="notifications, sound">     <!-- also clipboard, location, camera, microphone, screen, print, usb, serial, hid, midi, background, login -->
@@ -58,6 +59,10 @@ A popup lists what the tags allow before the page runs. A red line is a way to s
 A page keeps its storage (`localStorage`, IndexedDB) when you move or rename the file, as long as its content is the same as when it was last open. A copy starts empty.
 
 With no tag, a page can still open a link in your browser, and a file (image, video, audio, PDF, text) or a folder in its app. A link asks first, with the address shown, unless the page names the site with `papp-open`.
+
+With no tag, a page can also ask you to pick a file or folder. Apargon's dialog says what the page gets: to see it, or to change it too. A pick is kept until you take the page's approval back, and the popup lists it under "You gave it". A page can also keep secrets, like an API key: Apargon seals them with your computer's own store, where no page can read them.
+
+With `papp-listen`, Apargon answers requests for the page: from programs on this computer, or with `network` from devices on your network, like a phone. The page itself never listens. Both show red.
 
 `papp-use background` keeps a page running after you close it; quit it from its tray icon. `papp-use login` opens a page at login, until you take back its approval.
 

@@ -108,12 +108,20 @@
     const power = await papp.power();
     result.power_read = typeof power.idleSeconds === 'number' && typeof power.onBattery === 'boolean';
     result.save_names_refused = (await Promise.all([{}, { '../out.txt': 'x' }, { 'sub/out.txt': 'x' }, { '.zshrc': 'x' }, { 'ok.txt': 'x', 'page.papp': 'x' }, { 'ok.txt': 'x', '': 'x' }].map((files) => refused(() => papp.saveAs(files))))).every(Boolean);
+    result.given_empty = (await papp.given()).length === 0;
+    // 'token' stays: selftest-system then finds the secrets folder hidden with a file in it.
+    await papp.secret('token', 'kept by selftest.papp');
+    await papp.secret('gone', 'x');
+    await papp.secret('gone', null);
+    result.secret_roundtrip = await papp.secret('token') === 'kept by selftest.papp' && await papp.secret('gone') === null && await papp.secret('never') === null;
+    result.secret_names_refused = await refused(() => papp.secret('')) && await refused(() => papp.secret('token', 5)) && await refused(() => papp.secret('x'.repeat(257)));
 
     result.outside_read_refused = await refused(() => papp.readFile('../../../package.json'));
     result.outside_write_refused = await refused(() => papp.writeFile('../outside.txt', 'x'));
     result.home_read_refused = await refused(() => papp.readdir('~'));
     result.hidden_write_refused = await refused(() => papp.writeFile('.hidden', 'x'));
     result.run_refused = await refused(() => papp.run('ls'));
+    result.listen_refused = await refused(() => papp.listen({}, () => ({ body: 'x' })));
     result.spawn_refused = await refused(() => papp.spawn('ls'));
     result.use_refused = await refused(() => papp.notify('selftest', 'should not show')) && await refused(() => papp.print()) && await refused(() => window.print());
     result.open_type_refused = await refused(() => papp.open('selftest.papp')) && await refused(() => papp.open('subfolder/frame.html')) && await refused(() => papp.open('subfolder/bundle.app'));

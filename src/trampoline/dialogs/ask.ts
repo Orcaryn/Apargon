@@ -35,7 +35,7 @@ export async function ask(file: string, content: object) {
         resolve(url.endsWith('#allow'));
         win.close();
       } else {
-        fit();
+        void fit();
       }
     });
     win.on('closed', () => resolve(false));

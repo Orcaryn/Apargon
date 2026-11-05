@@ -42,6 +42,6 @@ async function noticeNewVersion() {
   });
 
   if (response === 0) {
-    shell.openExternal(`https://github.com/${REPO}/releases/tag/v${latest}`);
+    void shell.openExternal(`https://github.com/${REPO}/releases/tag/v${latest}`);
   }
 }

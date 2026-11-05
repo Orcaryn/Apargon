@@ -17,10 +17,10 @@ app.on('open-file', (event, file) => {
   if (PAGE_CONFIG) {
     tellTrampoline('open', page);
   } else if (app.isReady()) {
-    openPage(page);
+    void openPage(page);
   } else {
     pages.push(page);
   }
 });
 
-app.whenReady().then(() => (PAGE_CONFIG ? startPage(PAGE_CONFIG) : startTrampoline(pages)));
+void app.whenReady().then(() => (PAGE_CONFIG ? startPage(PAGE_CONFIG) : startTrampoline(pages)));

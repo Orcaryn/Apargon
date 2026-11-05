@@ -163,7 +163,7 @@ async function startPageProcess({ page, permissions: declared, pageHash }: Pick<
 
     // Before openPage counts this one closed, so the app does not quit in between.
     if (reopen) {
-      openPage(page);
+      void openPage(page);
     }
   });
 

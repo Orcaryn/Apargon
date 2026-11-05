@@ -10,13 +10,8 @@ const electron: string = createRequire(import.meta.url)('electron');
 const node = process.execPath;
 const pages = 'test/selftest/pages';
 const steps = [
-  [node, 'test/node/platforms.ts'],
-  [node, 'test/node/preload.ts'],
-  [node, 'test/node/popup.ts'],
-  [node, 'test/node/storage.ts'],
-  [node, 'test/node/menus.ts'],
-  [node, 'test/node/env.ts'],
-  [node, 'test/node/protocol.ts'],
+  // Node's test runner takes the pattern itself, and runs each file in a process of its own.
+  [node, '--test', 'test/node/*.ts'],
   [node, 'test/selftest/refuse.ts'],
   [node, 'test/selftest/daemons.ts'],
   [electron, '.', `${pages}/selftest.papp`],

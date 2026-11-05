@@ -27,7 +27,7 @@ Further reading and code: [https://github.com/Orcaryn/Apargon](https://github.co
 ```
 
 - Open it with `open page.papp` (macOS), `apargon page.papp` (Linux) or a double-click (Windows). A popup asks the user first, and again when the tags change. A page made on this computer with no tags opens without a popup.
-- Saving a `.papp`, `.css` or `.js` file in the page's folder reloads the window. The reload keeps the old tags: reopen the page for new ones. A downloaded page that changed does not load until it is reopened and approved again.
+- Saving the `.papp`, or a `.css` or `.js` file it loaded, reloads the window. Other files do not, nor files the page may change itself. The reload keeps the old tags: reopen the page for new ones. A downloaded page that changed does not load until it is reopened and approved again.
 - A web link opens in the browser, after the user agrees. `window.open` on the page's own file opens a second window.
 - The window opens at 1200×800 with a frame, later where the user left it. `<title>` names it.
 - `localStorage` and IndexedDB persist. They follow a moved or renamed page if it was not edited since it was last closed. A copy starts empty.

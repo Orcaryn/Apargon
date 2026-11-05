@@ -40,7 +40,8 @@ export default defineConfig([
     files: ['src/**/*.ts', 'test/**/*.ts'],
     extends: [js.configs.recommended, tseslint.configs.recommended],
     plugins: { '@stylistic': stylistic },
-    languageOptions: { globals: globals.node, sourceType: 'module' },
+    // Types, for the rules below that need them.
+    languageOptions: { globals: globals.node, sourceType: 'module', parserOptions: { projectService: true } },
     linterOptions: { reportUnusedDisableDirectives: 'error' },
     rules: {
       curly: ['error', 'all'],
@@ -65,6 +66,11 @@ export default defineConfig([
       '@stylistic/lines-between-class-members': ['error', 'always', { exceptAfterSingleLine: true }],
       'no-restricted-syntax': ['error', ...restrictedSyntax],
       'personal/require-else-if': 'error',
+      // A promise nobody waits for is written void, so a rejection that goes unseen is a choice. Electron ignores what a listener returns, so an async one may be passed.
+      '@typescript-eslint/no-floating-promises': ['error', { allowForKnownSafeCalls: [{ from: 'package', package: 'node:test', name: ['test', 'suite'] }] }],
+      '@typescript-eslint/no-misused-promises': ['error', { checksVoidReturn: { arguments: false, properties: false } }],
+      '@typescript-eslint/await-thenable': 'error',
+      '@typescript-eslint/no-unnecessary-type-assertion': 'error',
     },
   },
 ]);

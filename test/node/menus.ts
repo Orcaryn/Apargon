@@ -1,3 +1,5 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
 import type { TrayItem } from '../../src/shared/channel.ts';
 import { pageMenuItems, trayItems, type PageMenuItem } from '../../src/shared/menuItems.ts';
 
@@ -44,14 +46,14 @@ const tray = trayItems(
 (tray[0].click as () => void)();
 
 // JSON leaves out the clicks, which clicked checks: Apargon's, sending the id.
-const checks = [
-  {
-    name: 'menu items keep only label, keys and submenu',
-    ok: JSON.stringify(menu) === JSON.stringify([{ label: 'Run', accelerator: 'CmdOrCtrl+R', submenu: [{ type: 'separator' }, { label: 'Quit' }] }]),
-  },
-  { name: 'tray items keep only label', ok: JSON.stringify(tray) === JSON.stringify([{ label: 'Run' }, { type: 'separator' }]) },
-  { name: 'clicks send the id', ok: clicked.join() === 'run,quit,run' },
-];
+test('menu items keep only label, keys and submenu', () => {
+  assert.deepEqual(JSON.parse(JSON.stringify(menu)), [{ label: 'Run', accelerator: 'CmdOrCtrl+R', submenu: [{ type: 'separator' }, { label: 'Quit' }] }]);
+});
 
-checks.forEach(({ name, ok }) => console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}`));
-process.exit(checks.every(({ ok }) => ok) ? 0 : 1);
+test('tray items keep only label', () => {
+  assert.deepEqual(JSON.parse(JSON.stringify(tray)), [{ label: 'Run' }, { type: 'separator' }]);
+});
+
+test('clicks send the id', () => {
+  assert.deepEqual(clicked, ['run', 'quit', 'run']);
+});

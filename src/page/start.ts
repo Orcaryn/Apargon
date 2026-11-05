@@ -3,7 +3,6 @@ import fs from 'fs';
 import path from 'path';
 import { pathToFileURL } from 'url';
 import { describe } from '../permissions/describe.ts';
-import { HOME } from '../permissions/paths.ts';
 import { onTrampolineEvent, relay, tellTrampoline, type PageConfig } from '../shared/channel.ts';
 import { APP_ROOT, pageStorage } from '../shared/data.ts';
 import { pageAccess } from './api/access.ts';
@@ -39,7 +38,7 @@ export async function startPage({ page, permissions, pageHash, proxy, bridges, b
   const dir = path.dirname(page);
   const access = permissions.system ? null : pageAccess(permissions);
   const canSee = (file: string) => access === null || file === page || access.canSee(file);
-  const pageSession = createPageSession(page, permissions, pageHash, canSee);
+  const pageSession = createPageSession(page, permissions, pageHash, canSee, liveReload(page, access, () => pageWindows().forEach(other => other.webContents.reloadIgnoringCache())));
   const menus = installMenu(page, describe(permissions), menu);
   const icon = app.isPackaged ? undefined : path.join(APP_ROOT, 'build/icon.png');
 
@@ -72,12 +71,17 @@ export async function startPage({ page, permissions, pageHash, proxy, bridges, b
   };
 
   const api = serveApi(dir, permissions, access, { menus, toFront, pageIcon, proxy });
-  const pageUrl = pathToFileURL(page);
+  const pagePath = decodeURIComponent(pathToFileURL(page).pathname);
 
   const isPage = (href: string) => {
     const url = new URL(href);
 
-    return url.protocol === 'file:' && !url.host && decodeURIComponent(url.pathname) === decodeURIComponent(pageUrl.pathname);
+    try {
+      return url.protocol === 'file:' && !url.host && decodeURIComponent(url.pathname) === pagePath;
+    } catch {
+      // A bad escape such as %zz names no file. Throwing instead would skip stayOnPage's preventDefault.
+      return false;
+    }
   };
 
   const stayOnPage = (event: Electron.Event<{ url: string; isMainFrame: boolean }>) => {
@@ -116,7 +120,7 @@ export async function startPage({ page, permissions, pageHash, proxy, bridges, b
   };
 
   setUpWindow(win);
-  win.loadFile(page);
+  void win.loadFile(page);
 
   if (background) {
     app.on('activate', toFront);
@@ -144,19 +148,44 @@ export async function startPage({ page, permissions, pageHash, proxy, bridges, b
     },
     request: incoming => api.request(incoming),
   });
+}
 
+// Live reload: an edit to a .papp, .css or .js file the page loaded reloads its windows; a file the page may change itself does not, or every save would reload it.
+// Folders are watched, not files: an editor that saves by replacing a file would end a watch on it.
+function liveReload(page: string, access: ReturnType<typeof pageAccess> | null, reload: () => void) {
+  const loaded = new Set<string>();
+  const watched = new Set<string>();
   let pendingReload: NodeJS.Timeout | undefined = undefined;
-  const edits = fs.watch(dir, { recursive: dir !== HOME && dir !== path.parse(dir).root }, (_event, name) => {
-    if (!name || !/\.(papp|css|js)$/.test(name) || /(^|[\\/])(\.[^\\/]*|node_modules)([\\/]|$)/.test(name)) {
+
+  // A folder whose watch fails leaves the set, so the next load from it tries again; the load itself goes on.
+  const stopWatching = (folder: string, err: Error) => {
+    watched.delete(folder);
+    console.error(`Apargon: live reload stopped for ${folder} (${err.message}). Reload the page to try again.`);
+  };
+
+  return (file: string) => {
+    if (!/\.(papp|css|js)$/.test(file) || (file !== page && access?.canChange(file))) {
       return;
     }
 
-    clearTimeout(pendingReload);
-    pendingReload = setTimeout(() => pageWindows().forEach(other => other.webContents.reloadIgnoringCache()), 100);
-  });
-  // On Linux a recursive watch can run out of inotify watches in a large folder; the page then no longer reloads on an edit.
-  edits.on('error', err => {
-    console.error(`Apargon: live reload stopped (${err.message}). Reopen the page after an edit.`);
-    edits.close();
-  });
+    loaded.add(file);
+    const folder = path.dirname(file);
+
+    if (watched.has(folder)) {
+      return;
+    }
+
+    watched.add(folder);
+
+    try {
+      fs.watch(folder, (_event, name) => {
+        if (name && loaded.has(path.join(folder, name))) {
+          clearTimeout(pendingReload);
+          pendingReload = setTimeout(reload, 100);
+        }
+      }).on('error', err => stopWatching(folder, err));
+    } catch (err) {
+      stopWatching(folder, err as Error);
+    }
+  };
 }

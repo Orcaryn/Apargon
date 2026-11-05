@@ -31,7 +31,7 @@ export async function openLink(page: string, { open }: Permissions, url: string)
     }
   }
 
-  shell.openExternal(url);
+  void shell.openExternal(url);
 }
 
 // The real path: a symlink without an extension could lead to an app.
@@ -39,6 +39,6 @@ export function openFile(file: string) {
   const target = realPath(file);
 
   if (viewable(target)) {
-    shell.openPath(target);
+    void shell.openPath(target);
   }
 }

@@ -4,7 +4,7 @@
 
 ## `node/`
 
-Plain Node, without the app.
+Plain Node, without the app, on `node:test`: `run.ts` runs them all with `node --test`, and each runs alone too, as `node test/node/popup.ts`. `--test-name-pattern` picks cases by name.
 
 | File           | Checks                                                                                                                            |
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------- |

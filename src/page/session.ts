@@ -6,7 +6,7 @@ import { realPath } from '../permissions/paths.ts';
 import { PAGE_FILE } from '../permissions/patterns.ts';
 import type { Permissions, Use } from '../permissions/tags.ts';
 
-export function createPageSession(page: string, { use }: Permissions, pageHash: string | null, canSee: (file: string) => boolean) {
+export function createPageSession(page: string, { use }: Permissions, pageHash: string | null, canSee: (file: string) => boolean, served: (file: string) => void) {
   const pageSession = session.defaultSession;
 
   pageSession.protocol.handle('file', request => {
@@ -21,7 +21,11 @@ export function createPageSession(page: string, { use }: Permissions, pageHash: 
 
     if (!canSee(file)) {
       return new Response(`Apargon: this page may not see ${file}\n`, { status: 403 });
-    } else if (PAGE_FILE.test(file)) {
+    }
+
+    served(file);
+
+    if (PAGE_FILE.test(file)) {
       const html = fs.readFileSync(file);
 
       if (file === page && pageHash && createHash('sha256').update(html).digest('hex') !== pageHash) {

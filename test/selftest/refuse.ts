@@ -15,7 +15,7 @@ const child = spawn(electron, ['.', page], {
   stdio: ['inherit', 'inherit', 'pipe'],
 });
 let stderr = '';
-child.stderr!.setEncoding('utf8').on('data', (text: string) => {
+child.stderr.setEncoding('utf8').on('data', (text: string) => {
   stderr += text;
   process.stderr.write(text);
 });

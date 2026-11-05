@@ -42,7 +42,7 @@ export function pageHandlers({ page, permissions, listeners, tell, setTray, open
         refreshMenus();
       } else {
         app.focus({ steal: true });
-        dialog.showMessageBox({ type: 'warning', message: 'Forget these pages?', detail: revoked.join('\n'), buttons: ['Forget', 'Cancel'], defaultId: 1, cancelId: 1 }).then(({ response }) => {
+        void dialog.showMessageBox({ type: 'warning', message: 'Forget these pages?', detail: revoked.join('\n'), buttons: ['Forget', 'Cancel'], defaultId: 1, cancelId: 1 }).then(({ response }) => {
           if (response === 0) {
             revoke(revoked);
           }
@@ -58,7 +58,7 @@ export function pageHandlers({ page, permissions, listeners, tell, setTray, open
         refreshMenus();
       } else {
         app.focus({ steal: true });
-        dialog.showMessageBox({ type: 'warning', message: 'Turn off the update check?', detail: 'Apargon will no longer look for security fixes.', buttons: ['Turn Off', 'Cancel'], defaultId: 1, cancelId: 1 }).then(({ response }) => {
+        void dialog.showMessageBox({ type: 'warning', message: 'Turn off the update check?', detail: 'Apargon will no longer look for security fixes.', buttons: ['Turn Off', 'Cancel'], defaultId: 1, cancelId: 1 }).then(({ response }) => {
           if (response === 0) {
             updates.set({ automatic: false });
           }
@@ -72,10 +72,10 @@ export function pageHandlers({ page, permissions, listeners, tell, setTray, open
     pageIcon: icon => TRAMPOLINE_PLATFORM.pageIcon?.(page, icon),
     showEgressLog: () => {
       if (fs.existsSync(EGRESS_LOG)) {
-        shell.openPath(EGRESS_LOG);
+        void shell.openPath(EGRESS_LOG);
       } else {
         app.focus({ steal: true });
-        dialog.showMessageBox({ type: 'info', message: 'No egress recorded yet.', detail: EGRESS_LOG });
+        void dialog.showMessageBox({ type: 'info', message: 'No egress recorded yet.', detail: EGRESS_LOG });
       }
     },
     tray: setTray,

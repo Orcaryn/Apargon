@@ -1,5 +1,7 @@
+import assert from 'node:assert/strict';
 import { createHash } from 'crypto';
 import fs from 'fs';
+import { after, test } from 'node:test';
 import os from 'os';
 import path from 'path';
 import { followMove, noteContent, pageRecords } from '../../src/trampoline/storage.ts';
@@ -8,6 +10,7 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apargon-moved-'));
 const pageData = path.join(root, 'data');
 fs.mkdirSync(path.join(root, 'records'));
 const records = pageRecords(path.join(root, 'records'));
+after(() => fs.rmSync(root, { recursive: true }));
 
 function setUp(content: string) {
   const dir = path.join(root, content);
@@ -25,115 +28,83 @@ function storage(page: string) {
   return path.join(pageData, 'Partitions', createHash('sha256').update(page).digest('hex'));
 }
 
-const has = (page: string) => fs.existsSync(path.join(storage(page), 'data'));
-const cases: [string, () => boolean][] = [
-  [
-    'moved: the data follows',
-    () => {
-      const { old, moved } = setUp('a');
-      fs.renameSync(old, moved);
-      followMove(moved, storage, records, []);
+// Where the data is: with the old path, the new one, both or neither.
+const where = (old: string, moved: string) => ({ old: fs.existsSync(path.join(storage(old), 'data')), moved: fs.existsSync(path.join(storage(moved), 'data')) });
 
-      return has(moved) && !has(old);
-    },
-  ],
-  [
-    'copied: the old file is there, the copy starts empty',
-    () => {
-      const { old, moved } = setUp('b');
-      fs.copyFileSync(old, moved);
-      followMove(moved, storage, records, []);
+test('moved: the data follows', () => {
+  const { old, moved } = setUp('a');
+  fs.renameSync(old, moved);
+  followMove(moved, storage, records, []);
+  assert.deepEqual(where(old, moved), { old: false, moved: true });
+});
 
-      return has(old) && !has(moved);
-    },
-  ],
-  [
-    'other content: no match',
-    () => {
-      const { old, moved } = setUp('c');
-      fs.rmSync(old);
-      fs.writeFileSync(moved, 'c, changed');
-      followMove(moved, storage, records, []);
+test('copied: the old file is there, the copy starts empty', () => {
+  const { old, moved } = setUp('b');
+  fs.copyFileSync(old, moved);
+  followMove(moved, storage, records, []);
+  assert.deepEqual(where(old, moved), { old: true, moved: false });
+});
 
-      return has(old) && !has(moved);
-    },
-  ],
-  [
-    'edited while open, then moved: the close notes it',
-    () => {
-      const { old, moved } = setUp('d');
-      fs.writeFileSync(old, 'd, edited');
-      noteContent(old, storage, records);
-      fs.renameSync(old, moved);
-      followMove(moved, storage, records, []);
+test('other content: no match', () => {
+  const { old, moved } = setUp('c');
+  fs.rmSync(old);
+  fs.writeFileSync(moved, 'c, changed');
+  followMove(moved, storage, records, []);
+  assert.deepEqual(where(old, moved), { old: true, moved: false });
+});
 
-      return has(moved);
-    },
-  ],
-  [
-    'the old window still open: refused, the data stays',
-    () => {
-      const { old, moved } = setUp('e');
-      fs.renameSync(old, moved);
+test('edited while open, then moved: the close notes it', () => {
+  const { old, moved } = setUp('d');
+  fs.writeFileSync(old, 'd, edited');
+  noteContent(old, storage, records);
+  fs.renameSync(old, moved);
+  followMove(moved, storage, records, []);
+  assert.equal(where(old, moved).moved, true);
+});
 
-      try {
-        followMove(moved, storage, records, [old]);
+test('the old window still open: refused, the data stays', () => {
+  const { old, moved } = setUp('e');
+  fs.renameSync(old, moved);
+  assert.throws(() => followMove(moved, storage, records, [old]));
+  assert.deepEqual(where(old, moved), { old: true, moved: false });
+});
 
-        return false;
-      } catch {
-        return has(old) && !has(moved);
-      }
-    },
-  ],
-  [
-    'the new path has data of its own: kept',
-    () => {
-      const { old, moved } = setUp('f');
-      fs.renameSync(old, moved);
-      fs.mkdirSync(storage(moved), { recursive: true });
-      followMove(moved, storage, records, []);
+test('the new path has data of its own: kept', () => {
+  const { old, moved } = setUp('f');
+  fs.renameSync(old, moved);
+  fs.mkdirSync(storage(moved), { recursive: true });
+  followMove(moved, storage, records, []);
+  assert.deepEqual(where(old, moved), { old: true, moved: false });
+});
 
-      return has(old) && !has(moved);
-    },
-  ],
-  [
-    'forgotten only when file and data are both gone',
-    () => {
-      const gone = setUp('g');
-      const movedAway = setUp('h');
-      fs.rmSync(gone.old);
-      fs.rmSync(storage(gone.old), { recursive: true });
-      fs.renameSync(movedAway.old, movedAway.moved);
-      noteContent(movedAway.moved, storage, records);
+test('forgotten only when file and data are both gone', () => {
+  const gone = setUp('g');
+  const movedAway = setUp('h');
+  fs.rmSync(gone.old);
+  fs.rmSync(storage(gone.old), { recursive: true });
+  fs.renameSync(movedAway.old, movedAway.moved);
+  noteContent(movedAway.moved, storage, records);
+  assert.equal(records.get(gone.old).content, undefined);
+  assert.ok(records.get(movedAway.old).content);
+  assert.ok(records.get(movedAway.moved).content);
+});
 
-      return !records.get(gone.old).content && !!records.get(movedAway.old).content && !!records.get(movedAway.moved).content;
-    },
-  ],
-  [
-    'moved: the window follows, the approval stays',
-    () => {
-      const { old, moved } = setUp('i');
-      records.change(old, { window: { x: 1, y: 2, width: 3, height: 4 }, grant: ['own:x'] });
-      fs.renameSync(old, moved);
-      followMove(moved, storage, records, []);
-      const [from, to] = [records.get(old), records.get(moved)];
+test('moved: the window follows, the approval stays', () => {
+  const { old, moved } = setUp('i');
+  records.change(old, { window: { x: 1, y: 2, width: 3, height: 4 }, grant: ['own:x'] });
+  fs.renameSync(old, moved);
+  followMove(moved, storage, records, []);
+  assert.equal(records.get(moved).window?.x, 1);
+  assert.equal(records.get(moved).grant, undefined);
+  assert.equal(records.get(old).window, undefined);
+  assert.deepEqual(records.get(old).grant, ['own:x']);
+});
 
-      return to.window?.x === 1 && !to.grant && !from.window && from.grant?.[0] === 'own:x';
-    },
-  ],
-  [
-    'a record left empty is deleted, and listed only while it holds something',
-    () => {
-      const page = path.join(root, 'j.papp');
-      records.change(page, { grant: ['own:x'], links: ['a.example'] });
-      const listed = records.all().some(saved => saved.page === page);
-      records.change(page, { grant: undefined, links: undefined });
-
-      return listed && !records.all().some(saved => saved.page === page) && Object.keys(records.get(page)).length === 0;
-    },
-  ],
-];
-const failed = cases.filter(([, run]) => !run()).map(([name]) => name);
-fs.rmSync(root, { recursive: true });
-console.log(failed.length ? `storage: FAIL, ${failed.join('; ')}` : `storage: ok, ${cases.length} cases`);
-process.exit(failed.length ? 1 : 0);
+test('a record left empty is deleted, and listed only while it holds something', () => {
+  const page = path.join(root, 'j.papp');
+  records.change(page, { grant: ['own:x'], links: ['a.example'] });
+  assert.ok(records.all().some(saved => saved.page === page));
+  records.change(page, { grant: undefined, links: undefined });
+  assert.ok(!records.all().some(saved => saved.page === page));
+  assert.deepEqual(records.get(page), {});
+});

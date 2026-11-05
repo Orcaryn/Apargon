@@ -2,7 +2,8 @@ import { safeStorage } from 'electron';
 import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { readJson, SECRETS_DATA, writeJson } from '../../shared/data.ts';
+import { SECRETS_DATA } from '../../shared/data.ts';
+import { readJson, writeJson } from '../../shared/json.ts';
 
 // One file per page, each value sealed on its own with the OS's store for this user, in a folder every page's sandbox hides.
 export async function readSecret(page: string, name: string) {

@@ -1,6 +1,5 @@
 import type { BrowserWindow, NativeImage } from 'electron';
 import type { Permissions } from '../../permissions/tags.ts';
-import type { Ask } from '../../shared/channel.ts';
 import type { PageMenus } from '../menu.ts';
 import type { pageAccess } from './access.ts';
 import { connectionApi } from './connections.ts';
@@ -11,17 +10,17 @@ import { pageScope } from './scope.ts';
 import { systemApi } from './system.ts';
 import { windowApi } from './window.ts';
 
-// What every window of the page shares: the menu bar, the trampoline's answers, and the icon as drawn.
-export type PageProcess = { menus: PageMenus; toFront: () => void; ask: Ask; pageIcon: () => NativeImage | null };
+// What every window of the page shares: the menu bar, the icon as drawn, and the proxy, if the page has network.
+export type PageProcess = { menus: PageMenus; toFront: () => void; pageIcon: () => NativeImage | null; proxy: string | null };
 
 // What the page's process does on its behalf, when its sandbox allows the page none of it: window.papp in the page is a mirror of this object.
-export function pageApi(dir: string, permissions: Permissions, access: ReturnType<typeof pageAccess>, win: BrowserWindow, { menus, toFront, ask, pageIcon }: PageProcess) {
+export function pageApi(dir: string, permissions: Permissions, access: ReturnType<typeof pageAccess>, win: BrowserWindow, { menus, toFront, pageIcon, proxy }: PageProcess) {
   const scope = pageScope(dir, access);
-  const files = fileApi(dir, scope, win, ask);
+  const files = fileApi(dir, scope, win);
   const programs = programApi(permissions, scope, win);
   const pageWindow = windowApi(permissions, win, menus);
-  const listeners = listenApi(win, ask);
-  const connections = connectionApi(win);
+  const listeners = listenApi(scope, win);
+  const connections = connectionApi(scope, win, proxy);
 
   return {
     ...files,
@@ -29,7 +28,7 @@ export function pageApi(dir: string, permissions: Permissions, access: ReturnTyp
     ...pageWindow,
     ...listeners,
     ...connections,
-    ...systemApi(permissions, scope, toFront, ask, pageIcon),
+    ...systemApi(permissions, scope, toFront, pageIcon),
     // On each load of the page, and when its window closes: nothing the page before it started outlives it.
     reset() {
       files.reset();
@@ -37,7 +36,7 @@ export function pageApi(dir: string, permissions: Permissions, access: ReturnTyp
       pageWindow.reset();
       listeners.reset();
       connections.reset();
-      scope.picked.length = 0;
+      scope.reset();
     },
   };
 }

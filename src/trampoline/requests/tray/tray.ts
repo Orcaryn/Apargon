@@ -1,6 +1,7 @@
-import { Menu, nativeImage, Tray, type MenuItemConstructorOptions } from 'electron';
+import { Menu, nativeImage, Tray } from 'electron';
 import path from 'path';
 import type { TrayItem } from '../../../shared/channel.ts';
+import { trayItems } from '../../../shared/menuItems.ts';
 
 // A menu, not only a click: Linux sends no clicks, and a page in the background is quit from here.
 export function trayFor(page: string, onShow: () => void, onQuit: () => void, onItem: (id: string) => void) {
@@ -19,10 +20,8 @@ export function trayFor(page: string, onShow: () => void, onQuit: () => void, on
         tray.setToolTip(name);
       }
 
-      // Label and id only: a papp-system page writes the request itself, and could add a role that quits Apargon.
-      const pageItems = items.map((item): MenuItemConstructorOptions => ('separator' in item ? { type: 'separator' } : { label: item.label, click: () => onItem(item.id) }));
       tray.setTitle(title);
-      tray.setContextMenu(Menu.buildFromTemplate([...pageItems, ...(items.length ? [{ type: 'separator' } as const] : []), { label: `Show ${name}`, click: onShow }, { label: `Quit ${name}`, click: onQuit }]));
+      tray.setContextMenu(Menu.buildFromTemplate([...trayItems(items, onItem), ...(items.length ? [{ type: 'separator' } as const] : []), { label: `Show ${name}`, click: onShow }, { label: `Quit ${name}`, click: onQuit }]));
     }
   };
 }

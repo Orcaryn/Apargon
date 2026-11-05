@@ -1,13 +1,18 @@
 import { app } from 'electron';
+import { randomUUID } from 'crypto';
 import { once } from 'events';
 import fs from 'fs';
 import net from 'net';
 import readline from 'readline';
+import type { Rectangle } from 'electron';
 import type { Permissions } from '../permissions/tags.ts';
+import type { Answer, Calls, EventHandlers, PageEvents, Tell, TrampolineEvents } from './protocol.ts';
 
 export type Bridge = { port: number; socket: string };
-// replies: a file, where the sandbox passes no more pipes; null when they come on REPLY_FD.
-export type PageConfig = { page: string; permissions: Permissions; pageHash: string | null; proxy: string | null; bridges: Bridge[]; requestFd: number; replies: string | null };
+// What Apargon's menu shows: the approved pages, and whether it checks for updates.
+export type MenuState = { approved: string[]; automaticUpdates: boolean };
+// replies: a file, where the sandbox passes no more pipes; null when they come on REPLY_FD. bounds: where the user left the window, if anywhere.
+export type PageConfig = { page: string; permissions: Permissions; pageHash: string | null; proxy: string | null; bridges: Bridge[]; requestFd: number; replies: string | null; bounds: Rectangle | null; menu: MenuState };
 // A page's own tray items go above Apargon's Show and Quit; a click hands back the item's id.
 export type TrayItem = { label: string; id: string } | { separator: true };
 export type PageTray = { title: string | null; items: TrayItem[] };
@@ -15,33 +20,8 @@ export type SavedFile = { name: string; data: string };
 export type PickOptions = { folder: boolean; multiple: boolean; write: boolean };
 // Headers by lowercase name, repeats joined with a comma as a browser joins them; a body as base64.
 export type IncomingRequest = { server: string; id: string; method: string; url: string; headers: Record<string, string>; body: string };
-export type PageRequest =
-  | { open: string }
-  | { revoke: string[] }
-  | { showEgressLog: true }
-  | { automaticUpdates: boolean }
-  | { pageIcon: string }
-  | { notify: { id: string } & Notice }
-  | { tray: PageTray }
-  | { saveAll: { id: string; files: SavedFile[] } }
-  | { save: { id: string; file: string; data: string } }
-  | { pick: { id: string } & PickOptions }
-  // Without a value, a read; with null, a deletion.
-  | { secret: { id: string; name: string } }
-  | { secret: { id: string; name: string; value: string | null } }
-  | { listen: { id: string; server: string; port: number | null } }
-  | { respond: { id: string; status: number; headers: Record<string, string>; body: string } }
-  | { unlisten: string }
-  | { installSkill: true }
-  | { openLink: string }
-  | { openFile: string };
-// restart quits past the page's beforeunload: the page asked for it with a write pick, and the trampoline opens it again.
-// Requests with an id get one answer: what was saved or picked, a secret, a listener's address, or the notification button the user picked.
-export type PageReply = { show: true } | { quit: true } | { restart: true } | { refreshMenu: true } | { trayItem: string } | { request: IncomingRequest } | { answered: string; value: string[] | string | number | null } | { answered: string; error: string };
 // icon: the page's icon as base64 PNG, once it has one.
 export type Notice = { title: string; body: string; buttons: string[]; icon: string | null };
-// A request the trampoline answers later, by the id it is given.
-export type Ask = <T>(request: (id: string) => PageRequest) => Promise<T>;
 
 export const REQUEST_FD = 3;
 export const TRAMPOLINE_NETWORK_FD = 4;
@@ -49,8 +29,8 @@ export const REPLY_FD = 5;
 export const PAGE_CONFIG: PageConfig | null = process.env.APARGON ? JSON.parse(process.env.APARGON) : null;
 
 // The trampoline can die under the page: a crash, or a kill. Its proxy and dialogs go with it, so the page quits, as bwrap's --die-with-parent already makes it on Linux.
-export function tellTrampoline(request: PageRequest) {
-  const line = Buffer.from(JSON.stringify(request) + '\n');
+function sendToTrampoline(message: object) {
+  const line = Buffer.from(JSON.stringify(message) + '\n');
 
   try {
     for (let written = 0; written < line.length; ) {
@@ -65,10 +45,40 @@ export function tellTrampoline(request: PageRequest) {
   }
 }
 
+export const tellTrampoline: Tell<PageEvents> = (event, ...args) => sendToTrampoline({ event, args: args[0] });
+
+// Each call waits for the one answer with its id.
+const waiting = new Map<string, PromiseWithResolvers<unknown>>();
+
+export function callTrampoline<K extends keyof Calls>(call: K, ...args: Calls[K]['args'] extends undefined ? [] : [Calls[K]['args']]) {
+  const id = randomUUID();
+  const answer = Promise.withResolvers<unknown>();
+  waiting.set(id, answer);
+  sendToTrampoline({ call, id, args: args[0] });
+
+  return answer.promise as Promise<Calls[K]['result']>;
+}
+
 // The pipe ends with the trampoline; the file tells nothing, so there only the next request finds out.
-export function onTrampolineReply(handle: (reply: PageReply) => void) {
+export function onTrampolineEvent(events: EventHandlers<TrampolineEvents>) {
   const { replies } = PAGE_CONFIG!;
-  const read = (line: string) => handle(JSON.parse(line));
+
+  const read = (line: string) => {
+    const message: { event: keyof TrampolineEvents; args: unknown } | Answer = JSON.parse(line);
+
+    if ('event' in message) {
+      (events[message.event] as (args: unknown) => void)(message.args);
+    } else {
+      const { resolve, reject } = waiting.get(message.id)!;
+      waiting.delete(message.id);
+
+      if ('error' in message) {
+        reject(new Error(message.error));
+      } else {
+        resolve(message.value);
+      }
+    }
+  };
 
   if (replies) {
     // A last line without its newline is still being written: it is read next time.

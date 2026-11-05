@@ -24,8 +24,8 @@ Keys and logins are files like any other. A tag that names one, the popup names:
 - **Apargon checks reads, not the OS.** Chromium's own sandbox cannot run inside `sandbox-exec`, `bwrap` or MXC. The OS only enforces network and writes.
 - **Tags are read from the file on disk**, before the page runs. Only the part before the first `<script`, `<body` or `</head` counts. An unknown tag, a bad value or an invisible character refuses the page.
 - **An approval = a path + the exact popup lines.** A downloaded page is also tied to its content. If the content changes, Apargon asks again.
-- **No page can write Apargon's data** (`grants.json`, `links.json`, `seen.json`, `given.json`). The page's file API can't read it either.
-- **A pick is kept** in `given.json`, and granted as if a tag named it: the sandbox, the checks and the page's menu follow the same rule. The trampoline shows the dialog, which says what the page gets, and refuses a link, Apargon's data, and for write a hidden file, a page or a launch folder. A pick then passes every check a tag does, when picked and again each time the sandbox is built: no `"` in a written path, no line break or invisible character, on Linux not `/tmp` or `/var/tmp` itself, a folder that holds one, or anything in `/run`, and no write over a program the page runs. A pick that widens the sandbox restarts the page. Taking back the approval forgets the picks.
+- **No page can write Apargon's data** (`pages-saved/`, one file per page: its approval, links, picks, window and content hash). The page's file API can't read it either.
+- **A pick is kept** in the page's file in `pages-saved/`, and granted as if a tag named it: the sandbox, the checks and the page's menu follow the same rule. The trampoline shows the dialog, which says what the page gets, and refuses a link, Apargon's data, and for write a hidden file, a page or a launch folder. A pick then passes every check a tag does, when picked and again each time the sandbox is built: no `"` in a written path, no line break or invisible character, on Linux not `/tmp` or `/var/tmp` itself, a folder that holds one, or anything in `/run`, and no write over a program the page runs. A pick that widens the sandbox restarts the page. Taking back the approval forgets the picks.
 - **Secrets** (`papp.getSecret`, `papp.setSecret`, `papp.deleteSecret`) live in `apargon-secrets` beside Apargon's data, one file per page, each value sealed with the OS's store for this user (`safeStorage`). Every sandbox hides the folder, so no page's process, `papp-system` included, reads another page's secrets or its own file. The trampoline answers only the page that asked, by the pipe it asked on. Taking back the approval deletes them.
 - **The sandbox gets no terminal.** Its output reaches the terminal as plain text. On macOS, Seatbelt also denies `/dev/tty`, so a page can't type commands into the shell that started Apargon.
 - **The window shows only the page.** No navigation. No frame of another file.
@@ -62,6 +62,7 @@ Keys and logins are files like any other. A tag that names one, the popup names:
 - Offline check: connecting to `127.0.0.1:9` and to `192.0.2.1:9`, an address no network routes, must both fail with `EACCES`. MXC refuses every address that way at once. A sandbox that only blocks loopback, or no sandbox, answers differently for the second.
 - Writes: limited by path, as on Linux. A named file can be changed in place or deleted, not renamed. A write folder in or around Apargon's data is refused, and a folder that holds the secrets.
 - As on Linux, a page that runs programs, or has `papp-system`, may not write a folder that holds the page.
+- A page, or a program it runs, in a folder that holds Apargon's data, like your home folder, is refused: the sandbox would see the secrets and the other pages' replies.
 - The secrets folder is on the denied list. Untested: the folder is outside every granted one, so it is unreadable either way.
 - The trampoline answers a page through a file, as MXC passes no more pipes. A reply can hold a secret, so each page's file is in a folder of its own beside Apargon's data, which only that page's sandbox may read. Untested on Windows.
 - `localhost` ports: through the proxy. Chromium is told not to bypass it for loopback. A program that ignores `http_proxy` is refused by MXC.
@@ -70,7 +71,7 @@ Keys and logins are files like any other. A tag that names one, the popup names:
 
 ### Every OS
 
-- The OS lets a page write only to: its `papp-write` paths, the temp folder, `/dev`, and its own Electron data.
+- The OS lets a page write only to: its `papp-write` paths, the temp folder, its own Electron data, and on macOS `/dev/null` and the like, plus serial ports with `papp-use serial`.
 - Keys and logins: `SECRETS` in `src/permissions/paths.ts`, plus each OS's list, is a popup list only. A tag that names a path in one (`~/.ssh/config`) is yellow and says what it holds. `*` and `**` never match a hidden name, so `~/**` does not reach them; `~/` as a folder does, on the OSes that grant folders whole.
 - A `papp-read` or `papp-write` path that is a link is refused: the sandbox would grant what it leads to, which the page could change between opens.
 - A folder in a tag ends in `/`, anything else is a file. Apargon refuses a tag that does not match the disk.
@@ -82,6 +83,7 @@ Keys and logins are files like any other. A tag that names one, the popup names:
 - It answers 403 to any undeclared `host:port`.
 - It refuses local addresses: loopback, `0/8`, `10/8`, `172.16/12`, `192.168/16`, `100.64/10`, `169.254/16`, `fc00::/7`, `fe80::/10`, `64:ff9b::/96`, and this machine's own addresses.
 - A local IPv4 address works only if declared in numbers, with its port.
+- `papp-net` and `papp-open` take a host only if the browser's URL parser reads it back unchanged, a wildcard as one of the hosts it covers. So `0x7f.1`, `127.1` and `*.0.1` are refused: the popup would show a name where the browser reads an address. A name under `localhost` must be `localhost` itself: browsers send them all to this computer.
 - It logs to `egress.log`. If the log fails to write, it stops taking connections.
 - A declared `localhost` port: the page reaches it directly on macOS and Linux, through the proxy on Windows. Its programs go through the proxy on every OS, so those connections are logged. Each needs a number: `localhost:*` would reach other pages' proxies.
 
@@ -114,7 +116,7 @@ Keys and logins are files like any other. A tag that names one, the popup names:
 - `papp.saveAll` writes only new files, into the folder the user picks.
 - `papp.save` can replace a file. The OS asks first, but the page suggests the name and folder, so the user only has to press Save and Replace.
 - On Windows, `papp.save` follows a link at the chosen name. Windows has no flag that refuses one.
-- Hidden folders and `~/Library` or `AppData` are refused: files saved there can run on their own. macOS cloud drives in `~/Library` (iCloud Drive, `~/Library/CloudStorage`) are allowed: files there only sync.
+- Apargon's data, its secrets and replies folders, and its install folder are refused. So are hidden folders and `~/Library` or `AppData`: files saved there can run on their own. macOS cloud drives in `~/Library` (iCloud Drive, `~/Library/CloudStorage`) are allowed: files there only sync.
 - On macOS and Windows, saved files get the download mark, so the OS warns before one runs. Linux has no such mark, nor does a drive that cannot hold one, like a USB stick on Windows: the file is saved without it.
 - A program could swap the picked folder for a link between check and write.
 
@@ -142,7 +144,7 @@ Keys and logins are files like any other. A tag that names one, the popup names:
 - A program the page ships (`./bin/tool`) is refused if a `papp-write` tag covers it, by its real path. The page's own folder is read-only otherwise, so the program is what the page came with.
 - They can read every file but keys and logins. Windows: the granted folders, each program's own folder, and what every sandbox may read, like `C:\Windows` and Program Files.
 - They take any arguments, like `git -c core.sshCommand=…`.
-- They can change every page's storage in `pages/`.
+- They can read every page's storage in `pages/`. They change only their own page's. They can also read Apargon's other files, like the approvals and where each page's window was, which name the pages you opened.
 - Windows: stopping a program (`kill`, a timeout, a reload) stops only that program. Programs it started keep running in the sandbox until they end. If they share its output, `papp.run` waits for them.
 - macOS: programs can't open terminal devices (`/dev/ttys…`). Tools that need a pseudo-terminal likely fail. Untested.
 - macOS: they can probably use the camera, microphone or screen once Apargon has that access. Untested.
@@ -160,6 +162,7 @@ Keys and logins are files like any other. A tag that names one, the popup names:
 - The proxy tells "local" by address range. A VPN with public addresses counts as the internet.
 - For https and `papp.connect`, the proxy sees only `host:port`. Domain fronting works, and a connection can carry any protocol.
 - Deleting `egress.log` while it runs loses later entries silently.
+- A page with `papp-net` runs with Chromium's web security off, so it reads its declared hosts' answers without CORS. A frame from a declared host still cannot reach the page or `papp` (tested 2026-11-05 on macOS).
 - Ways out for a program, or a page that exploits Chromium:
   - macOS: messages to system services (the GUI needs them).
   - Linux: a socket file elsewhere (`tmux -S ~/sock`), `vsock` in a VM, the X11 display to type into other windows.
@@ -175,7 +178,9 @@ Keys and logins are files like any other. A tag that names one, the popup names:
 
 - The link dialog is the only check. "Always" remembers the host for that page.
 - Only the first address is checked. After that, the site can go anywhere.
+- A `papp-open` host is checked as text. Its DNS can point it at this computer or your network, and the browser, not Apargon, looks it up. `papp-net` does not have this gap: the proxy checks the address it looks up.
 - `papp.open` opens only viewable types, like images, PDF and text. The viewer decides what the file does: Acrobat runs PDF scripts.
+- The trampoline checks the file, then opens it by name. A program the page runs could swap it for a link to an app between the two. Untested whether macOS then launches the app.
 - A page can open the dialog as often as it likes.
 
 ### Devices and the desktop
@@ -217,11 +222,11 @@ The sandbox still blocks their network and writes to Apargon's data. Nothing els
 
 - launch an app that has network (`open`, `osascript`);
 - write startup files;
-- read and change other pages' storage;
+- read other pages' storage;
 - ask the trampoline to revoke its own approval, or turn update checks back on, with no prompt; revoking another page, or turning update checks off, needs the user to confirm a prompt first;
 - remove its badge.
 
-Untested: whether it can rename a folder above Apargon's data and plant a `grants.json`.
+Untested: whether it can rename a folder above Apargon's data and plant a page's file in `pages-saved/`.
 
 ### The update check
 
@@ -242,12 +247,12 @@ Apargon is not a VM. For a hard "nothing leaves" guarantee, use a VM with no net
 
 `pnpm test` runs every check in the real app. `test/selftest/check.ts` lists them. [AGENTS.md](AGENTS.md#tests) has the Linux `.deb` run.
 
-| Platform      | Last verified                                                                                                                                                                                                                                    |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| macOS         | 2026-11-05, `pnpm test` on `aea2a9e` with the staged proxy-loopback and program-fd fixes: 289 checks                                                                                                                                             |
-| Linux         | 2026-11-05, locally built `.deb` (`aea2a9e` plus the staged fixes) on the Ubuntu 24.04 VPS: 116 checks, the refusal test and its control, and the Node tests. A program was confirmed to reach the trampoline's fds before the fix and not after |
-| Linux desktop | not yet                                                                                                                                                                                                                                          |
-| Windows       | 2026-11-01, Windows 11 on arm64 (GitHub `windows-11-arm`, run 41315097711 of the spike repo, this tree on `3b3d16e`): 77 checks from source with no leak in the packet capture, and 77 in the installed arm64 app. x64 not tested                |
+| Platform      | Last verified                                                                                                                                                                                                                                |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS         | 2026-11-05, `pnpm test` on `6de5170` with the staged per-page storage and audit fixes: 293 checks                                                                                                                                            |
+| Linux         | 2026-11-05, locally built `.deb` (`6de5170` plus the staged fixes) on the Ubuntu 24.04 VPS: 119 checks, the refusal test and its control, and the Node tests. A page's storage from the previous build was still there after the upgrade     |
+| Linux desktop | not yet                                                                                                                                                                                                                                      |
+| Windows       | 2026-11-05, Windows 11 on arm64 (GitHub `windows-11-arm`, run 42057647732 of the spike repo, `6de5170` plus the staged fixes): 103 checks from source with no leak in the packet capture, and 103 in the installed arm64 app. x64 not tested |
 
 Not tested: the NAT64 refusal, the proxy refusing this Mac's own LAN address, and two pages reaching each other's `localhost` ports.
 

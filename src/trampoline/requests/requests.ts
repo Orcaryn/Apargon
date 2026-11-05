@@ -1,11 +1,14 @@
 import { app, dialog, shell } from 'electron';
+import fs from 'fs';
 import type { Permissions } from '../../permissions/tags.ts';
-import type { PageReply, PageRequest, PageTray } from '../../shared/channel.ts';
-import { EGRESS_LOG, GRANTS_FILE, LINKS_FILE, readJson, UPDATE_FILE, writeJson, type Grants, type Links, type UpdateState } from '../../shared/data.ts';
+import type { PageTray } from '../../shared/channel.ts';
+import { EGRESS_LOG } from '../../shared/data.ts';
 import { showNotice } from '../../shared/notice.ts';
+import type { CallHandlers, EventHandlers, PageEvents, Tell, TrampolineEvents } from '../../shared/protocol.ts';
 import { revoke } from '../dialogs/approve.ts';
 import { offerSkill } from '../dialogs/skill.ts';
 import { TRAMPOLINE_PLATFORM } from '../platform.ts';
+import { menuState, records, updates } from '../store.ts';
 import type { pageListeners } from './listen.ts';
 import { openFile, openLink } from './open.ts';
 import { pickFiles } from './pick.ts';
@@ -16,108 +19,98 @@ type Page = {
   page: string;
   permissions: Permissions;
   listeners: ReturnType<typeof pageListeners>;
-  reply(reply: PageReply): void;
+  tell: Tell<TrampolineEvents>;
   setTray(tray: PageTray): void;
   openPage(file: string): void;
   // Quits the page and opens it again, with its sandbox built anew.
   restart(): void;
+  // Sends every running page's menu what is on disk now.
+  refreshMenus(): void;
 };
 
-export function handleRequest(request: PageRequest, { page, permissions, listeners, reply, setTray, openPage, restart }: Page) {
-  if ('open' in request) {
-    openPage(request.open);
-  } else if ('revoke' in request) {
-    // Only approved pages, as the menu lists them: a papp-system page writes this line itself. Forgetting another page takes its picks and secrets too, so the user confirms. Either way the page builds its menu again from disk.
-    const approved = Object.keys({ ...readJson<Links>(LINKS_FILE), ...readJson<Grants>(GRANTS_FILE) });
-    const pages = request.revoke.filter(other => approved.includes(other));
+// What a page may send, by name. A papp-system page writes the line itself, so each handler takes the fields it uses, one by one, and checks a tag the page process already checked.
+export function pageHandlers({ page, permissions, listeners, tell, setTray, openPage, restart, refreshMenus }: Page) {
+  const events: EventHandlers<PageEvents> = {
+    open: openPage,
+    // Only approved pages, as the menu lists them. Forgetting another page takes its picks and secrets too, so the user confirms. Either way every page's menu is sent again.
+    revoke: pages => {
+      const { approved } = menuState();
+      const revoked = pages.filter(other => approved.includes(other));
 
-    if (pages.every(other => other === page)) {
-      revoke(pages);
-      reply({ refreshMenu: true });
-    } else {
-      app.focus({ steal: true });
-      dialog.showMessageBox({ type: 'warning', message: 'Forget these pages?', detail: pages.join('\n'), buttons: ['Forget', 'Cancel'], defaultId: 1, cancelId: 1 }).then(({ response }) => {
-        if (response === 0) {
-          revoke(pages);
-        }
+      if (revoked.every(other => other === page)) {
+        revoke(revoked);
+        refreshMenus();
+      } else {
+        app.focus({ steal: true });
+        dialog.showMessageBox({ type: 'warning', message: 'Forget these pages?', detail: revoked.join('\n'), buttons: ['Forget', 'Cancel'], defaultId: 1, cancelId: 1 }).then(({ response }) => {
+          if (response === 0) {
+            revoke(revoked);
+          }
 
-        reply({ refreshMenu: true });
-      });
-    }
-  } else if ('automaticUpdates' in request) {
-    // Off stops the check for security fixes, so the user confirms. The menu's checkbox ticked itself before asking: the page builds it again from disk.
-    if (request.automaticUpdates) {
-      writeJson(UPDATE_FILE, { ...readJson<UpdateState>(UPDATE_FILE), automatic: true });
-    } else {
-      app.focus({ steal: true });
-      dialog.showMessageBox({ type: 'warning', message: 'Turn off the update check?', detail: 'Apargon will no longer look for security fixes.', buttons: ['Turn Off', 'Cancel'], defaultId: 1, cancelId: 1 }).then(({ response }) => {
-        if (response === 0) {
-          writeJson(UPDATE_FILE, { ...readJson<UpdateState>(UPDATE_FILE), automatic: false });
-        }
+          refreshMenus();
+        });
+      }
+    },
+    // Off stops the check for security fixes, so the user confirms. The menu's checkbox ticked itself before asking: every page's menu is sent again.
+    automaticUpdates: automatic => {
+      if (automatic) {
+        updates.set({ automatic: true });
+        refreshMenus();
+      } else {
+        app.focus({ steal: true });
+        dialog.showMessageBox({ type: 'warning', message: 'Turn off the update check?', detail: 'Apargon will no longer look for security fixes.', buttons: ['Turn Off', 'Cancel'], defaultId: 1, cancelId: 1 }).then(({ response }) => {
+          if (response === 0) {
+            updates.set({ automatic: false });
+          }
 
-        reply({ refreshMenu: true });
-      });
-    }
-  } else if ('pageIcon' in request) {
-    TRAMPOLINE_PLATFORM.pageIcon?.(page, request.pageIcon);
-  } else if ('showEgressLog' in request) {
-    shell.openPath(EGRESS_LOG);
-  } else if ('notify' in request && !permissions.use.includes('notifications')) {
-    // A papp-system page writes the line itself, so the tag is checked here too.
-    reply({ answered: request.notify.id, error: 'Apargon: this page may not show notifications. Ask for it with <meta name="papp-use" content="notifications">.' });
-  } else if ('notify' in request) {
-    // Field by field: a papp-system page writes the line itself, and could add Electron's other options.
-    const { id, title, body, buttons, icon } = request.notify;
-    showNotice({ title, body, buttons, icon }, () => reply({ show: true })).then(button => reply({ answered: id, value: button }));
-  } else if ('tray' in request) {
-    setTray(request.tray);
-  } else if ('openLink' in request) {
-    openLink(page, permissions, request.openLink);
-  } else if ('openFile' in request) {
-    openFile(request.openFile);
-  } else if ('installSkill' in request) {
-    offerSkill('The papp skill for coding agents', null);
-  } else if ('saveAll' in request) {
-    const { id, files } = request.saveAll;
-    saveFiles(files).then(
-      paths => reply({ answered: id, value: paths }),
-      (err: Error) => reply({ answered: id, error: err.message })
-    );
-  } else if ('save' in request) {
-    const { id, file, data } = request.save;
-    saveFile(file, data).then(
-      saved => reply({ answered: id, value: saved }),
-      (err: Error) => reply({ answered: id, error: err.message })
-    );
-  } else if ('pick' in request) {
-    const { id, ...options } = request.pick;
-    pickFiles(page, permissions, options).then(
-      ({ paths, rebuild }) => {
-        reply({ answered: id, value: paths });
+          refreshMenus();
+        });
+      }
+    },
+    // Field by field: the next start hands the window to Electron, which takes other options too.
+    bounds: ({ x, y, width, height }) => records.change(page, { window: { x, y, width, height } }),
+    pageIcon: icon => TRAMPOLINE_PLATFORM.pageIcon?.(page, icon),
+    showEgressLog: () => {
+      if (fs.existsSync(EGRESS_LOG)) {
+        shell.openPath(EGRESS_LOG);
+      } else {
+        app.focus({ steal: true });
+        dialog.showMessageBox({ type: 'info', message: 'No egress recorded yet.', detail: EGRESS_LOG });
+      }
+    },
+    tray: setTray,
+    openLink: url => openLink(page, permissions, url),
+    openFile,
+    installSkill: () => offerSkill('The papp skill for coding agents', null),
+    respond: ({ id, status, headers, body }) => listeners.respond(id, status, headers, body),
+    unlisten: listeners.unlisten,
+  };
+  const calls: CallHandlers = {
+    saveAll: ({ files }) => saveFiles(files),
+    save: ({ file, data }) => saveFile(file, data),
+    pick: async ({ folder, multiple, write }) => {
+      const { paths, rebuild } = await pickFiles(page, permissions, { folder, multiple, write });
 
-        if (rebuild) {
-          restart();
-        }
-      },
-      (err: Error) => reply({ answered: id, error: err.message })
-    );
-  } else if ('secret' in request) {
-    const { id, name } = request.secret;
-    const done = 'value' in request.secret ? writeSecret(page, name, request.secret.value).then(() => null) : readSecret(page, name);
-    done.then(
-      answer => reply({ answered: id, value: answer }),
-      (err: Error) => reply({ answered: id, error: err.message })
-    );
-  } else if ('listen' in request) {
-    const { id, server, port } = request.listen;
-    listeners.listen(server, port).then(
-      url => reply({ answered: id, value: url }),
-      (err: Error) => reply({ answered: id, error: err.message })
-    );
-  } else if ('respond' in request) {
-    const { id, status, headers, body } = request.respond;
-    listeners.respond(id, status, headers, body);
-  } else if ('unlisten' in request) {
-    listeners.unlisten(request.unlisten);
-  }
+      // After the answer, which goes out once this returns: the page takes the paths, then quits.
+      if (rebuild) {
+        setImmediate(restart);
+      }
+
+      return paths;
+    },
+    given: () => records.get(page).given ?? [],
+    getSecret: ({ name }) => readSecret(page, name),
+    setSecret: ({ name, value }) => writeSecret(page, name, value).then(() => null),
+    listen: ({ server, port }) => listeners.listen(server, port),
+    notify: ({ title, body, buttons, icon }) => {
+      if (!permissions.use.includes('notifications')) {
+        throw new Error('Apargon: this page may not show notifications. Ask for it with <meta name="papp-use" content="notifications">.');
+      }
+
+      // Field by field: Electron takes other options too.
+      return showNotice({ title, body, buttons, icon }, () => tell('show'));
+    },
+  };
+
+  return { events, calls };
 }

@@ -15,12 +15,13 @@
   const here = path.dirname(decodeURIComponent(location.pathname));
   const result = {};
 
-  // The sandbox's refusal, not the folder's owner: Seatbelt answers EPERM, a read-only mount EROFS.
+  // The sandbox's refusal, not the folder's owner, a missing folder or a file already there: Seatbelt answers EPERM, a read-only mount EROFS. Any other code fails, named.
+  const refusal = process.platform === 'darwin' ? 'EPERM' : 'EROFS';
   try {
     fs.writeFileSync(path.join(here, '..', 'node-outside.tmp'), 'hi');
     result.ungranted_write_refused = false;
   } catch (err) {
-    result.ungranted_write_refused = err.code === (process.platform === 'darwin' ? 'EPERM' : 'EROFS');
+    result.ungranted_write_refused = err.code === refusal || err.code;
   }
 
   // Seatbelt denies the folder; on Linux an empty one covers it. selftest.papp left a secret there.
@@ -39,12 +40,20 @@
   result.electron_window = win.isAlwaysOnTop();
   win.setAlwaysOnTop(false);
 
+  const data = path.join(os.homedir(), process.platform === 'darwin' ? 'Library/Application Support/apargon' : '.config/apargon');
   try {
-    const data = process.platform === 'darwin' ? 'Library/Application Support/apargon' : '.config/apargon';
-    fs.appendFileSync(path.join(os.homedir(), data, 'grants.json'), '');
+    fs.appendFileSync(path.join(data, 'grants.json'), '');
     result.grants_protected = false;
-  } catch {
-    result.grants_protected = true;
+  } catch (err) {
+    result.grants_protected = err.code === refusal || err.code;
+  }
+
+  // Only its own storage: another page's holds settings that page trusts, like its window. Partitions holds this page's own, so it exists.
+  try {
+    fs.mkdirSync(path.join(data, 'pages', 'Partitions', 'f'.repeat(64)));
+    result.other_storage_write_blocked = false;
+  } catch (err) {
+    result.other_storage_write_blocked = err.code === refusal || err.code;
   }
 
   try {

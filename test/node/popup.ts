@@ -207,6 +207,17 @@ const refusals = [
   { tag: '<meta name="papp-open" content="https://x.com">', reason: 'Bad papp-open value' },
   { tag: '<meta name="papp-open" content="x.com:443">', reason: 'Bad papp-open value' },
   { tag: '<meta name="papp-open" content="*.com:443">', reason: 'Bad papp-open value' },
+  // A last label of numbers makes a host an address, as a browser reads a link: *.0.1 would be 127.0.0.1 and 10.0.0.1.
+  ...['*.0.1', '*.0.0.1', '*.168.1.1', '*.1', '*.1.1.1.1', '0x7f.1', '16843009', '127.1', '1.1'].flatMap(host => [
+    { tag: `<meta name="papp-open" content="${host}">`, reason: 'full address' },
+    { tag: `<meta name="papp-net" content="${host}:80">`, reason: 'full address' },
+  ]),
+  // Browsers send every name under localhost to this computer.
+  ...['app.localhost', '*.localhost'].flatMap(host => [
+    { tag: `<meta name="papp-open" content="${host}">`, reason: 'write localhost' },
+    { tag: `<meta name="papp-net" content="${host}:80">`, reason: 'write localhost' },
+  ]),
+  { tag: '<meta name="papp-open" content="a..com">', reason: 'Bad papp-open value' },
   { tag: '<meta name="papp-read" content="./data/**/x/**/*.md">', reason: 'one ** per path' },
   { tag: '<meta name="papp-read" content="./data/a*b*.md">', reason: 'one * per name' },
   { tag: '<meta name="papp-write" content="./data/a**b">', reason: 'one * per name' },
@@ -225,12 +236,13 @@ const refusals = [
 fs.mkdirSync(path.join(dir, 'x"))(allow lsopen)(regex #"'));
 fs.mkdirSync(path.join(dir, 'line\nbreak'));
 fs.writeFileSync(page, '<meta name="papp-run" content="./data/tool">');
+// As the dialog gives them: real paths. The temporary folder is a link on macOS, and a kept pick through a link is dropped.
+const realDir = fs.realpathSync(dir);
 const pickRefusals = [
-  { pick: { path: path.join(dir, 'x"))(allow lsopen)(regex #"'), write: true }, reason: 'has a "' },
-  // As the dialog gives it: checkPick refuses a path through a link, and the temporary folder is one on macOS.
-  { pick: { path: path.join(fs.realpathSync(dir), 'data'), write: true }, reason: 'could change' },
-  { pick: { path: fs.realpathSync(dir), write: true }, reason: 'could change' },
-  { pick: { path: path.join(dir, 'line\nbreak'), write: false }, reason: 'invisible character' },
+  { pick: { path: path.join(realDir, 'x"))(allow lsopen)(regex #"'), write: true }, reason: 'has a "' },
+  { pick: { path: path.join(realDir, 'data'), write: true }, reason: 'could change' },
+  { pick: { path: realDir, write: true }, reason: 'could change' },
+  { pick: { path: path.join(realDir, 'line\nbreak'), write: false }, reason: 'invisible character' },
 ].map(({ pick, reason }) => {
   try {
     withGiven(declaredPermissions(page), [pick], page);
@@ -240,16 +252,21 @@ const pickRefusals = [
     return { pick, refused: (err as Error).message.includes(reason) };
   }
 });
-// The control: a plain pick passes, and is granted.
+// The control: a plain pick passes, and is granted. A folder too, kept with its separator.
+fs.mkdirSync(path.join(dir, 'picked'));
 const plainPick =
   withGiven(
     declaredPermissions(page),
     [
-      { path: path.join(dir, '.tool'), write: false },
-      { path: path.join(dir, 'x"))(allow lsopen)(regex #"'), write: false },
+      { path: path.join(realDir, '.tool'), write: false },
+      { path: path.join(realDir, 'x"))(allow lsopen)(regex #"'), write: false },
+      { path: path.join(realDir, 'picked') + path.sep, write: false },
     ],
     page
-  ).read.length === 2;
+  ).read.length === 3;
+// A kept pick that became a link since is not granted: the sandbox would grant what it leads to.
+fs.symlinkSync(os.homedir(), path.join(realDir, 'swapped'));
+const linkedPickDropped = withGiven(declaredPermissions(page), [{ path: path.join(realDir, 'swapped'), write: true }], page).write.length === 0;
 const trust = [
   { tags: '', expected: false },
   { tags: '<meta name="papp-read" content="./data/">', expected: false },
@@ -300,6 +317,12 @@ const colours = [
   { tags: '<meta name="papp-open" content="localhost">', kind: 'open:', level: 'red', says: 'browser' },
   { tags: '<meta name="papp-open" content="192.168.1.1">', kind: 'open:', level: 'red', says: 'browser' },
   { tags: '<meta name="papp-open" content="1.1.1.1">', kind: 'open:', level: 'red', says: 'browser' },
+  { tags: '<meta name="papp-open" content="localhost.">', kind: 'open:localhost', level: 'red', says: 'browser' },
+  { tags: '<meta name="papp-open" content="x.com.">', kind: 'open:x.com', level: 'plain', says: 'browser' },
+  { tags: '<meta name="papp-open" content="*.co.uk">', kind: 'open:', level: 'yellow', says: 'browser' },
+  { tags: '<meta name="papp-open" content="*.x1.com">', kind: 'open:', level: 'yellow', says: 'browser' },
+  { tags: '<meta name="papp-net" content="*.com">', kind: 'net:', level: 'red', says: 'data' },
+  { tags: '<meta name="papp-net" content="1password.com">', kind: 'net:', level: 'plain', says: 'data' },
   { tags: '<meta name="papp-use" content="clipboard">', kind: 'use:', level: 'yellow', says: 'copy' },
   { tags: '<meta name="papp-use" content="notifications">', kind: 'use:', level: 'plain', says: 'notifications' },
   { tags: '<meta name="papp-use" content="camera">', kind: 'use:', level: 'yellow', says: 'camera' },
@@ -340,7 +363,7 @@ const seen = [
   const said = seenFiles(declaredPermissions(fs.realpathSync(page)));
   // A folder's id ends in a separator; the expected paths do not.
   const files = said.lines.map(line => path.resolve(line.id.slice('read:'.length)));
-  const expected = shows.map(file => path.resolve(fs.realpathSync(dir), file));
+  const expected = shows.map(file => path.resolve(realDir, file));
 
   return { tags, ok: said.all === all && files.join('\n') === expected.join('\n'), said: `${said.all ? 'all, ' : ''}${files.join(', ')}` };
 });
@@ -420,6 +443,7 @@ for (const { pick, refused } of pickRefusals) {
 }
 
 console.log(`${plainPick ? 'ok  ' : 'FAIL'} popup grants a plain pick`);
+console.log(`${linkedPickDropped ? 'ok  ' : 'FAIL'} popup drops a kept pick that became a link`);
 
 for (const { tags, expected, said } of trust) {
   console.log(`${said === expected ? 'ok  ' : 'FAIL'} popup asks for trust with ${JSON.stringify(tags)}: ${said}`);
@@ -456,6 +480,7 @@ process.exit(
       refusals.every(({ refused }) => refused) &&
       pickRefusals.every(({ refused }) => refused) &&
       plainPick &&
+      linkedPickDropped &&
       trust.every(({ expected, said }) => said === expected) &&
       colours.every(({ ok }) => ok) &&
       seen.every(({ ok }) => ok) &&

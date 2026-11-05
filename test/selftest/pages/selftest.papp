@@ -13,8 +13,14 @@
   }
 
   const result = {};
-  const refused = async (call) => {
-    try { await call(); return false; } catch { return true; }
+  // Refused by Apargon itself, not failed some other way: a renamed call or a crash is not a refusal. What else happened goes to check.ts, as refused_wrongly.
+  const wrong = [];
+  const refused = async (call, expected = /^Error: Apargon: (?!no such call)/) => {
+    const said = await call().then(() => 'not refused', (err) => `${err.name}: ${err.message}`);
+    if (!expected.test(said)) {
+      wrong.push(`${call}: ${said}`);
+    }
+    return expected.test(said);
   };
   const changeSeen = async (watching, change, options) => {
     let seen = null;
@@ -80,7 +86,8 @@
     await new Promise((done) => setTimeout(done, 1000));
     await deepWatcher.close();
     result.watch_recursive = deep.includes('scratch-dir/deep.txt changed') && await deepWatcher.closed === null;
-    result.rm_folder_needs_recursive = await refused(() => papp.rm('scratch-dir')) && (await papp.readdir('scratch-dir')).includes('deep.txt');
+    // As Node's rm: the folder's own error, not Apargon's.
+    result.rm_folder_needs_recursive = await refused(() => papp.rm('scratch-dir'), /^Error: Path is a directory: .*EISDIR/) && (await papp.readdir('scratch-dir')).includes('deep.txt');
     await papp.rm('scratch-dir', { recursive: true });
     await papp.writeFile('scratch.txt', 'again');
     result.watch_outside_refused = await refused(() => papp.watch('..', () => {}));
@@ -123,6 +130,8 @@
     result.power_read = typeof power.idleSeconds === 'number' && typeof power.onBattery === 'boolean';
     result.save_names_refused = (await Promise.all([{}, { '../out.txt': 'x' }, { 'sub/out.txt': 'x' }, { '.zshrc': 'x' }, { 'ok.txt': 'x', 'page.papp': 'x' }, { 'ok.txt': 'x', '': 'x' }].map((files) => refused(() => papp.saveAll(files))))).every(Boolean);
     result.given_empty = (await papp.given()).length === 0;
+    // Each page's secrets are its own: selftest-net keeps a 'token' too, which this page must never see.
+    result.secrets_per_page = await papp.getSecret('token') !== 'kept by selftest-net.papp';
     // 'token' stays: selftest-system then finds the secrets folder hidden with a file in it.
     await papp.setSecret('token', 'kept by selftest.papp');
     await papp.setSecret('gone', 'x');
@@ -141,7 +150,7 @@
     result.open_type_refused = await refused(() => papp.open('selftest.papp')) && await refused(() => papp.open('subfolder/frame.html')) && await refused(() => papp.open('subfolder/bundle.app'));
     result.open_outside_refused = await refused(() => papp.open('../../../package.json'));
     result.open_scheme_refused = (await Promise.all(['vscode://file/etc/passwd', 'file:///etc/passwd', 'javascript:1'].map((href) => refused(() => papp.open(href))))).every(Boolean);
-    result.screen_capture_refused = await refused(() => navigator.mediaDevices.getDisplayMedia({ video: true }));
+    result.screen_capture_refused = await refused(() => navigator.mediaDevices.getDisplayMedia({ video: true }), /^NotAllowedError: /);
     result.other_file_window_refused = window.open('subfolder/frame.html') === null;
 
     result.fetch_blocked = await fetched;
@@ -153,8 +162,16 @@
       setTimeout(() => done(!window.framed), 1000);
     });
     result.permissions_denied = (await permissions).every((answer) => answer === 'denied');
+    // The window shows only the page: a page that could leave it would run another file with this page's access. Navigated, this script is gone and the result written first stays.
+    await papp.writeFile('results/result.json', JSON.stringify({ ...result, navigation_refused: 'the window left the page' }, null, 2) + '\n');
+    location.href = 'subfolder/frame.html';
+    await new Promise((done) => setTimeout(done, 1000));
+    result.navigation_refused = true;
   } catch (err) {
     result.error = err.message;
+  }
+  if (wrong.length) {
+    result.refused_wrongly = wrong;
   }
 
   document.body.textContent = JSON.stringify(result);

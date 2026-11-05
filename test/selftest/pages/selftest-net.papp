@@ -26,8 +26,14 @@
 
 <script type="module">
   const result = {};
-  const refused = async (call) => {
-    try { await call(); return false; } catch { return true; }
+  // Refused by Apargon itself, not failed some other way: a renamed call or a crash is not a refusal. What else happened goes to check.ts, as refused_wrongly.
+  const wrong = [];
+  const refused = async (call, expected = /^Error: Apargon: (?!no such call)/) => {
+    const said = await call().then(() => 'not refused', (err) => `${err.name}: ${err.message}`);
+    if (!expected.test(said)) {
+      wrong.push(`${call}: ${said}`);
+    }
+    return expected.test(said);
   };
   const curl = async (...args) => (await papp.run('curl', ['-s', '-o', '/dev/null', '-m', '5', '-w', '%{http_code}', ...args])).stdout;
   const mac = navigator.userAgent.includes('Macintosh');
@@ -113,6 +119,9 @@
     const answered = answer instanceof Response ? { url: server.url, status: answer.status, header: answer.headers.get('x-answer'), text: await answer.text(), asked: asked.join() } : { url: server.url, error: String(answer), asked: asked.join() };
     const expected = { url: 'http://127.0.0.1:47183', status: 201, header: 'yes', text: 'answered', asked: 'POST /path?q=1 p hello' };
     result.listen_answers = JSON.stringify(answered) === JSON.stringify(expected) || answered;
+    // papp-listen localhost is this computer only: listen.ts, outside the sandbox, reaches it on loopback and not on its network address.
+    const reached = await (await fetch('http://127.0.0.1:47181/reach?port=47183')).json();
+    result.listen_localhost_only = (reached.loopback === 'connected' && reached.network === 'ECONNREFUSED') || reached;
     await server.close();
     result.listen_closed = await server.closed === null && !(await fetchOk('http://127.0.0.1:47183/'));
 
@@ -135,11 +144,17 @@
     result.connect_undeclared_refused = (await papp.connect('localhost', 47182).then(() => 'connected', (err) => err.message)).includes('may not connect');
     result.connect_local_network_refused = (await papp.connect('10.255.255.1', 9).then(() => 'connected', (err) => err.message)).includes('may not connect');
     result.connect_wildcard_refuses_this_computer = (await Promise.all(['localhost', '127.0.0.1'].map((host) => papp.connect(host, 9).then(() => 'connected', (err) => err.message)))).every((message) => message.includes('may not connect'));
+    // Not selftest.papp's 'token': each page has its own secrets. This one stays, for selftest.papp to not see on the next run.
+    result.secrets_per_page = await papp.getSecret('token') !== 'kept by selftest.papp';
+    await papp.setSecret('token', 'kept by selftest-net.papp');
     result.clipboard_read_granted = (await navigator.permissions.query({ name: 'clipboard-read' })).state === 'granted';
     result.microphone_permission_granted = (await navigator.permissions.query({ name: 'microphone' })).state === 'granted';
     result.camera_permission_denied_without_tag = (await navigator.permissions.query({ name: 'camera' })).state === 'denied';
   } catch (err) {
     result.error = err.message;
+  }
+  if (wrong.length) {
+    result.refused_wrongly = wrong;
   }
 
   document.body.textContent = JSON.stringify(result);

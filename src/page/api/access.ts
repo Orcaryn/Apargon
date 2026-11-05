@@ -1,7 +1,7 @@
 import path from 'path';
 import { changeableSources, isInside, PAGE_FILE, patternSource } from '../../permissions/patterns.ts';
 import type { Permissions } from '../../permissions/tags.ts';
-import { DATA, INSTALL_FOLDER, SECRETS_DATA } from '../../shared/data.ts';
+import { APARGON_FOLDERS } from '../../shared/data.ts';
 
 export function pageAccess(permissions: Permissions) {
   const { files, pages } = changeableSources(permissions);
@@ -15,9 +15,8 @@ export function pageAccess(permissions: Permissions) {
 
     return firstWild === -1 ? [] : names.slice(firstWild).map((_, i) => new RegExp(patternSource(path.join(root, ...names.slice(0, firstWild + i)), false)));
   });
-  // Apargon's data holds other pages' storage and the approvals: the page's process may read it, the page may not. The secrets, no process may.
-  const offLimits = [DATA, SECRETS_DATA, INSTALL_FOLDER ?? []].flat();
-  const isOffLimits = (file: string) => offLimits.some(folder => isInside(file, folder));
+  // Apargon's data holds other pages' storage and the approvals: the page's process may read it, the page may not. The secrets, no process may; the replies, only the page's own.
+  const isOffLimits = (file: string) => APARGON_FOLDERS.some(folder => isInside(file, folder));
   const canSee = (file: string) => visible.some(pattern => pattern.test(file)) && !isOffLimits(file);
 
   return {

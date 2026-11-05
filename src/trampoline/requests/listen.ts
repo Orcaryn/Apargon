@@ -4,13 +4,13 @@ import http from 'http';
 import type { AddressInfo } from 'net';
 import os from 'os';
 import type { Permissions } from '../../permissions/tags.ts';
-import type { PageReply } from '../../shared/channel.ts';
+import type { IncomingRequest } from '../../shared/channel.ts';
 
 // A request is a line to the page, and the page's answer a line back.
 const BODY_LIMIT = 16 * 1024 * 1024;
 
 // This process listens, as the page's may not: each request goes to the page as data, and its answer comes back the same way. Nothing in between reads either.
-export function pageListeners({ listen }: Permissions, reply: (reply: PageReply) => void) {
+export function pageListeners({ listen }: Permissions, toPage: (request: IncomingRequest) => void) {
   const servers = new Map<string, http.Server>();
   const pending = new Map<string, http.ServerResponse>();
 
@@ -39,7 +39,7 @@ export function pageListeners({ listen }: Permissions, reply: (reply: PageReply)
           const headers = Object.fromEntries(Object.entries(request.headers as Record<string, string | string[]>).map(([name, value]) => [name, Array.isArray(value) ? value.join(', ') : value]));
           pending.set(id, response);
           response.on('close', () => pending.delete(id));
-          reply({ request: { server, id, method: request.method!, url: `http://${request.headers.host ?? '127.0.0.1'}${request.url}`, headers, body: Buffer.concat(chunks).toString('base64') } });
+          toPage({ server, id, method: request.method!, url: `http://${request.headers.host ?? '127.0.0.1'}${request.url}`, headers, body: Buffer.concat(chunks).toString('base64') });
         });
       });
       listener.listen({ port: port ?? 0, host: listen === 'network' ? '0.0.0.0' : '127.0.0.1' });

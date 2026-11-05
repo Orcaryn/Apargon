@@ -3,7 +3,7 @@ import { hostMatches } from '../../permissions/network.ts';
 import { linkHost, viewable } from '../../permissions/open.ts';
 import { realPath } from '../../permissions/paths.ts';
 import type { Permissions } from '../../permissions/tags.ts';
-import { LINKS_FILE, readJson, writeJson, type Links } from '../../shared/data.ts';
+import { records } from '../store.ts';
 
 // The browser is outside the sandbox, logged in. A declared or remembered host opens at once; any other asks here, address shown, so the page cannot fake the question or the answer.
 export async function openLink(page: string, { open }: Permissions, url: string) {
@@ -11,7 +11,7 @@ export async function openLink(page: string, { open }: Permissions, url: string)
 
   if (!host) {
     return;
-  } else if (![...open, ...(readJson<Links>(LINKS_FILE)[page] ?? [])].some(pattern => hostMatches(pattern, host))) {
+  } else if (![...open, ...(records.get(page).links ?? [])].some(pattern => hostMatches(pattern, host))) {
     app.focus({ steal: true });
     const { response, checkboxChecked } = await dialog.showMessageBox({
       type: 'question',
@@ -27,8 +27,7 @@ export async function openLink(page: string, { open }: Permissions, url: string)
       return;
     } else if (checkboxChecked) {
       // Read again: another dialog may have saved a host while this one waited.
-      const links = readJson<Links>(LINKS_FILE);
-      writeJson(LINKS_FILE, { ...links, [page]: [...(links[page] ?? []), host] });
+      records.change(page, { links: [...(records.get(page).links ?? []), host] });
     }
   }
 

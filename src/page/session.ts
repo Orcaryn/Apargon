@@ -7,7 +7,7 @@ import { PAGE_FILE } from '../permissions/patterns.ts';
 import type { Permissions, Use } from '../permissions/tags.ts';
 
 export function createPageSession(page: string, { use }: Permissions, pageHash: string | null, canSee: (file: string) => boolean) {
-  const pageSession = session.fromPartition(`persist:${createHash('sha256').update(page).digest('hex')}`);
+  const pageSession = session.defaultSession;
 
   pageSession.protocol.handle('file', request => {
     const url = new URL(request.url);

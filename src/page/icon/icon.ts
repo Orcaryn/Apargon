@@ -1,4 +1,4 @@
-import { BrowserWindow, nativeImage, type NativeImage } from 'electron';
+import { BrowserWindow, nativeImage, session, type NativeImage } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -59,9 +59,26 @@ async function readFavicon(win: BrowserWindow, url: string, canSee: (file: strin
     // Through the page's session, so its proxy: only a host in papp-net answers. An image of a favicon's size, or nothing.
     const response = await win.webContents.session.fetch(url);
     const type = response.headers.get('content-type') ?? '';
-    const body = Buffer.from(await response.arrayBuffer());
 
-    return response.ok && type.startsWith('image/') && body.byteLength <= MAX_FAVICON_BYTES ? `data:${type};base64,${body.toString('base64')}` : undefined;
+    if (!response.ok || !type.startsWith('image/')) {
+      return undefined;
+    }
+
+    // Counted as it arrives: a server can send more than it says. Leaving the loop cancels the download.
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+
+    for await (const chunk of response.body ?? []) {
+      size += chunk.byteLength;
+
+      if (size > MAX_FAVICON_BYTES) {
+        return undefined;
+      }
+
+      chunks.push(chunk);
+    }
+
+    return `data:${type};base64,${Buffer.concat(chunks).toString('base64')}`;
   } else if (!url.startsWith('file:')) {
     return undefined;
   }
@@ -75,7 +92,8 @@ async function readFavicon(win: BrowserWindow, url: string, canSee: (file: strin
 async function drawIcon(favicons: string[]) {
   const html = fs.readFileSync(path.join(import.meta.dirname, 'html', 'icon.html')).toString('base64');
   const badge = fs.readFileSync(path.join(import.meta.dirname, 'images', 'badge.svg')).toString('base64');
-  const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true } });
+  // Not the page's session, so not one of its windows.
+  const win = new BrowserWindow({ show: false, webPreferences: { session: session.fromPartition('icon'), sandbox: true, contextIsolation: true } });
 
   try {
     await win.loadURL(`data:text/html;base64,${html}`);

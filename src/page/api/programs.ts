@@ -21,7 +21,7 @@ export function programApi(permissions: Permissions, { where, canList, need }: S
     }
 
     const folder = where(cwd);
-    need(canList(folder), folder, 'see');
+    need(canList(folder), 'see');
 
     const options = { cwd: folder, env, detached: PAGE_PLATFORM.processGroups, windowsHide: true };
 

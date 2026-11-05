@@ -15,7 +15,7 @@ app.on('open-file', (event, file) => {
   event.preventDefault();
 
   if (PAGE_CONFIG) {
-    tellTrampoline({ open: page });
+    tellTrampoline('open', page);
   } else if (app.isReady()) {
     openPage(page);
   } else {

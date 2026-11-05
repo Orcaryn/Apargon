@@ -1,10 +1,10 @@
 import type { BrowserWindow } from 'electron';
-import { tellTrampoline, type Ask, type IncomingRequest } from '../../shared/channel.ts';
+import { callTrampoline, tellTrampoline, type IncomingRequest } from '../../shared/channel.ts';
+import type { Scope } from './scope.ts';
 
 // The trampoline listens for the page, refusing without the tag, and passes each request here as data; the page's answer goes back the same way.
-export function listenApi(win: BrowserWindow, ask: Ask) {
+export function listenApi({ loaded }: Scope, win: BrowserWindow) {
   const servers = new Set<string>();
-  let resets = 0;
 
   return {
     async listen(server: string, port: number | null) {
@@ -12,14 +12,14 @@ export function listenApi(win: BrowserWindow, ask: Ask) {
         throw new Error('Apargon: listen takes a port from 1 to 65535, or none for a free one.');
       }
 
-      const resetsBefore = resets;
-      const url = await ask<string>(id => ({ listen: { id, server, port } }));
+      const stillLoaded = loaded();
+      const url = await callTrampoline('listen', { server, port });
 
       // A reload while it opened: the page that asked is gone, and so is its handler.
-      if (resets === resetsBefore) {
+      if (stillLoaded()) {
         servers.add(server);
       } else {
-        tellTrampoline({ unlisten: server });
+        tellTrampoline('unlisten', server);
       }
 
       return url;
@@ -33,11 +33,11 @@ export function listenApi(win: BrowserWindow, ask: Ask) {
         throw new Error('Apargon: an answer\'s body is a string or bytes.');
       }
 
-      tellTrampoline({ respond: { id: String(id), status, headers, body: Buffer.from(body).toString('base64') } });
+      tellTrampoline('respond', { id: String(id), status, headers, body: Buffer.from(body).toString('base64') });
     },
     unlisten(server: string) {
       if (servers.delete(server)) {
-        tellTrampoline({ unlisten: server });
+        tellTrampoline('unlisten', server);
       }
     },
     request({ server, ...request }: IncomingRequest) {
@@ -46,9 +46,8 @@ export function listenApi(win: BrowserWindow, ask: Ask) {
       }
     },
     reset() {
-      servers.forEach(server => tellTrampoline({ unlisten: server }));
+      servers.forEach(server => tellTrampoline('unlisten', server));
       servers.clear();
-      resets++;
     },
   };
 }

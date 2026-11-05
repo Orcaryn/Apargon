@@ -16,8 +16,14 @@
 <script type="module">
   // Programs here can leak through Windows' name lookups, as SECURITY.md says: so no name below starts apg-leak-, which the Windows test looks for.
   const result = {};
-  const refused = async (call) => {
-    try { await call(); return false; } catch { return true; }
+  // Refused by Apargon itself, not failed some other way: a renamed call or a crash is not a refusal. What else happened goes to check.ts, as refused_wrongly.
+  const wrong = [];
+  const refused = async (call, expected = /^Error: Apargon: (?!no such call)/) => {
+    const said = await call().then(() => 'not refused', (err) => `${err.name}: ${err.message}`);
+    if (!expected.test(said)) {
+      wrong.push(`${call}: ${said}`);
+    }
+    return expected.test(said);
   };
   const curl = async (...args) => (await papp.run('curl', ['-s', '-o', 'NUL', '-m', '5', '-w', '%{http_code}', ...args])).stdout;
   const cmd = (line) => papp.run('cmd', ['/d', '/c', line]);
@@ -61,6 +67,9 @@
     result.options_as_args_refused = await refused(() => papp.run('cmd', { cwd: 'C:\\' }));
   } catch (err) {
     result.error = err.message;
+  }
+  if (wrong.length) {
+    result.refused_wrongly = wrong;
   }
 
   document.body.textContent = JSON.stringify(result);

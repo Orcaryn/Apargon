@@ -16,12 +16,13 @@
   const here = path.dirname(fileURLToPath(location.href));
   const result = {};
 
-  // The Windows test makes Documents: it may not exist.
+  // The sandbox's refusal, not a missing folder or a file already there: Windows answers access denied, as EPERM or EACCES by call. Any other code fails, named. test/run.ts makes Documents.
+  const refusals = ['EPERM', 'EACCES'];
   try {
     fs.writeFileSync(path.join(os.homedir(), 'Documents', 'apargon-node.tmp'), 'hi');
     result.ungranted_write_refused = false;
-  } catch {
-    result.ungranted_write_refused = true;
+  } catch (err) {
+    result.ungranted_write_refused = refusals.includes(err.code) || err.code;
   }
 
   result.child_process = execSync('echo ok', { windowsHide: true }).toString().trim() === 'ok';
@@ -35,8 +36,16 @@
   try {
     fs.appendFileSync(path.join(process.env.APPDATA, 'apargon', 'grants.json'), '');
     result.grants_protected = false;
-  } catch {
-    result.grants_protected = true;
+  } catch (err) {
+    result.grants_protected = refusals.includes(err.code) || err.code;
+  }
+
+  // Only its own storage: another page's holds settings that page trusts, like its window. Partitions holds this page's own, so it exists.
+  try {
+    fs.mkdirSync(path.join(process.env.APPDATA, 'apargon', 'pages', 'Partitions', 'f'.repeat(64)));
+    result.other_storage_write_blocked = false;
+  } catch (err) {
+    result.other_storage_write_blocked = refusals.includes(err.code) || err.code;
   }
 
   try {

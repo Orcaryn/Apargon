@@ -22,7 +22,7 @@ export const linux: PagePlatform = {
       win.setIcon(icon);
     }
 
-    tellTrampoline({ pageIcon: icon.toPNG().toString('base64') });
+    tellTrampoline('pageIcon', icon.toPNG().toString('base64'));
   },
 };
 

@@ -3,13 +3,12 @@ import { randomUUID } from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { DATA, readJson, writeJson } from '../../shared/data.ts';
+import { welcomeState } from '../store.ts';
 import { ask } from './ask.ts';
 
 // Inside app.asar, so on macOS the build hash covers it.
 const SKILL = path.join(app.getAppPath(), 'skills/papp/SKILL.md');
 const FOLDERS = ['.claude', '.agents'].map(agents => path.join(agents, 'skills/papp'));
-const WELCOME_FILE = path.join(DATA, 'welcome.json');
 let asking = false;
 
 // Right after installing, Apargon is opened from the Dock or the app menu, with no page: that is where an installer sees the skill. A first run that opens a page offers it once.
@@ -22,11 +21,11 @@ export async function welcome(withPage: boolean) {
   });
 
   // Dev test runs, like their popup, answer nothing; the installed app's test run writes welcome.json first (AGENTS.md).
-  if (withPage && (installed || readJson<{ welcomed?: true }>(WELCOME_FILE).welcomed || (!app.isPackaged && process.env.APARGON_TEST_ALLOW === '1'))) {
+  if (withPage && (installed || welcomeState.get().welcomed || (!app.isPackaged && process.env.APARGON_TEST_ALLOW === '1'))) {
     return;
   }
 
-  writeJson(WELCOME_FILE, { welcomed: true });
+  welcomeState.set({ welcomed: true });
   const title = withPage ? 'Welcome to Apargon.' : 'Apargon is ready.';
   const subtitle = withPage ? null : 'Double-click a .papp file to open it.';
 

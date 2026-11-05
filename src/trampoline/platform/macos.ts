@@ -9,15 +9,15 @@ import { localPorts } from '../../permissions/network.ts';
 import { changeableSources, literalBase, PAGE_SOURCE } from '../../permissions/patterns.ts';
 import type { Permissions } from '../../permissions/tags.ts';
 import { REQUEST_FD } from '../../shared/channel.ts';
-import { APP_ROOT, DATA, INSTALL_FOLDER, PAGE_DATA, pageAppId, SECRETS_DATA } from '../../shared/data.ts';
+import { APP_ROOT, DATA, INSTALL_FOLDER, pageAppId, pageStorage, SECRETS_DATA } from '../../shared/data.ts';
 import type { TrampolinePlatform } from '../platform.ts';
 import { startProxy } from '../network/proxy.ts';
 
 export const macos: TrampolinePlatform = {
-  async prepare(_page, permissions) {
+  async prepare(page, permissions) {
     const proxy = permissions.net.length ? await startProxy(permissions.net, null) : null;
     const proxyPort = proxy && (proxy.address() as AddressInfo).port;
-    const profile = seatbeltProfile(permissions, proxyPort);
+    const profile = seatbeltProfile(page, permissions, proxyPort);
 
     return { command: apargon => ['sandbox-exec', '-p', profile, ...apargon], stdio: ['ignore', 'pipe', 'pipe', 'pipe', 'ignore', 'pipe'], requestFd: REQUEST_FD, replies: null, proxyPort, bridges: [], close: () => proxy?.close() };
   },
@@ -35,7 +35,8 @@ export const macos: TrampolinePlatform = {
   pageIcon(page, png) {
     const hash = createHash('sha256').update(png).digest('hex');
 
-    if (spawnSync('/usr/bin/xattr', ['-p', 'com.apargon.icon', page], { encoding: 'utf8' }).stdout.trim() === hash) {
+    // A page that may write itself could have become a link: the icon would land on what it leads to.
+    if (fs.lstatSync(page).isSymbolicLink() || spawnSync('/usr/bin/xattr', ['-p', 'com.apargon.icon', page], { encoding: 'utf8' }).stdout.trim() === hash) {
       return;
     }
 
@@ -71,7 +72,7 @@ export const macos: TrampolinePlatform = {
   autoUpdates: true,
 };
 
-function seatbeltProfile(permissions: Permissions, proxyPort: number | null) {
+function seatbeltProfile(page: string, permissions: Permissions, proxyPort: number | null) {
   const ports = [proxyPort ?? [], localPorts(permissions)].flat();
   const { files, pages } = changeableSources(permissions);
   const rules = [
@@ -86,13 +87,15 @@ function seatbeltProfile(permissions: Permissions, proxyPort: number | null) {
     '(deny appleevent-send)',
     '(deny user-preference-write)',
     '(deny file-write*)',
-    `(allow file-write* (subpath "/dev") (subpath "${fs.realpathSync(app.getPath('temp'))}"))`,
+    `(allow file-write* (literal "/dev/null") (literal "/dev/zero") (literal "/dev/dtracehelper") (subpath "/dev/fd") (subpath "${fs.realpathSync(app.getPath('temp'))}"))`,
+    // Web Serial opens the port from this process. Any other device, like BPF, would reach past the network deny.
+    ...(permissions.use.includes('serial') ? ['(allow file-write* (regex #"^/dev/(cu|tty)\\."))'] : []),
     ...files.map(source => `(allow file-write* (regex #"${source}"))`),
     `(deny file-write* (regex #"${PAGE_SOURCE}"))`,
     ...pages.map(source => `(allow file-write* (regex #"${source}"))`),
     `(deny file-read* file-write* (subpath "${SECRETS_DATA}"))`,
     `(deny file-write* (subpath "${DATA}"))`,
-    `(allow file-write* (subpath "${PAGE_DATA}"))`,
+    `(allow file-write* (subpath "${pageStorage(page)}"))`,
   ];
 
   if (INSTALL_FOLDER) {

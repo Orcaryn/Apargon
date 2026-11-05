@@ -5,7 +5,7 @@ import { realPath, runsOutsideSandbox } from '../../permissions/paths.ts';
 import { isInside, PAGE_FILE } from '../../permissions/patterns.ts';
 import { PERMISSIONS_PLATFORM } from '../../permissions/platform.ts';
 import type { SavedFile } from '../../shared/channel.ts';
-import { DATA, INSTALL_FOLDER } from '../../shared/data.ts';
+import { APARGON_FOLDERS } from '../../shared/data.ts';
 import { TRAMPOLINE_PLATFORM } from '../platform.ts';
 
 // The page names the files and the user picks the folder, in this process's dialog: a page that breaks out of its sandbox can write nowhere else.
@@ -91,7 +91,7 @@ function findBadName(names: string[]) {
 function checkFolder(folder: string) {
   if (realPath(folder) !== folder) {
     throw new Error(`Apargon: a page may not save to ${folder}. Pick a folder itself, not a link to it.`);
-  } else if (PAGE_FILE.test(folder) || runsOutsideSandbox(folder) || [DATA, INSTALL_FOLDER ?? []].flat().some(protectedFolder => isInside(folder, protectedFolder))) {
-    throw new Error(`Apargon: a page may not save to ${folder}: it holds Apargon's data, or files that run on their own.`);
+  } else if (PAGE_FILE.test(folder) || runsOutsideSandbox(folder) || APARGON_FOLDERS.some(own => isInside(folder, own))) {
+    throw new Error(`Apargon: a page may not save to ${folder}: it holds Apargon's data or secrets, or files that run on their own.`);
   }
 }

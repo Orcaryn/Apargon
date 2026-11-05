@@ -1,20 +1,20 @@
 import { app, autoUpdater, dialog, net, shell } from 'electron';
-import { readJson, UPDATE_FILE, writeJson, type UpdateState } from '../../shared/data.ts';
 import { TRAMPOLINE_PLATFORM } from '../platform.ts';
+import { updates } from '../store.ts';
 
 const REPO = 'Orcaryn/Apargon';
 const FEED = `https://github.com/${REPO}/releases/latest/download/update-${process.platform}-${process.arch}.json`;
 const DAY = 24 * 60 * 60 * 1000;
 
 export function checkForUpdates() {
-  const state = readJson<UpdateState>(UPDATE_FILE);
+  const state = updates.get();
   const checkedToday = state.checked !== undefined && Date.now() - Date.parse(state.checked) < DAY;
 
   if (!app.isPackaged || state.automatic === false || checkedToday) {
     return;
   }
 
-  writeJson(UPDATE_FILE, { ...state, checked: new Date().toISOString() });
+  updates.set({ checked: new Date().toISOString() });
 
   if (TRAMPOLINE_PLATFORM.autoUpdates) {
     autoUpdater.on('error', err => console.error(`Apargon: update failed: ${err.message}`));
@@ -27,13 +27,13 @@ export function checkForUpdates() {
 
 async function noticeNewVersion() {
   const { currentRelease: latest } = (await net.fetch(FEED).then(response => response.json())) as { currentRelease: string };
-  const state = readJson<UpdateState>(UPDATE_FILE);
+  const state = updates.get();
 
   if (latest === app.getVersion() || latest === state.noticed) {
     return;
   }
 
-  writeJson(UPDATE_FILE, { ...state, noticed: latest });
+  updates.set({ noticed: latest });
   const { response } = await dialog.showMessageBox({
     type: 'info',
     message: `Apargon ${latest} is out.`,

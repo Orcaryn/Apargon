@@ -6,9 +6,9 @@ import { describe, givenLine, needsTrust, seenFiles, type Line } from '../../per
 import { HOME } from '../../permissions/paths.ts';
 import { isInside } from '../../permissions/patterns.ts';
 import { declaredPermissions } from '../../permissions/tags.ts';
-import { GIVEN_FILE, GRANTS_FILE, LINKS_FILE, readJson, writeJson, type Given, type Grants, type Links } from '../../shared/data.ts';
 import { TRAMPOLINE_PLATFORM } from '../platform.ts';
 import { forgetSecrets } from '../requests/secrets.ts';
+import { records } from '../store.ts';
 import { ask } from './ask.ts';
 
 export async function approve(file: string) {
@@ -23,11 +23,15 @@ export async function approve(file: string) {
   const opensWithoutAsking = downloadedFrom === null && lines.every(line => line.id.startsWith('own:') || (line.id.startsWith('window:') && line.level === 'plain'));
   const pageHash = downloadedFrom === null ? null : createHash('sha256').update(html).digest('hex');
   const grant = lines.map(line => line.id).concat(pageHash ? `content:${pageHash}` : []).sort();
-  const grants = readJson<Grants>(GRANTS_FILE);
-  const previous = grants[page];
+  const previous = records.get(page).grant;
   const approved = { page, permissions, pageHash };
 
-  if (opensWithoutAsking || previous?.join('\n') === grant.join('\n')) {
+  if (previous?.join('\n') === grant.join('\n')) {
+    return approved;
+  } else if (opensWithoutAsking) {
+    // Recorded all the same: what the user gives it later, picks and secrets, is taken back with its approval.
+    records.change(page, { grant, links: undefined });
+
     return approved;
   }
 
@@ -55,7 +59,7 @@ export async function approve(file: string) {
   const order = { red: 0, yellow: 1, plain: 2 };
   const isFolder = (file: string) => fs.statSync(file, { throwIfNoEntry: false })?.isDirectory() === true;
   // The user's picks: shown so the whole of what the page gets is in one place, but no part of the approval.
-  const given = (readJson<Given>(GIVEN_FILE)[page] ?? []).map(givenLine);
+  const picks = (records.get(page).given ?? []).map(givenLine);
   const popup = {
     source: downloadedFrom === null ? 'Made on this computer' : `Downloaded from ${downloadedFrom}`,
     downloaded: downloadedFrom !== null,
@@ -73,7 +77,7 @@ export async function approve(file: string) {
           isNew: previous !== undefined && !previous.includes(line.id),
           isFolder: line.id.startsWith('write:') && isFolder(line.id.slice('write:'.length)),
         })),
-      ...given.map(line => ({ level: line.level, id: line.id, short: shortOf(line), text: line.text, isNew: false, isFolder: isFolder(line.id.slice('given:'.length)) })),
+      ...picks.map(line => ({ level: line.level, id: line.id, short: shortOf(line), text: line.text, isNew: false, isFolder: isFolder(line.id.slice('given:'.length)) })),
       ...(seenShort === '' ? [] : [
         {
           level: seenLevel,
@@ -100,23 +104,17 @@ export async function approve(file: string) {
     return null;
   }
 
-  const latest = readJson<Grants>(GRANTS_FILE);
-  writeJson(GRANTS_FILE, { ...latest, [page]: grant });
   // A new approval forgets the hosts ticked "Always": the user allowed this page, not what the last one opened.
-  const links = readJson<Links>(LINKS_FILE);
-  delete links[page];
-  writeJson(LINKS_FILE, links);
+  records.change(page, { grant, links: undefined });
 
   return approved;
 }
 
 // Everything the user gave the page goes with its approval: the links, the picks and the secrets.
 export function revoke(pages: string[]) {
-  pages.forEach(page => TRAMPOLINE_PLATFORM.startAtLogin(page, false));
-  pages.forEach(forgetSecrets);
-
-  for (const file of [GRANTS_FILE, LINKS_FILE, GIVEN_FILE]) {
-    const kept = Object.entries(readJson<Record<string, unknown>>(file)).filter(([approved]) => !pages.includes(approved));
-    writeJson(file, Object.fromEntries(kept));
+  for (const page of pages) {
+    TRAMPOLINE_PLATFORM.startAtLogin(page, false);
+    forgetSecrets(page);
+    records.change(page, { grant: undefined, links: undefined, given: undefined });
   }
 }

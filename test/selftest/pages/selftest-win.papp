@@ -11,13 +11,14 @@
 <script type="module">
   // Names starting apg-leak- must never reach the network: the Windows test looks for them in a packet capture.
   const result = {};
-  const refused = async (call) => {
-    try {
-      await call();
-      return false;
-    } catch {
-      return true;
+  // Refused by Apargon itself, not failed some other way: a renamed call or a crash is not a refusal. What else happened goes to check.ts, as refused_wrongly.
+  const wrong = [];
+  const refused = async (call, expected = /^Error: Apargon: (?!no such call)/) => {
+    const said = await call().then(() => 'not refused', (err) => `${err.name}: ${err.message}`);
+    if (!expected.test(said)) {
+      wrong.push(`${call}: ${said}`);
     }
+    return expected.test(said);
   };
   const loads = (src) => new Promise((done) => {
     const script = document.createElement('script');
@@ -48,6 +49,9 @@
     connection.close();
   } catch (err) {
     result.error = err.message;
+  }
+  if (wrong.length) {
+    result.refused_wrongly = wrong;
   }
 
   document.body.textContent = JSON.stringify(result);

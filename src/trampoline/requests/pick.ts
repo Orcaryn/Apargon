@@ -6,7 +6,8 @@ import { isInside, PAGE_FILE } from '../../permissions/patterns.ts';
 import { PERMISSIONS_PLATFORM } from '../../permissions/platform.ts';
 import type { Permissions } from '../../permissions/tags.ts';
 import type { PickOptions } from '../../shared/channel.ts';
-import { DATA, GIVEN_FILE, INSTALL_FOLDER, readJson, REPLIES_DATA, SECRETS_DATA, writeJson, type Given } from '../../shared/data.ts';
+import { APARGON_FOLDERS } from '../../shared/data.ts';
+import { records } from '../store.ts';
 
 // The user picks in this process's dialog, which says what the page gets, and the pick is kept beside the approvals: a page that breaks out of its sandbox can plant neither. Resolves with the paths, and whether the sandbox must be built again to grant them.
 export async function pickFiles(page: string, permissions: Permissions, { folder, multiple, write }: PickOptions) {
@@ -25,8 +26,7 @@ export async function pickFiles(page: string, permissions: Permissions, { folder
   filePaths.forEach(file => checkPick(file, write));
   // Kept as a tag names it: a folder ends in the separator.
   const picked = filePaths.map(file => (folder ? file + path.sep : file));
-  const given = readJson<Given>(GIVEN_FILE);
-  const before = given[page] ?? [];
+  const before = records.get(page).given ?? [];
   // A pick keeps the write it had. The sandbox is built when the page starts: a new write, or on an OS that limits reads by folder a new path, needs it built again.
   const picks = picked.map(file => ({ path: file, write: write || before.some(old => old.path === file && old.write) }));
   const rebuild = picks.some(pick => {
@@ -36,7 +36,7 @@ export async function pickFiles(page: string, permissions: Permissions, { folder
   });
   // Refused now, as the next start would refuse it: kept, it would stop the page from opening.
   withGiven(permissions, picks, page);
-  writeJson(GIVEN_FILE, { ...given, [page]: [...before.filter(old => !picked.includes(old.path)), ...picks] });
+  records.change(page, { given: [...before.filter(old => !picked.includes(old.path)), ...picks] });
 
   return { paths: filePaths, rebuild };
 }
@@ -47,7 +47,7 @@ function checkPick(file: string, write: boolean) {
     throw new Error(`Apargon: ${file} goes through a link. Pick what it leads to instead.`);
   } else if (file.includes('*')) {
     throw new Error(`Apargon: a picked name may not hold *: ${file}.`);
-  } else if ([DATA, SECRETS_DATA, REPLIES_DATA, INSTALL_FOLDER ?? []].flat().some(folder => isInside(file, folder) || isInside(folder, file))) {
+  } else if (APARGON_FOLDERS.some(folder => isInside(file, folder) || isInside(folder, file))) {
     throw new Error(`Apargon: ${file} holds or is in Apargon's data. Pick another.`);
   } else if (write && (runsOutsideSandbox(file) || PAGE_FILE.test(file))) {
     throw new Error(`Apargon: a page may not change ${file}: a hidden file, a page, or a folder whose files run on their own.`);

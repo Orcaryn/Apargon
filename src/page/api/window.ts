@@ -1,20 +1,9 @@
-import { Menu, type BrowserWindow, type MenuItemConstructorOptions } from 'electron';
+import { Menu, type BrowserWindow } from 'electron';
 import type { Permissions } from '../../permissions/tags.ts';
 import type { PageMenus } from '../menu.ts';
-
-type PageMenuItem = { separator: true } | { label: string; id?: string; keys?: string; submenu?: PageMenuItem[] };
+import { pageMenuItems, type PageMenuItem } from '../../shared/menuItems.ts';
 
 export function windowApi(permissions: Permissions, win: BrowserWindow, menus: PageMenus) {
-  // Labels, keys and ids only: a role or a click of the page's own could do what Apargon's items do.
-  const menuItems = (items: PageMenuItem[]): MenuItemConstructorOptions[] =>
-    items.map(item => {
-      if ('separator' in item) {
-        return { type: 'separator' };
-      }
-
-      return { label: String(item.label), accelerator: item.keys === undefined ? undefined : String(item.keys), submenu: item.submenu && menuItems(item.submenu), click: () => win.webContents.send('apargon-menu', item.id) };
-    });
-
   return {
     pdf() {
       return win.webContents.printToPDF({});
@@ -28,10 +17,10 @@ export function windowApi(permissions: Permissions, win: BrowserWindow, menus: P
       return new Promise<boolean>(resolve => win.webContents.print({}, resolve));
     },
     menu(items: PageMenuItem[]) {
-      menus.setPageMenus(menuItems(items), win);
+      menus.setPageMenus(pageMenuItems(items, id => win.webContents.send('apargon-menu', id)), win);
     },
     contextMenu(items: PageMenuItem[]) {
-      Menu.buildFromTemplate(menuItems(items)).popup({ window: win });
+      Menu.buildFromTemplate(pageMenuItems(items, id => win.webContents.send('apargon-menu', id))).popup({ window: win });
     },
     closeWindow() {
       win.close();

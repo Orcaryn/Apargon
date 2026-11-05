@@ -76,7 +76,7 @@ export function declaredPermissions(page: string, html = fs.readFileSync(page, '
     } else if (kind === 'net') {
       permissions.net.push(hostPattern(value));
     } else if (kind === 'open') {
-      permissions.open.push(openHost(value));
+      permissions.open.push(hostName(value, 'papp-open', value));
     } else if (kind === 'run' && Object.hasOwn(permissions.run, path.basename(value))) {
       throw new Error(`Two papp-run tags name a program ${path.basename(value)}. The page runs programs by name, so keep one.`);
     } else if (kind === 'run') {
@@ -187,18 +187,18 @@ function pathPattern(value: string, dir: string) {
 }
 
 function hostPattern(value: string) {
-  // A trailing dot names the same host: without it, localhost. would not count as this computer.
-  const pattern = (value.includes(':') ? value : `${value}:443`).toLowerCase().replace('.:', ':');
-  const [host, port] = pattern.split(':');
+  const pattern = value.includes(':') ? value : `${value}:443`;
+  const [name, port] = pattern.split(':');
 
-  if (!/^(\*|(\*\.)?[a-z0-9][a-z0-9.-]*):(\*|[1-9]\d*)$/.test(pattern) || +port < 1 || +port > 65535) {
-    throw new Error(`Bad papp-net value "${value}". One host per <meta>, with a port after a colon if not 443, such as api.example.com, *.example.com or example.com:8080.`);
-  } else if (value === '*') {
+  if (value === '*') {
     throw new Error('Write papp-net "*:443" for any server on port 443, or "*:*" for any port.');
-  } else if (!net.isIPv4(host) && host.split('.').every(label => /^(\d+|0x[0-9a-f]*)$/.test(label))) {
-    // To the resolver 16843009, 1.1 and 0x7f.1 are addresses; the popup would show them as names.
-    throw new Error(`Bad papp-net value "${value}". A host of numbers must be a full address, such as 1.1.1.1:${port === '*' ? '443' : port}.`);
-  } else if (host !== '127.0.0.1' && /^(0|127|169\.254)\./.test(host)) {
+  } else if (!/^[^:]+:(\*|[1-9]\d*)$/.test(pattern) || +port > 65535) {
+    throw new Error(`Bad papp-net value "${value}". One host per <meta>, with a port after a colon if not 443, such as api.example.com, *.example.com or example.com:8080.`);
+  }
+
+  const host = hostName(name, 'papp-net', value);
+
+  if (host !== '127.0.0.1' && /^(0|127|169\.254)\./.test(host)) {
     throw new Error(`Apargon never reaches ${host}, which is this computer or a link-local address, where cloud machines keep their keys. For a program on this computer, declare localhost:<port>.`);
   } else if (net.isIPv4(host) && Object.values(os.networkInterfaces()).flat().some(own => own?.address === host && !own.internal)) {
     throw new Error(`Apargon never reaches ${host}: it is one of this computer's own addresses. For a program on this computer, declare localhost:<port>.`);
@@ -209,14 +209,26 @@ function hostPattern(value: string) {
     throw new Error(`Apargon reaches ${host} on one port only, which you name. Write ${host}:<port>.`);
   }
 
-  return pattern;
+  return `${host}:${port}`;
 }
 
-function openHost(value: string) {
-  const host = value.toLowerCase().replace(/\.$/, '');
+// The host of a papp-net or papp-open value, read as a browser reads a link's, so the popup never shows an address as a name.
+function hostName(name: string, tag: string, value: string) {
+  // A trailing dot names the same host: without dropping it, localhost. would not count as this computer.
+  const host = name.toLowerCase().replace(/\.$/, '');
+  // A wildcard as one of the hosts it covers.
+  const example = host.replace(/^\*\./, 'x.');
 
-  if (host !== '*' && !/^(\*\.)?[a-z0-9][a-z0-9.-]*$/.test(host)) {
-    throw new Error(`Bad papp-open value "${value}". One host per <meta>, no scheme or port, such as x.com or *.example.com.`);
+  if (host === '*') {
+    return host;
+  } else if (!example.split('.').every(label => /^[a-z0-9][a-z0-9-]*$/.test(label))) {
+    throw new Error(`Bad ${tag} value "${value}". One host per <meta>, no scheme, such as x.com or *.example.com.`);
+  } else if (URL.parse(`http://${example}`)?.hostname !== example) {
+    // The browser reads 0x7f.1 and 127.1 as 127.0.0.1, and x.0.1 as no host at all: *.0.1 covers addresses, not names.
+    throw new Error(`Bad ${tag} value "${value}". A host of numbers must be a full address with no *, such as 1.1.1.1.`);
+  } else if (example.endsWith('.localhost')) {
+    // Browsers send every name under localhost to this computer.
+    throw new Error(`Bad ${tag} value "${value}". For a program on this computer, write localhost.`);
   }
 
   return host;

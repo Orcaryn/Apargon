@@ -2,18 +2,19 @@ import { createHash } from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { followMove, noteContent } from '../../src/trampoline/storage.ts';
+import { followMove, noteContent, pageRecords } from '../../src/trampoline/storage.ts';
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apargon-moved-'));
 const pageData = path.join(root, 'data');
-const seenFile = path.join(root, 'seen.json');
+fs.mkdirSync(path.join(root, 'records'));
+const records = pageRecords(path.join(root, 'records'));
 
 function setUp(content: string) {
   const dir = path.join(root, content);
   fs.mkdirSync(dir);
   const [old, moved] = [path.join(dir, 'old.papp'), path.join(dir, 'new.papp')];
   fs.writeFileSync(old, content);
-  noteContent(old, pageData, seenFile);
+  noteContent(old, storage, records);
   fs.mkdirSync(storage(old), { recursive: true });
   fs.writeFileSync(path.join(storage(old), 'data'), 'kept');
 
@@ -31,7 +32,7 @@ const cases: [string, () => boolean][] = [
     () => {
       const { old, moved } = setUp('a');
       fs.renameSync(old, moved);
-      followMove(moved, pageData, seenFile, []);
+      followMove(moved, storage, records, []);
 
       return has(moved) && !has(old);
     },
@@ -41,7 +42,7 @@ const cases: [string, () => boolean][] = [
     () => {
       const { old, moved } = setUp('b');
       fs.copyFileSync(old, moved);
-      followMove(moved, pageData, seenFile, []);
+      followMove(moved, storage, records, []);
 
       return has(old) && !has(moved);
     },
@@ -52,7 +53,7 @@ const cases: [string, () => boolean][] = [
       const { old, moved } = setUp('c');
       fs.rmSync(old);
       fs.writeFileSync(moved, 'c, changed');
-      followMove(moved, pageData, seenFile, []);
+      followMove(moved, storage, records, []);
 
       return has(old) && !has(moved);
     },
@@ -62,9 +63,9 @@ const cases: [string, () => boolean][] = [
     () => {
       const { old, moved } = setUp('d');
       fs.writeFileSync(old, 'd, edited');
-      noteContent(old, pageData, seenFile);
+      noteContent(old, storage, records);
       fs.renameSync(old, moved);
-      followMove(moved, pageData, seenFile, []);
+      followMove(moved, storage, records, []);
 
       return has(moved);
     },
@@ -76,7 +77,7 @@ const cases: [string, () => boolean][] = [
       fs.renameSync(old, moved);
 
       try {
-        followMove(moved, pageData, seenFile, [old]);
+        followMove(moved, storage, records, [old]);
 
         return false;
       } catch {
@@ -90,7 +91,7 @@ const cases: [string, () => boolean][] = [
       const { old, moved } = setUp('f');
       fs.renameSync(old, moved);
       fs.mkdirSync(storage(moved), { recursive: true });
-      followMove(moved, pageData, seenFile, []);
+      followMove(moved, storage, records, []);
 
       return has(old) && !has(moved);
     },
@@ -103,10 +104,32 @@ const cases: [string, () => boolean][] = [
       fs.rmSync(gone.old);
       fs.rmSync(storage(gone.old), { recursive: true });
       fs.renameSync(movedAway.old, movedAway.moved);
-      noteContent(movedAway.moved, pageData, seenFile);
-      const seen: Record<string, string> = JSON.parse(fs.readFileSync(seenFile, 'utf8'));
+      noteContent(movedAway.moved, storage, records);
 
-      return !(gone.old in seen) && movedAway.old in seen && movedAway.moved in seen;
+      return !records.get(gone.old).content && !!records.get(movedAway.old).content && !!records.get(movedAway.moved).content;
+    },
+  ],
+  [
+    'moved: the window follows, the approval stays',
+    () => {
+      const { old, moved } = setUp('i');
+      records.change(old, { window: { x: 1, y: 2, width: 3, height: 4 }, grant: ['own:x'] });
+      fs.renameSync(old, moved);
+      followMove(moved, storage, records, []);
+      const [from, to] = [records.get(old), records.get(moved)];
+
+      return to.window?.x === 1 && !to.grant && !from.window && from.grant?.[0] === 'own:x';
+    },
+  ],
+  [
+    'a record left empty is deleted, and listed only while it holds something',
+    () => {
+      const page = path.join(root, 'j.papp');
+      records.change(page, { grant: ['own:x'], links: ['a.example'] });
+      const listed = records.all().some(saved => saved.page === page);
+      records.change(page, { grant: undefined, links: undefined });
+
+      return listed && !records.all().some(saved => saved.page === page) && Object.keys(records.get(page)).length === 0;
     },
   ],
 ];

@@ -4,11 +4,11 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { localPorts } from '../../permissions/network.ts';
-import { literalBase } from '../../permissions/patterns.ts';
+import { isInside, literalBase } from '../../permissions/patterns.ts';
 import { PRIVATE } from '../../permissions/platform/linux.ts';
 import type { Permissions, Use } from '../../permissions/tags.ts';
 import { REQUEST_FD, relay, type Bridge } from '../../shared/channel.ts';
-import { APP_ROOT, DATA, NET_DATA, PAGE_DATA, pageAppId, SECRETS_DATA } from '../../shared/data.ts';
+import { APP_ROOT, DATA, NET_DATA, pageAppId, pageStorage, SECRETS_DATA } from '../../shared/data.ts';
 import type { TrampolinePlatform } from '../platform.ts';
 import { startProxy } from '../network/proxy.ts';
 
@@ -143,7 +143,7 @@ function unusedPort(declared: Bridge[]) {
 function bwrapArgs(page: string, permissions: Permissions, socketFolder: string | null) {
   const temp = fs.realpathSync(app.getPath('temp'));
   const written = permissions.write.map(literalBase);
-  const writable = [...(PRIVATE.includes(temp) ? [] : [temp]), ...written];
+  const writable = [...(PRIVATE.some(folder => isInside(temp, folder)) ? [] : [temp]), ...written];
   const sound = permissions.use.includes('sound') || permissions.use.includes('microphone');
   const soundSockets = sound ? ['pipewire-0', 'pulse'].map(name => path.join(RUNTIME, name)).filter(file => fs.existsSync(file)) : [];
   const printSocket = permissions.use.includes('print') && fs.existsSync('/run/cups/cups.sock') ? ['/run/cups/cups.sock'] : [];
@@ -160,7 +160,8 @@ function bwrapArgs(page: string, permissions: Permissions, socketFolder: string 
   // bwrap binds only what is there. The trampoline made the written paths.
   const seen = [...permissions.read, ...permissions.sockets].map(literalBase).filter(file => fs.existsSync(file));
   const named = [path.dirname(page), ...seen, ...displaySockets(), ...soundSockets, ...printSocket, ...udev];
-  fs.mkdirSync(PAGE_DATA, { recursive: true });
+  const storage = pageStorage(page);
+  fs.mkdirSync(storage, { recursive: true });
 
   // Later mounts cover earlier ones: Apargon's own data must stay last.
   return [
@@ -169,7 +170,7 @@ function bwrapArgs(page: string, permissions: Permissions, socketFolder: string 
     ...PRIVATE.flatMap(folder => ['--tmpfs', folder]),
     ...named.flatMap(file => ['--ro-bind', file, file]),
     ...writable.flatMap(folder => ['--bind', folder, folder]),
-    ...['--ro-bind', DATA, DATA, '--tmpfs', NET_DATA, ...(socketFolder ? ['--ro-bind', socketFolder, socketFolder] : []), '--bind', PAGE_DATA, PAGE_DATA, '--tmpfs', SECRETS_DATA],
+    ...['--ro-bind', DATA, DATA, '--tmpfs', NET_DATA, ...(socketFolder ? ['--ro-bind', socketFolder, socketFolder] : []), '--bind', storage, storage, '--tmpfs', SECRETS_DATA],
   ];
 }
 

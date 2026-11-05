@@ -1,11 +1,11 @@
-import { app, BrowserWindow, dialog, globalShortcut, powerMonitor, screen, type Rectangle } from 'electron';
+import { app, BrowserWindow, dialog, globalShortcut, powerMonitor, screen } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import { pathToFileURL } from 'url';
 import { describe } from '../permissions/describe.ts';
 import { HOME } from '../permissions/paths.ts';
-import { onTrampolineReply, relay, tellTrampoline, type PageConfig } from '../shared/channel.ts';
-import { APP_ROOT, PAGE_DATA, writeJson } from '../shared/data.ts';
+import { onTrampolineEvent, relay, tellTrampoline, type PageConfig } from '../shared/channel.ts';
+import { APP_ROOT, pageStorage } from '../shared/data.ts';
 import { pageAccess } from './api/access.ts';
 import { serveApi } from './api/ipc.ts';
 import { followFavicon } from './icon/icon.ts';
@@ -14,7 +14,7 @@ import { PAGE_PLATFORM } from './platform.ts';
 import { createPageSession } from './session.ts';
 
 export function preparePage({ page, proxy }: PageConfig) {
-  app.setPath('userData', PAGE_DATA);
+  app.setPath('userData', pageStorage(page));
 
   if (proxy) {
     app.commandLine.appendSwitch('proxy-server', proxy);
@@ -24,7 +24,7 @@ export function preparePage({ page, proxy }: PageConfig) {
   app.on('window-all-closed', () => app.quit());
 }
 
-export async function startPage({ page, permissions, pageHash, bridges }: PageConfig) {
+export async function startPage({ page, permissions, pageHash, proxy, bridges, bounds, menu }: PageConfig) {
   if (!(await PAGE_PLATFORM.isOffline())) {
     const refusal = 'This process can still open sockets, so it is not in the sandbox. Refusing to open the page. If APARGON is set in your environment, unset it.';
     console.error(`Apargon: ${refusal}`);
@@ -40,7 +40,7 @@ export async function startPage({ page, permissions, pageHash, bridges }: PageCo
   const access = permissions.system ? null : pageAccess(permissions);
   const canSee = (file: string) => access === null || file === page || access.canSee(file);
   const pageSession = createPageSession(page, permissions, pageHash, canSee);
-  const menus = installMenu(page, describe(permissions));
+  const menus = installMenu(page, describe(permissions), menu);
   const icon = app.isPackaged ? undefined : path.join(APP_ROOT, 'build/icon.png');
 
   if (icon) {
@@ -54,11 +54,10 @@ export async function startPage({ page, permissions, pageHash, bridges }: PageCo
   const { width = 1200, height = 800, minWidth, minHeight, resizable = true, titleBar = true, frame = true, transparent = false, onTop = false } = permissions.window ?? {};
   // Without a title bar the OS still draws the window's buttons over the page.
   const windowOptions: Electron.BrowserWindowConstructorOptions = { width, height, minWidth, minHeight, resizable, frame, transparent, alwaysOnTop: onTop, titleBarStyle: titleBar ? 'default' : 'hidden', titleBarOverlay: !titleBar, icon, webPreferences };
-  // A fixed size stays as declared.
-  const boundsFile = path.join(pageSession.storagePath!, 'window.json');
-  const saved = savedBounds(boundsFile);
+  // Where the user left the window, while that is still on a screen. A fixed size stays as declared.
+  const saved = bounds && screen.getAllDisplays().some(({ workArea: area }) => bounds.x < area.x + area.width && bounds.x + bounds.width > area.x && bounds.y < area.y + area.height && bounds.y + bounds.height > area.y) ? bounds : null;
   const win = new BrowserWindow({ ...windowOptions, ...(saved && (resizable ? saved : { x: saved.x, y: saved.y })) });
-  win.on('close', () => writeJson(boundsFile, win.getNormalBounds()));
+  win.on('close', () => tellTrampoline('bounds', win.getNormalBounds()));
   PAGE_PLATFORM.pin?.(win, page);
   const pageIcon = followFavicon(win, canSee, pageHash === null);
   const pageWindows = () => BrowserWindow.getAllWindows().filter(other => other.webContents.session === pageSession);
@@ -72,7 +71,7 @@ export async function startPage({ page, permissions, pageHash, bridges }: PageCo
     front?.focus();
   };
 
-  const api = serveApi(dir, permissions, access, { menus, toFront, pageIcon });
+  const api = serveApi(dir, permissions, access, { menus, toFront, pageIcon, proxy });
   const pageUrl = pathToFileURL(page);
 
   const isPage = (href: string) => {
@@ -86,7 +85,7 @@ export async function startPage({ page, permissions, pageHash, bridges }: PageCo
       event.preventDefault();
 
       if (event.isMainFrame) {
-        tellTrampoline({ openLink: event.url });
+        tellTrampoline('openLink', event.url);
       }
     }
   };
@@ -99,7 +98,7 @@ export async function startPage({ page, permissions, pageHash, bridges }: PageCo
         return { action: 'allow', overrideBrowserWindowOptions: windowOptions };
       }
 
-      tellTrampoline({ openLink: url });
+      tellTrampoline('openLink', url);
 
       return { action: 'deny' };
     });
@@ -134,23 +133,16 @@ export async function startPage({ page, permissions, pageHash, bridges }: PageCo
     });
   }
 
-  onTrampolineReply(reply => {
-    if ('show' in reply) {
-      toFront();
-    } else if ('quit' in reply) {
-      app.quit();
-    } else if ('refreshMenu' in reply) {
-      menus.refresh();
-    } else if ('trayItem' in reply) {
-      pageWindows().forEach(other => other.webContents.send('apargon-tray', reply.trayItem));
-    } else if ('restart' in reply) {
+  onTrampolineEvent({
+    show: toFront,
+    quit: () => app.quit(),
+    refreshMenu: state => menus.refresh(state),
+    trayItem: id => pageWindows().forEach(other => other.webContents.send('apargon-tray', id)),
+    restart: () => {
       pageWindows().forEach(other => other.webContents.once('will-prevent-unload', event => event.preventDefault()));
       app.quit();
-    } else if ('request' in reply) {
-      api.request(reply.request);
-    } else {
-      api.answered(reply);
-    }
+    },
+    request: incoming => api.request(incoming),
   });
 
   let pendingReload: NodeJS.Timeout | undefined = undefined;
@@ -163,17 +155,8 @@ export async function startPage({ page, permissions, pageHash, bridges }: PageCo
     pendingReload = setTimeout(() => pageWindows().forEach(other => other.webContents.reloadIgnoringCache()), 100);
   });
   // On Linux a recursive watch can run out of inotify watches in a large folder; the page then no longer reloads on an edit.
-  edits.on('error', () => edits.close());
-}
-
-// Where the user left the window, while that is still on a screen. Kept with the page's storage, so it moves and goes with it.
-function savedBounds(file: string): Rectangle | null {
-  if (!fs.existsSync(file)) {
-    return null;
-  }
-
-  const saved: Rectangle = JSON.parse(fs.readFileSync(file, 'utf8'));
-  const onScreen = screen.getAllDisplays().some(({ workArea: area }) => saved.x < area.x + area.width && saved.x + saved.width > area.x && saved.y < area.y + area.height && saved.y + saved.height > area.y);
-
-  return onScreen ? saved : null;
+  edits.on('error', err => {
+    console.error(`Apargon: live reload stopped (${err.message}). Reopen the page after an edit.`);
+    edits.close();
+  });
 }

@@ -3,24 +3,22 @@ import { once } from 'events';
 import http from 'http';
 import type net from 'net';
 import tls from 'tls';
-import { PAGE_CONFIG } from '../../shared/channel.ts';
+import type { Scope } from './scope.ts';
 
 // A TCP connection through Apargon's proxy, which lets through only a declared host:port and logs it, as for fetch.
-export function connectionApi(win: BrowserWindow) {
+export function connectionApi({ loaded }: Scope, win: BrowserWindow, proxy: string | null) {
   const connections = new Map<string, net.Socket>();
-  let resets = 0;
 
   return {
     async connect(id: string, host: string, port: number, { tls: secure = false }: { tls?: boolean } = {}) {
       const target = `${host}:${port}`;
       const refusal = new Error(`Apargon: this page may not connect to ${target}. Ask for it with <meta name="papp-net" content="${target}">.`);
-      const { proxy } = PAGE_CONFIG!;
 
       if (!proxy) {
         throw refusal;
       }
 
-      const resetsBefore = resets;
+      const stillLoaded = loaded();
       const [proxyHost, proxyPort] = proxy.split(':');
       const request = http.request({ host: proxyHost, port: proxyPort, method: 'CONNECT', path: target }).end();
       const [response, tunnel, head] = (await once(request, 'connect')) as [http.IncomingMessage, net.Socket, Buffer];
@@ -41,7 +39,7 @@ export function connectionApi(win: BrowserWindow) {
       }
 
       // A reload or a closed window while it opened: the page that asked is gone, so nothing may outlive it.
-      if (resets !== resetsBefore) {
+      if (!stillLoaded()) {
         socket.destroy();
 
         throw new Error('Apargon: the page reloaded while it connected.');
@@ -72,7 +70,6 @@ export function connectionApi(win: BrowserWindow) {
     reset() {
       connections.forEach(socket => socket.destroy());
       connections.clear();
-      resets++;
     },
   };
 }

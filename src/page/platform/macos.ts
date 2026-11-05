@@ -7,6 +7,7 @@ export const macos: PagePlatform = {
   isOffline: async () => !(await canBindLoopback()),
   notifiesHere: true,
   processGroups: true,
+  programsInheritFds: true,
   appMenu: true,
   // The trampoline sets the file's icon: this process may not write there.
   showIcon(_win, icon, madeHere) {

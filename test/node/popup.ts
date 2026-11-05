@@ -39,7 +39,10 @@ function wholeFolderFailures(page: string, program: string) {
 
 if (process.platform === 'linux') {
   const page = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'apargon-popup-')), 'case.papp');
-  const cases = [...['/', '/var/', '/var/tmp/', '/tmp/', '/tmp/*', '/run/'].map(folder => ['papp-read', folder]), ...['/', '/tmp/', '/run/'].map(folder => ['papp-socket', folder])];
+  const cases = [
+    ...['/', '/var/', '/var/tmp/', '/tmp/', '/tmp/*', '/run/'].map(folder => ['papp-read', folder]),
+    ...['/', '/tmp/', '/run/'].map(folder => ['papp-socket', folder]),
+  ];
   const opened = cases.filter(([tag, folder]) => {
     fs.writeFileSync(page, `<meta name="${tag}" content="${folder}">`);
 
@@ -64,7 +67,10 @@ if (process.platform === 'linux') {
         return !(err as Error).message.includes('cannot open');
       }
     });
-  const whole = wholeFolderFailures(page, 'sh');
+  // Not in /tmp: Linux refuses any page there, before the rule this checks.
+  const ownFolder = fs.mkdtempSync(path.join(os.homedir(), 'apargon-popup-'));
+  const whole = wholeFolderFailures(path.join(ownFolder, 'case.papp'), 'sh');
+  fs.rmSync(ownFolder, { recursive: true, force: true });
   console.log(opened.length ? `popup: FAIL, opened ${opened.map(([tag, folder]) => `${tag} ${folder}`).join(', ')}` : 'popup: ok, every emptied folder refused');
   console.log(picked.length ? `popup: FAIL, picks opened ${picked.map(pick => pick.path).join(', ')}` : 'popup: ok, every emptied folder refused as a pick');
   console.log(whole.length ? `popup: FAIL, the page's own folder ${JSON.stringify(whole)}` : "popup: ok, programs never get the page's own folder");
@@ -329,16 +335,15 @@ const seen = [
   },
   { tags: '<meta name="papp-read" content="./data/*.txt">\n<meta name="papp-read" content="./data/a.txt">', all: false, shows: [''] },
   { tags: '<meta name="papp-system" content="full">\n<meta name="papp-write" content="./data/">', all: PERMISSIONS_PLATFORM.readsAll, shows: [] },
-]
-  .map(({ tags, all, shows }) => {
-    fs.writeFileSync(page, tags);
-    const said = seenFiles(declaredPermissions(fs.realpathSync(page)));
-    // A folder's id ends in a separator; the expected paths do not.
-    const files = said.lines.map(line => path.resolve(line.id.slice('read:'.length)));
-    const expected = shows.map(file => path.resolve(fs.realpathSync(dir), file));
+].map(({ tags, all, shows }) => {
+  fs.writeFileSync(page, tags);
+  const said = seenFiles(declaredPermissions(fs.realpathSync(page)));
+  // A folder's id ends in a separator; the expected paths do not.
+  const files = said.lines.map(line => path.resolve(line.id.slice('read:'.length)));
+  const expected = shows.map(file => path.resolve(fs.realpathSync(dir), file));
 
-    return { tags, ok: said.all === all && files.join('\n') === expected.join('\n'), said: `${said.all ? 'all, ' : ''}${files.join(', ')}` };
-  });
+  return { tags, ok: said.all === all && files.join('\n') === expected.join('\n'), said: `${said.all ? 'all, ' : ''}${files.join(', ')}` };
+});
 fs.writeFileSync(page, '<meta name="papp-run" content="./data/tool">');
 const bundled = declaredPermissions(page).run.tool === path.join(dir, 'data', 'tool');
 fs.writeFileSync(page, '<meta\n  name="papp-read"\n  content="./data/">\n<meta charset="utf-8">');

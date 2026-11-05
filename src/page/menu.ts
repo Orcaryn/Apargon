@@ -3,29 +3,22 @@ import fs from 'fs';
 import path from 'path';
 import type { Line } from '../permissions/describe.ts';
 import { tellTrampoline } from '../shared/channel.ts';
-import { EGRESS_LOG, readJson, UPDATE_FILE, type UpdateState } from '../shared/data.ts';
+import { EGRESS_LOG, GRANTS_FILE, LINKS_FILE, readJson, UPDATE_FILE, type Grants, type Links, type UpdateState } from '../shared/data.ts';
 import { PAGE_PLATFORM } from './platform.ts';
 
 export type PageMenus = ReturnType<typeof installMenu>;
 
-// Apargon's menu, with the page's own menus between View and Window once it sets them.
-export function installMenu(page: string, lines: Line[], approved: string[]) {
+// Apargon's menu, with the page's own menus between View and Window once it sets them. Each build reads approvals and updates from disk.
+export function installMenu(page: string, lines: Line[]) {
   let pageMenus: MenuItemConstructorOptions[] = [];
   // The window whose page set the menus: only its reload or close takes them away.
   let menusFrom: BrowserWindow | null = null;
-  let stillApproved = approved;
-
-  const revoke = (pages: string[]) => {
-    tellTrampoline({ revoke: pages });
-    stillApproved = stillApproved.filter(other => !pages.includes(other));
-    install();
-  };
-
-  const install = () => Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate(page, lines, stillApproved, pageMenus, revoke)));
+  const install = () => Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate(page, lines, pageMenus)));
 
   install();
 
   return {
+    refresh: install,
     setPageMenus(menus: MenuItemConstructorOptions[], from: BrowserWindow) {
       pageMenus = menus;
       menusFrom = from;
@@ -41,9 +34,10 @@ export function installMenu(page: string, lines: Line[], approved: string[]) {
   };
 }
 
-function menuTemplate(page: string, lines: Line[], approved: string[], pageMenus: MenuItemConstructorOptions[], revoke: (pages: string[]) => void): MenuItemConstructorOptions[] {
+function menuTemplate(page: string, lines: Line[], pageMenus: MenuItemConstructorOptions[]): MenuItemConstructorOptions[] {
   const appMenu: MenuItemConstructorOptions[] = PAGE_PLATFORM.appMenu ? [{ role: 'appMenu' }] : [];
   const updates = readJson<UpdateState>(UPDATE_FILE);
+  const approved = Object.keys({ ...readJson<Links>(LINKS_FILE), ...readJson<Grants>(GRANTS_FILE) });
 
   return [
     ...appMenu,
@@ -66,9 +60,9 @@ function menuTemplate(page: string, lines: Line[], approved: string[], pageMenus
         },
         {
           label: 'Approved Pages',
-          submenu: approved.length ? approved.map(other => ({ label: `Revoke ${other}`, click: () => revoke([other]) })) : [{ label: 'None', enabled: false }],
+          submenu: approved.length ? approved.map(other => ({ label: `Revoke ${other}`, click: () => tellTrampoline({ revoke: [other] }) })) : [{ label: 'None', enabled: false }],
         },
-        { label: 'Revoke All Approvals', enabled: approved.length > 0, click: () => revoke(approved) },
+        { label: 'Revoke All Approvals', enabled: approved.length > 0, click: () => tellTrampoline({ revoke: approved }) },
         { type: 'separator' },
         {
           label: 'Show Egress Log',

@@ -13,6 +13,13 @@ export async function startProxy(patterns: string[], socketFile: string | null) 
   const log = fs.createWriteStream(EGRESS_LOG, { flags: 'a' });
 
   const addressIfDeclared = async (host: string, port: string) => {
+    if (LOCAL_HOSTS.includes(host)) {
+      // A port on this computer: only a tag that names this host and port, as * matches any host and *:* would reach every port here, other pages' proxies too. On Windows, the page's only way to it. Not the proxy's own port, or it would call itself without end; on Linux it has none, it listens on a socket file.
+      const own = server.address();
+
+      return patterns.includes(`${host}:${port}`) && !(typeof own === 'object' && own?.port === +port) ? '127.0.0.1' : null;
+    }
+
     const declared = patterns.some(pattern => {
       const [allowedHost, allowedPort] = pattern.split(':');
 
@@ -21,11 +28,6 @@ export async function startProxy(patterns: string[], socketFile: string | null) 
 
     if (!declared) {
       return null;
-    } else if (LOCAL_HOSTS.includes(host)) {
-      // A declared port on this computer: on Windows, the page's only way to it. Not the proxy's own port, or it would call itself without end; on Linux it has none, it listens on a socket file.
-      const own = server.address();
-
-      return typeof own === 'object' && own?.port === +port ? null : '127.0.0.1';
     }
 
     const { address, family } = await dns.promises.lookup(host);

@@ -3,6 +3,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import { once } from 'events';
 import { PROGRAM_ENV } from '../../permissions/env.ts';
 import type { Permissions } from '../../permissions/tags.ts';
+import { REPLY_FD, REQUEST_FD, TRAMPOLINE_NETWORK_FD } from '../../shared/channel.ts';
 import { PAGE_PLATFORM } from '../platform.ts';
 import type { Scope } from './scope.ts';
 
@@ -22,7 +23,14 @@ export function programApi(permissions: Permissions, { where, canList, need }: S
     const folder = where(cwd);
     need(canList(folder), folder, 'see');
 
-    return spawn(permissions.run[name], args, { cwd: folder, env, detached: PAGE_PLATFORM.processGroups, windowsHide: true });
+    const options = { cwd: folder, env, detached: PAGE_PLATFORM.processGroups, windowsHide: true };
+
+    if (!PAGE_PLATFORM.programsInheritFds) {
+      return spawn(permissions.run[name], args, options);
+    }
+
+    // Through sh, which closes the page's pipes to the trampoline and execs the program in its place: with them, it could ask the trampoline anything as this page. Only these fds: dash keeps its own on 10 and up.
+    return spawn('/bin/sh', ['-c', `exec ${REQUEST_FD}>&- ${TRAMPOLINE_NETWORK_FD}>&- ${REPLY_FD}>&-; exec "$@"`, 'sh', permissions.run[name], ...args], options);
   };
 
   const stopProgram = (child: ChildProcessWithoutNullStreams) => {

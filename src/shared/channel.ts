@@ -37,7 +37,7 @@ export type PageRequest =
   | { openFile: string };
 // restart quits past the page's beforeunload: the page asked for it with a write pick, and the trampoline opens it again.
 // Requests with an id get one answer: what was saved or picked, a secret, a listener's address, or the notification button the user picked.
-export type PageReply = { show: true } | { quit: true } | { restart: true } | { trayItem: string } | { request: IncomingRequest } | { answered: string; value: string[] | string | number | null } | { answered: string; error: string };
+export type PageReply = { show: true } | { quit: true } | { restart: true } | { refreshMenu: true } | { trayItem: string } | { request: IncomingRequest } | { answered: string; value: string[] | string | number | null } | { answered: string; error: string };
 // icon: the page's icon as base64 PNG, once it has one.
 export type Notice = { title: string; body: string; buttons: string[]; icon: string | null };
 // A request the trampoline answers later, by the id it is given.

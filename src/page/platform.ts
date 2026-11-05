@@ -12,6 +12,8 @@ export type PagePlatform = {
   appMenu: boolean;
   showIcon(win: BrowserWindow, icon: NativeImage, madeHere: boolean): void;
   processGroups: boolean;
+  // A child keeps every open fd that is not close-on-exec, the page's pipes to the trampoline included.
+  programsInheritFds: boolean;
 };
 
 // Another system gets Linux's, whose offline check fails there.

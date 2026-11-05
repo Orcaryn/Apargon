@@ -1,7 +1,7 @@
-import { shell } from 'electron';
+import { app, dialog, shell } from 'electron';
 import type { Permissions } from '../../permissions/tags.ts';
 import type { PageReply, PageRequest, PageTray } from '../../shared/channel.ts';
-import { EGRESS_LOG, readJson, UPDATE_FILE, writeJson, type UpdateState } from '../../shared/data.ts';
+import { EGRESS_LOG, GRANTS_FILE, LINKS_FILE, readJson, UPDATE_FILE, writeJson, type Grants, type Links, type UpdateState } from '../../shared/data.ts';
 import { showNotice } from '../../shared/notice.ts';
 import { revoke } from '../dialogs/approve.ts';
 import { offerSkill } from '../dialogs/skill.ts';
@@ -27,9 +27,37 @@ export function handleRequest(request: PageRequest, { page, permissions, listene
   if ('open' in request) {
     openPage(request.open);
   } else if ('revoke' in request) {
-    revoke(request.revoke);
+    // Only approved pages, as the menu lists them: a papp-system page writes this line itself. Forgetting another page takes its picks and secrets too, so the user confirms. Either way the page builds its menu again from disk.
+    const approved = Object.keys({ ...readJson<Links>(LINKS_FILE), ...readJson<Grants>(GRANTS_FILE) });
+    const pages = request.revoke.filter(other => approved.includes(other));
+
+    if (pages.every(other => other === page)) {
+      revoke(pages);
+      reply({ refreshMenu: true });
+    } else {
+      app.focus({ steal: true });
+      dialog.showMessageBox({ type: 'warning', message: 'Forget these pages?', detail: pages.join('\n'), buttons: ['Forget', 'Cancel'], defaultId: 1, cancelId: 1 }).then(({ response }) => {
+        if (response === 0) {
+          revoke(pages);
+        }
+
+        reply({ refreshMenu: true });
+      });
+    }
   } else if ('automaticUpdates' in request) {
-    writeJson(UPDATE_FILE, { ...readJson<UpdateState>(UPDATE_FILE), automatic: request.automaticUpdates });
+    // Off stops the check for security fixes, so the user confirms. The menu's checkbox ticked itself before asking: the page builds it again from disk.
+    if (request.automaticUpdates) {
+      writeJson(UPDATE_FILE, { ...readJson<UpdateState>(UPDATE_FILE), automatic: true });
+    } else {
+      app.focus({ steal: true });
+      dialog.showMessageBox({ type: 'warning', message: 'Turn off the update check?', detail: 'Apargon will no longer look for security fixes.', buttons: ['Turn Off', 'Cancel'], defaultId: 1, cancelId: 1 }).then(({ response }) => {
+        if (response === 0) {
+          writeJson(UPDATE_FILE, { ...readJson<UpdateState>(UPDATE_FILE), automatic: false });
+        }
+
+        reply({ refreshMenu: true });
+      });
+    }
   } else if ('pageIcon' in request) {
     TRAMPOLINE_PLATFORM.pageIcon?.(page, request.pageIcon);
   } else if ('showEgressLog' in request) {

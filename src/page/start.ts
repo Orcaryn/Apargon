@@ -5,7 +5,7 @@ import { pathToFileURL } from 'url';
 import { describe } from '../permissions/describe.ts';
 import { HOME } from '../permissions/paths.ts';
 import { onTrampolineReply, relay, tellTrampoline, type PageConfig } from '../shared/channel.ts';
-import { APP_ROOT, GRANTS_FILE, LINKS_FILE, PAGE_DATA, readJson, writeJson, type Grants, type Links } from '../shared/data.ts';
+import { APP_ROOT, PAGE_DATA, writeJson } from '../shared/data.ts';
 import { pageAccess } from './api/access.ts';
 import { serveApi } from './api/ipc.ts';
 import { followFavicon } from './icon/icon.ts';
@@ -40,7 +40,7 @@ export async function startPage({ page, permissions, pageHash, bridges }: PageCo
   const access = permissions.system ? null : pageAccess(permissions);
   const canSee = (file: string) => access === null || file === page || access.canSee(file);
   const pageSession = createPageSession(page, permissions, pageHash, canSee);
-  const menus = installMenu(page, describe(permissions), Object.keys({ ...readJson<Links>(LINKS_FILE), ...readJson<Grants>(GRANTS_FILE) }));
+  const menus = installMenu(page, describe(permissions));
   const icon = app.isPackaged ? undefined : path.join(APP_ROOT, 'build/icon.png');
 
   if (icon) {
@@ -139,6 +139,8 @@ export async function startPage({ page, permissions, pageHash, bridges }: PageCo
       toFront();
     } else if ('quit' in reply) {
       app.quit();
+    } else if ('refreshMenu' in reply) {
+      menus.refresh();
     } else if ('trayItem' in reply) {
       pageWindows().forEach(other => other.webContents.send('apargon-tray', reply.trayItem));
     } else if ('restart' in reply) {

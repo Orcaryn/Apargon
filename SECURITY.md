@@ -168,6 +168,7 @@ Keys and logins are files like any other. A tag that names one, the popup names:
 
 - A page's programs, and a `papp-system` page, can send any file they see anywhere: they open `\\<data>.example.com\x`, and Windows looks the name up outside the sandbox. No MXC setting stops this. The popup shows these programs red, and Allow needs "I trust this page."
 - A page that exploits Chromium can leak data the same way.
+- On macOS and Linux a program a page runs starts through `/bin/sh`, which closes Apargon's pipes to the trampoline (fds 3-5) first, so the program cannot send the trampoline requests as the page. On Windows the child gets only the handles libuv passes, not every open handle; that this holds has not been verified on Windows.
 - With OneDrive backup, the PowerShell startup folders are not on the list.
 
 ### Links and files
@@ -217,7 +218,7 @@ The sandbox still blocks their network and writes to Apargon's data. Nothing els
 - launch an app that has network (`open`, `osascript`);
 - write startup files;
 - read and change other pages' storage;
-- ask the trampoline to revoke approvals or turn off updates;
+- ask the trampoline to revoke its own approval, or turn update checks back on, with no prompt; revoking another page, or turning update checks off, needs the user to confirm a prompt first;
 - remove its badge.
 
 Untested: whether it can rename a folder above Apargon's data and plant a `grants.json`.
@@ -241,12 +242,12 @@ Apargon is not a VM. For a hard "nothing leaves" guarantee, use a VM with no net
 
 `pnpm test` runs every check in the real app. `test/selftest/check.ts` lists them. [AGENTS.md](AGENTS.md#tests) has the Linux `.deb` run.
 
-| Platform      | Last verified                                                                                                                                                                                                                                                                    |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| macOS         | 2026-11-05, `pnpm test` on `cc3a788` with the staged connect, tray and progress changes, the page-folder refusal and `**`: 122 checks                                                                                                                                            |
-| Linux         | 2026-11-01, installed `.deb` whose sandbox code matches `3b3d16e`, with the `listen.ts` tests, on Ubuntu 24.04 with AppArmor: 90 checks, the refusal test, and the Node tests. The changes after it, picks, secrets, listen and bundled programs included, are not yet run there |
-| Linux desktop | not yet                                                                                                                                                                                                                                                                          |
-| Windows       | 2026-11-01, Windows 11 on arm64 (GitHub `windows-11-arm`, run 41315097711 of the spike repo, this tree on `3b3d16e`): 77 checks from source with no leak in the packet capture, and 77 in the installed arm64 app. x64 not tested                                                |
+| Platform      | Last verified                                                                                                                                                                                                                                    |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| macOS         | 2026-11-05, `pnpm test` on `aea2a9e` with the staged proxy-loopback and program-fd fixes: 289 checks                                                                                                                                             |
+| Linux         | 2026-11-05, locally built `.deb` (`aea2a9e` plus the staged fixes) on the Ubuntu 24.04 VPS: 116 checks, the refusal test and its control, and the Node tests. A program was confirmed to reach the trampoline's fds before the fix and not after |
+| Linux desktop | not yet                                                                                                                                                                                                                                          |
+| Windows       | 2026-11-01, Windows 11 on arm64 (GitHub `windows-11-arm`, run 41315097711 of the spike repo, this tree on `3b3d16e`): 77 checks from source with no leak in the packet capture, and 77 in the installed arm64 app. x64 not tested                |
 
 Not tested: the NAT64 refusal, the proxy refusing this Mac's own LAN address, and two pages reaching each other's `localhost` ports.
 

@@ -27,6 +27,8 @@ export const windows: PagePlatform = {
   },
   // taskkill finds children through WMI, which the sandbox cannot reach: a kill ends the program, not what it started.
   processGroups: false,
+  // A child gets only the handles libuv hands it: its stdio.
+  programsInheritFds: false,
 };
 
 // TEST-NET-1: no network routes it, so outside the sandbox the connection hangs or is unreachable, never refused by the firewall.

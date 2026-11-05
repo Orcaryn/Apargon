@@ -14,6 +14,7 @@ export const linux: PagePlatform = {
     app.setDesktopName(`${pageAppId(page)}.desktop`);
   },
   processGroups: true,
+  programsInheritFds: true,
   appMenu: false,
   // In the launcher entry too, where the dock takes it from: the trampoline writes it, as this process may not.
   showIcon(win, icon) {

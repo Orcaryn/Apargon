@@ -38,6 +38,8 @@
     result.curl_undeclared_blocked = await curl('https://example.net/') !== '200';
     result.curl_direct_blocked = await curl('--noproxy', '*', 'https://example.com/') !== '200';
     result.proxy_refuses_this_computer = await curl('http://0.0.0.1:9/') === '403';
+    // *:9 matches any host: still not this computer, which only a tag naming localhost:<port> reaches.
+    result.proxy_wildcard_refuses_this_computer = (await Promise.all(['localhost', '127.0.0.1'].map((host) => curl('--noproxy', '', `http://${host}:9/`)))).every((code) => code === '403');
     result.proxy_refuses_local_network = (await Promise.all(['10.255.255.1', '192.168.255.1', '172.31.255.1', '169.254.169.254', '100.64.0.1'].map((address) => curl(`http://${address}:9/`)))).every((code) => code === '403');
     result.proxy_allows_declared_lan_address = await curl('http://10.255.255.2:9/') !== '403';
     if (mac) {
@@ -65,6 +67,8 @@
     result.program_page_write_blocked = (await papp.run('touch', ['touched.papp'])).status !== 0;
 
     result.program_bundled_runs = (await papp.run('greet', ['x'])).stdout === 'bundled x\n';
+    // Not the page's pipes to the trampoline (fds 3 and 5): with them, a program could ask it anything as this page.
+    result.program_no_trampoline_fds = (await papp.run('sh', ['-c', '{ echo >&3 || echo >&5; } 2>/dev/null && echo open || echo closed'])).stdout === 'closed\n';
     result.program_input = (await papp.run('cat', [], { input: 'piped' })).stdout === 'piped';
     const bytes = (await papp.run('cat', [], { input: new Uint8Array([0, 255, 10, 1]), encoding: null })).stdout;
     result.program_bytes = bytes instanceof Uint8Array && bytes.join() === '0,255,10,1';
@@ -130,6 +134,7 @@
     result.connect_tls = /^HTTP\/1\.[01] 200/.test(await talk('example.com', 443, { tls: true }));
     result.connect_undeclared_refused = (await papp.connect('localhost', 47182).then(() => 'connected', (err) => err.message)).includes('may not connect');
     result.connect_local_network_refused = (await papp.connect('10.255.255.1', 9).then(() => 'connected', (err) => err.message)).includes('may not connect');
+    result.connect_wildcard_refuses_this_computer = (await Promise.all(['localhost', '127.0.0.1'].map((host) => papp.connect(host, 9).then(() => 'connected', (err) => err.message)))).every((message) => message.includes('may not connect'));
     result.clipboard_read_granted = (await navigator.permissions.query({ name: 'clipboard-read' })).state === 'granted';
     result.microphone_permission_granted = (await navigator.permissions.query({ name: 'microphone' })).state === 'granted';
     result.camera_permission_denied_without_tag = (await navigator.permissions.query({ name: 'camera' })).state === 'denied';

@@ -54,7 +54,7 @@ export function followFavicon(win: BrowserWindow, canSee: (file: string) => bool
 // As a data: URL, which the sandboxed icon window can load.
 async function readFavicon(win: BrowserWindow, url: string, canSee: (file: string) => boolean) {
   if (url.startsWith('data:image/')) {
-    return url;
+    return url.length <= MAX_FAVICON_BYTES ? url : undefined;
   } else if (/^https?:/.test(url)) {
     // Through the page's session, so its proxy: only a host in papp-net answers. An image of a favicon's size, or nothing.
     const response = await win.webContents.session.fetch(url);
@@ -69,7 +69,7 @@ async function readFavicon(win: BrowserWindow, url: string, canSee: (file: strin
   const file = realPath(fileURLToPath(url));
   const type = IMAGE_TYPES[path.extname(file).toLowerCase()];
 
-  return type !== undefined && canSee(file) ? `data:${type};base64,${fs.readFileSync(file).toString('base64')}` : undefined;
+  return type !== undefined && canSee(file) && fs.statSync(file).size <= MAX_FAVICON_BYTES ? `data:${type};base64,${fs.readFileSync(file).toString('base64')}` : undefined;
 }
 
 async function drawIcon(favicons: string[]) {

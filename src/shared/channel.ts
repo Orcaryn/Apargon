@@ -23,7 +23,7 @@ export type PageRequest =
   | { pageIcon: string }
   | { notify: { id: string } & Notice }
   | { tray: PageTray }
-  | { saveAs: { id: string; files: SavedFile[] } }
+  | { saveAll: { id: string; files: SavedFile[] } }
   | { save: { id: string; file: string; data: string } }
   | { pick: { id: string } & PickOptions }
   // Without a value, a read; with null, a deletion.

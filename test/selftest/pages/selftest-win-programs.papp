@@ -46,11 +46,11 @@
 
     const chunks = [];
     const streamed = await papp.spawn('cmd', ['/d', '/c', 'echo one& node -e setTimeout(Object,1000)& echo two'], { onOutput: (_stream, text) => chunks.push(text) });
-    result.spawn_streams = (await streamed.done).status === 0 && lines(chunks.join('')) === 'one\ntwo\n';
+    result.spawn_streams = (await streamed.closed).status === 0 && lines(chunks.join('')) === 'one\ntwo\n';
     const sleeper = await papp.spawn('node', ['-e', 'setTimeout(Object,30000)']);
     const killedAt = Date.now();
-    sleeper.kill();
-    const stopped = await sleeper.done;
+    sleeper.close();
+    const stopped = await sleeper.closed;
     result.spawn_kill = (stopped.signal === 'SIGTERM' && Date.now() - killedAt < 5000) || { ...stopped, ms: Date.now() - killedAt };
     result.spawn_undeclared_refused = await refused(() => papp.spawn('where'));
 

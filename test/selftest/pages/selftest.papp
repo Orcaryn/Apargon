@@ -18,12 +18,12 @@
   };
   const changeSeen = async (watching, change, options) => {
     let seen = null;
-    const stop = await papp.watch(watching, (file, kind) => { seen ??= `${file} ${kind}`; }, options);
+    const watcher = await papp.watch(watching, (file, kind) => { seen ??= `${file} ${kind}`; }, options);
     await change();
     for (let waited = 0; seen === null && waited < 3000; waited += 100) {
       await new Promise((done) => setTimeout(done, 100));
     }
-    await stop();
+    await watcher.close();
     return seen;
   };
   const loads = (src) => new Promise((done) => {
@@ -75,19 +75,20 @@
     result.watch_removed = await changeSeen('scratch.txt', () => papp.rm('scratch.txt')) === 'scratch.txt removed';
     await papp.mkdir('scratch-dir');
     const deep = [];
-    const stopDeep = await papp.watch('.', (file, kind) => deep.push(`${file} ${kind}`), { recursive: true });
+    const deepWatcher = await papp.watch('.', (file, kind) => deep.push(`${file} ${kind}`), { recursive: true });
     await papp.writeFile('scratch-dir/deep.txt', 'x');
     await new Promise((done) => setTimeout(done, 1000));
-    await stopDeep();
-    result.watch_recursive = deep.includes('scratch-dir/deep.txt changed');
-    await papp.rm('scratch-dir');
+    await deepWatcher.close();
+    result.watch_recursive = deep.includes('scratch-dir/deep.txt changed') && await deepWatcher.closed === null;
+    result.rm_folder_needs_recursive = await refused(() => papp.rm('scratch-dir')) && (await papp.readdir('scratch-dir')).includes('deep.txt');
+    await papp.rm('scratch-dir', { recursive: true });
     await papp.writeFile('scratch.txt', 'again');
     result.watch_outside_refused = await refused(() => papp.watch('..', () => {}));
     result.watch_hidden_refused = await refused(() => papp.watch('.hidden', () => {}));
     await papp.rm('scratch.txt');
     await papp.mkdir('scratch-dir');
     result.hidden_below_match_refused = await refused(() => papp.writeFile('scratch-dir/.hidden', 'x'));
-    await papp.rm('scratch-dir');
+    await papp.rm('scratch-dir', { recursive: true });
     // ** is any number of folders, none hidden.
     await papp.writeFile('deep/top.md', 'x');
     await papp.writeFile('deep/sub/below.md', 'x');
@@ -100,7 +101,8 @@
     const entry = (name) => listed.find((item) => item.name === name);
     result.readdir_stats = entry('subfolder')?.isDirectory === true && entry('selftest.papp')?.isFile === true && entry('selftest.papp').size > 0 && !listed.some((item) => item.name.startsWith('.'));
     const note = await papp.readFile('subfolder/note.txt');
-    result.read_range = await papp.readFile('subfolder/note.txt', 'utf8', { offset: 2, length: 4 }) === note.slice(2, 6) && (await papp.readFile('subfolder/note.txt', null, { offset: 1 })).length === note.length - 1;
+    result.read_range = await papp.readFile('subfolder/note.txt', { offset: 2, length: 4 }) === note.slice(2, 6) && (await papp.readFile('subfolder/note.txt', { encoding: null, offset: 1 })).length === note.length - 1;
+    result.read_options_refused = await refused(() => papp.readFile('subfolder/note.txt', 'utf8'));
     await papp.writeFile('scratch.txt', 'a');
     await papp.appendFile('scratch.txt', 'b');
     result.append = await papp.readFile('scratch.txt') === 'ab';
@@ -119,14 +121,14 @@
     result.progress_refused = await refused(() => papp.progress(2)) && await refused(() => papp.progress('0.5')) && await refused(() => papp.progress(NaN));
     const power = await papp.power();
     result.power_read = typeof power.idleSeconds === 'number' && typeof power.onBattery === 'boolean';
-    result.save_names_refused = (await Promise.all([{}, { '../out.txt': 'x' }, { 'sub/out.txt': 'x' }, { '.zshrc': 'x' }, { 'ok.txt': 'x', 'page.papp': 'x' }, { 'ok.txt': 'x', '': 'x' }].map((files) => refused(() => papp.saveAs(files))))).every(Boolean);
+    result.save_names_refused = (await Promise.all([{}, { '../out.txt': 'x' }, { 'sub/out.txt': 'x' }, { '.zshrc': 'x' }, { 'ok.txt': 'x', 'page.papp': 'x' }, { 'ok.txt': 'x', '': 'x' }].map((files) => refused(() => papp.saveAll(files))))).every(Boolean);
     result.given_empty = (await papp.given()).length === 0;
     // 'token' stays: selftest-system then finds the secrets folder hidden with a file in it.
-    await papp.secret('token', 'kept by selftest.papp');
-    await papp.secret('gone', 'x');
-    await papp.secret('gone', null);
-    result.secret_roundtrip = await papp.secret('token') === 'kept by selftest.papp' && await papp.secret('gone') === null && await papp.secret('never') === null;
-    result.secret_names_refused = await refused(() => papp.secret('')) && await refused(() => papp.secret('token', 5)) && await refused(() => papp.secret('x'.repeat(257)));
+    await papp.setSecret('token', 'kept by selftest.papp');
+    await papp.setSecret('gone', 'x');
+    await papp.deleteSecret('gone');
+    result.secret_roundtrip = await papp.getSecret('token') === 'kept by selftest.papp' && await papp.getSecret('gone') === null && await papp.getSecret('never') === null;
+    result.secret_names_refused = await refused(() => papp.getSecret('')) && await refused(() => papp.setSecret('token', 5)) && await refused(() => papp.setSecret('token')) && await refused(() => papp.deleteSecret('x'.repeat(257)));
 
     result.outside_read_refused = await refused(() => papp.readFile('../../../package.json'));
     result.outside_write_refused = await refused(() => papp.writeFile('../outside.txt', 'x'));

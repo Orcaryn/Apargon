@@ -11,13 +11,13 @@ import { TRAMPOLINE_PLATFORM } from '../platform.ts';
 // The page names the files and the user picks the folder, in this process's dialog: a page that breaks out of its sandbox can write nowhere else.
 export async function saveFiles(files: SavedFile[]) {
   if (!files.length) {
-    throw new Error('Apargon: saveAs takes one or more files.');
+    throw new Error('Apargon: saveAll takes one or more files.');
   }
 
   const badName = findBadName(files.map(({ name }) => name));
 
   if (badName !== undefined) {
-    throw new Error(`Apargon: saveAs takes plain file names, without a folder, a leading dot or .papp: ${JSON.stringify(badName)}.`);
+    throw new Error(`Apargon: saveAll takes plain file names, without a folder, a leading dot or .papp: ${JSON.stringify(badName)}.`);
   }
 
   // This process has no window of its own: without this, its dialog opens behind the page.

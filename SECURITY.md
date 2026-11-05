@@ -26,7 +26,7 @@ Keys and logins are files like any other. A tag that names one, the popup names:
 - **An approval = a path + the exact popup lines.** A downloaded page is also tied to its content. If the content changes, Apargon asks again.
 - **No page can write Apargon's data** (`grants.json`, `links.json`, `seen.json`, `given.json`). The page's file API can't read it either.
 - **A pick is kept** in `given.json`, and granted as if a tag named it: the sandbox, the checks and the page's menu follow the same rule. The trampoline shows the dialog, which says what the page gets, and refuses a link, Apargon's data, and for write a hidden file, a page or a launch folder. A pick then passes every check a tag does, when picked and again each time the sandbox is built: no `"` in a written path, no line break or invisible character, on Linux not `/tmp` or `/var/tmp` itself, a folder that holds one, or anything in `/run`, and no write over a program the page runs. A pick that widens the sandbox restarts the page. Taking back the approval forgets the picks.
-- **Secrets** (`papp.secret`) live in `apargon-secrets` beside Apargon's data, one file per page, each value sealed with the OS's store for this user (`safeStorage`). Every sandbox hides the folder, so no page's process, `papp-system` included, reads another page's secrets or its own file. The trampoline answers only the page that asked, by the pipe it asked on. Taking back the approval deletes them.
+- **Secrets** (`papp.getSecret`, `papp.setSecret`, `papp.deleteSecret`) live in `apargon-secrets` beside Apargon's data, one file per page, each value sealed with the OS's store for this user (`safeStorage`). Every sandbox hides the folder, so no page's process, `papp-system` included, reads another page's secrets or its own file. The trampoline answers only the page that asked, by the pipe it asked on. Taking back the approval deletes them.
 - **The sandbox gets no terminal.** Its output reaches the terminal as plain text. On macOS, Seatbelt also denies `/dev/tty`, so a page can't type commands into the shell that started Apargon.
 - **The window shows only the page.** No navigation. No frame of another file.
 - **Hidden files** (dot names) are never matched by `*` or `**`. A tag must name them.
@@ -108,10 +108,10 @@ Keys and logins are files like any other. A tag that names one, the popup names:
 - A writable folder can hold files other tools run later, like `package.json` scripts or `.git/hooks`. The popup doesn't show these as red.
 - A synced folder sends what the page writes off the machine.
 
-### Saving (`papp.saveAs`, `papp.save`)
+### Saving (`papp.save`, `papp.saveAll`)
 
 - Any page can open the save dialog, with no tag, again and again.
-- `papp.saveAs` writes only new files, into the folder the user picks.
+- `papp.saveAll` writes only new files, into the folder the user picks.
 - `papp.save` can replace a file. The OS asks first, but the page suggests the name and folder, so the user only has to press Save and Replace.
 - On Windows, `papp.save` follows a link at the chosen name. Windows has no flag that refuses one.
 - Hidden folders and `~/Library` or `AppData` are refused: files saved there can run on their own. macOS cloud drives in `~/Library` (iCloud Drive, `~/Library/CloudStorage`) are allowed: files there only sync.
@@ -124,7 +124,7 @@ Keys and logins are files like any other. A tag that names one, the popup names:
 - A page with `papp-net` can send what you pick. The pick dialog does not say so; the popup did, when the page asked for the host.
 - A folder you pick with write is granted whole on Linux and Windows, as a `papp-write` folder is.
 
-### Secrets (`papp.secret`)
+### Secrets (`papp.getSecret`, `papp.setSecret`, `papp.deleteSecret`)
 
 - The page, and the programs it runs, see a secret while it runs. A page with `papp-net` can send it.
 - On Linux without a keyring, Electron seals them with a fixed key. They are then only obscured on disk.

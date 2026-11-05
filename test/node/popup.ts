@@ -395,7 +395,7 @@ const anyLink = hostMatches('*', 'anything.example') && linkHost('ssh://host') =
 const viewers =
   ['a.PNG', 'b.pdf', 'c.md', 'd.mov'].every(name => OPENABLE.test(name)) &&
   ['e.html', 'f.svg', 'g.papp', 'h.command', 'i.py', 'j.sh', 'k.webloc', 'l.desktop', 'm.app'].every(name => !OPENABLE.test(name));
-// saveAs refuses these folders, and the popup shows writes to them red.
+// saveAll refuses these folders, and the popup shows writes to them red.
 const runsOutside =
   (LAUNCH_FOLDER === null || runsOutsideSandbox(path.join(LAUNCH_FOLDER, 'x'))) &&
   runsOutsideSandbox(path.join(HOME, '.config', 'autostart')) &&
@@ -448,7 +448,7 @@ for (const { pattern, file, matches: expected, ok } of matches) {
 
 console.log(`${anyLink ? 'ok  ' : 'FAIL'} papp-open * takes any http(s) link and no other scheme`);
 console.log(`${viewers ? 'ok  ' : 'FAIL'} papp.open takes viewable files only`);
-console.log(`${runsOutside ? 'ok  ' : 'FAIL'} papp.saveAs refuses launch agents and hidden folders, not cloud drives`);
+console.log(`${runsOutside ? 'ok  ' : 'FAIL'} papp.saveAll refuses launch agents and hidden folders, not cloud drives`);
 
 process.exit(
   (

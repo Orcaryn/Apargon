@@ -9,8 +9,8 @@ import type { Scope } from './scope.ts';
 export function systemApi(permissions: Permissions, { where, canSee, need }: Scope, toFront: () => void, ask: Ask, pageIcon: () => NativeImage | null) {
   return {
     // The trampoline shows the dialog and writes: this process may not write where the user picks.
-    saveAs(files: Record<string, string | Uint8Array>) {
-      return ask<string[]>(id => ({ saveAs: { id, files: Object.entries(files).map(([name, data]) => ({ name, data: Buffer.from(data).toString('base64') })) } }));
+    saveAll(files: Record<string, string | Uint8Array>) {
+      return ask<string[]>(id => ({ saveAll: { id, files: Object.entries(files).map(([name, data]) => ({ name, data: Buffer.from(data).toString('base64') })) } }));
     },
     // The path saved to, or null when the user cancels.
     save(file: string, data: string | Uint8Array) {
@@ -43,18 +43,34 @@ export function systemApi(permissions: Permissions, { where, canSee, need }: Sco
     tray(title: PageTray['title'], items: PageTray['items'] = []) {
       tellTrampoline({ tray: { title: title === null ? null : String(title).slice(0, 24), items: items.map(item => ('separator' in item ? { separator: true } : { label: String(item.label), id: String(item.id) })) } });
     },
-    // One argument reads; a string sets; null deletes. The trampoline keeps them where no page's process can read.
-    secret(name: string, value?: string | null) {
-      if (typeof name !== 'string' || !name || name.length > 256) {
-        throw new Error('Apargon: secret takes a name of 1 to 256 characters.');
-      } else if (value !== undefined && value !== null && typeof value !== 'string') {
-        throw new Error('Apargon: a secret is a string, or null to delete it.');
+    // The trampoline keeps them where no page's process can read. Null when there is none.
+    getSecret(name: string) {
+      checkSecretName(name);
+
+      return ask<string | null>(id => ({ secret: { id, name } }));
+    },
+    setSecret(name: string, value: string) {
+      checkSecretName(name);
+
+      if (typeof value !== 'string') {
+        throw new Error('Apargon: a secret is a string. To remove one, use deleteSecret.');
       }
 
-      return ask<string | null>(id => ({ secret: value === undefined ? { id, name } : { id, name, value } }));
+      return ask<null>(id => ({ secret: { id, name, value } }));
+    },
+    deleteSecret(name: string) {
+      checkSecretName(name);
+
+      return ask<null>(id => ({ secret: { id, name, value: null } }));
     },
     power() {
       return { idleSeconds: powerMonitor.getSystemIdleTime(), onBattery: powerMonitor.isOnBatteryPower() };
     },
   };
+}
+
+function checkSecretName(name: string) {
+  if (typeof name !== 'string' || !name || name.length > 256) {
+    throw new Error('Apargon: a secret takes a name of 1 to 256 characters.');
+  }
 }

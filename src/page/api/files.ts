@@ -27,15 +27,20 @@ export function fileApi(dir: string, { where, canSee, canList, canChange, need, 
   };
 
   return {
-    async readFile(file: string, encoding: BufferEncoding | null, range?: { offset?: number; length?: number }) {
-      if (encoding !== null && !Buffer.isEncoding(encoding)) {
+    // Any other key could be a Node option passed through. A string, as Node takes the encoding, is refused too: it spreads into keys 0, 1, ….
+    async readFile(file: string, options: { encoding?: BufferEncoding | null; offset?: number; length?: number } = {}) {
+      const { encoding = 'utf8', offset = 0, length, ...rest } = options;
+
+      if (Object.keys(rest).length) {
+        throw new Error('Apargon: readFile takes the options encoding, offset and length, as in readFile(path, { encoding: null }) for bytes.');
+      } else if (encoding !== null && !Buffer.isEncoding(encoding)) {
         throw new Error('Apargon: readFile takes an encoding name, or null for bytes.');
       }
 
       const target = where(file);
       need(canSee(target), target, 'see');
 
-      if (!range) {
+      if (offset === 0 && length === undefined) {
         return fs.promises.readFile(target, encoding);
       }
 
@@ -43,8 +48,7 @@ export function fileApi(dir: string, { where, canSee, canList, canChange, need, 
 
       try {
         const { size } = await handle.stat();
-        const { offset = 0, length = size } = range;
-        const { bytesRead, buffer } = await handle.read(Buffer.alloc(Math.max(0, Math.min(length, size - offset))), 0, undefined, offset);
+        const { bytesRead, buffer } = await handle.read(Buffer.alloc(Math.max(0, Math.min(length ?? size, size - offset))), 0, undefined, offset);
         const bytes = buffer.subarray(0, bytesRead);
 
         return encoding === null ? bytes : bytes.toString(encoding);
@@ -101,10 +105,17 @@ export function fileApi(dir: string, { where, canSee, canList, canChange, need, 
 
       fs.mkdirSync(target, { recursive: true });
     },
-    rm(file: string) {
+    // A folder only with recursive, as in Node, which refuses one without it.
+    rm(file: string, { recursive = false }: { recursive?: boolean } = {}) {
       const target = where(file);
-      needChangeAll(target);
-      fs.rmSync(target, { recursive: true });
+
+      if (recursive) {
+        needChangeAll(target);
+      } else {
+        need(canChange(target), target, 'change');
+      }
+
+      fs.rmSync(target, { recursive });
     },
     rename(from: string, to: string) {
       const [source, destination] = [where(from), where(to)];
@@ -125,8 +136,12 @@ export function fileApi(dir: string, { where, canSee, canList, canChange, need, 
           win.webContents.send('apargon-change', id, path.relative(dir, file).replaceAll(path.sep, '/'), fs.existsSync(file) ? 'changed' : 'removed');
         }
       });
-      // A recursive watch can fail on a new subfolder, or when the system runs out of watches; it then stops.
-      watcher.on('error', () => watcher.close());
+      // A recursive watch can fail on a new subfolder, or when the system runs out of watches; it then stops, and the page's closed says why.
+      watcher.on('error', err => {
+        watcher.close();
+        watchers.delete(id);
+        win.webContents.send('apargon-unwatched', id, err.message);
+      });
       watchers.set(id, watcher);
     },
     unwatch(id: string) {

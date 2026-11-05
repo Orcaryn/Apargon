@@ -22,7 +22,7 @@ export function windowApi(permissions: Permissions, win: BrowserWindow, menus: P
     // The system's print dialog; true once the job is sent.
     print() {
       if (!permissions.use.includes('print')) {
-        throw new Error('Apargon: this page may not print. Ask for it with <meta name="papp-use" content="print">, or save papp.pdf() with papp.saveAs().');
+        throw new Error('Apargon: this page may not print. Ask for it with <meta name="papp-use" content="print">, or save papp.pdf() with papp.save().');
       }
 
       return new Promise<boolean>(resolve => win.webContents.print({}, resolve));

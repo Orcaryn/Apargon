@@ -28,7 +28,11 @@ const listener = callbacks => callback => {
 
   return () => callbacks.delete(callback);
 };
-ipcRenderer.on('apargon-change', (_event, id, file, kind) => watchCallbacks.get(id)?.(file, kind));
+ipcRenderer.on('apargon-change', (_event, id, file, kind) => watchCallbacks.get(id)?.callback(file, kind));
+ipcRenderer.on('apargon-unwatched', (_event, id, error) => {
+  watchCallbacks.get(id)?.resolve(error);
+  watchCallbacks.delete(id);
+});
 ipcRenderer.on('apargon-output', (_event, id, stream, text) => jobs.get(id)?.onOutput?.(stream, text));
 ipcRenderer.on('apargon-exit', (_event, id, exit) => {
   jobs.get(id)?.resolve(exit);
@@ -68,7 +72,7 @@ ipcRenderer.on('apargon-tray', (_event, id) => trayCallbacks.forEach(callback =>
 
 contextBridge.exposeInMainWorld('papp', {
   dir: ipcRenderer.sendSync('apargon-dir'),
-  readFile: (file, encoding = 'utf8', range) => call('readFile', file, encoding, range),
+  readFile: (file, options) => call('readFile', file, options),
   writeFile: (file, data) => call('writeFile', file, data),
   appendFile: (file, data) => call('appendFile', file, data),
   copyFile: (from, to) => call('copyFile', from, to),
@@ -76,18 +80,18 @@ contextBridge.exposeInMainWorld('papp', {
   stat: file => call('stat', file),
   exists: file => call('exists', file),
   mkdir: file => call('mkdir', file),
-  rm: file => call('rm', file),
+  rm: (file, options) => call('rm', file, options),
   rename: (from, to) => call('rename', from, to),
   run: (program, args, options) => call('run', program, args, options),
   spawn: async (program, args, { cwd, onOutput } = {}) => {
     const id = crypto.randomUUID();
-    const done = new Promise(resolve => jobs.set(id, { onOutput, resolve }));
+    const closed = new Promise(resolve => jobs.set(id, { onOutput, resolve }));
     await call('spawn', id, program, args, { cwd }).catch(err => {
       jobs.delete(id);
       throw err;
     });
 
-    return { done, write: data => call('write', id, data), end: () => call('endInput', id), kill: () => call('kill', id) };
+    return { closed, write: data => call('write', id, data), end: () => call('endInput', id), close: () => call('kill', id) };
   },
   connect: async (host, port, { tls, onData } = {}) => {
     const id = crypto.randomUUID();
@@ -101,18 +105,24 @@ contextBridge.exposeInMainWorld('papp', {
   },
   watch: async (file, callback, options) => {
     const id = crypto.randomUUID();
+    const { promise: closed, resolve } = Promise.withResolvers();
     await call('watch', id, file, options);
-    watchCallbacks.set(id, callback);
+    watchCallbacks.set(id, { callback, resolve });
 
-    return () => {
-      watchCallbacks.delete(id);
-
-      return call('unwatch', id);
+    return {
+      closed,
+      close: async () => {
+        watchCallbacks.delete(id);
+        await call('unwatch', id);
+        resolve(null);
+      },
     };
   },
   pick: options => call('pick', options),
   given: () => call('given'),
-  secret: (name, value) => call('secret', name, value),
+  getSecret: name => call('getSecret', name),
+  setSecret: (name, value) => call('setSecret', name, value),
+  deleteSecret: name => call('deleteSecret', name),
   listen: async (options, handler) => {
     if (typeof handler !== 'function') {
       throw new TypeError('papp.listen takes options and a handler: papp.listen({}, request => ({ body: "ok" })).');
@@ -125,17 +135,20 @@ contextBridge.exposeInMainWorld('papp', {
       throw err;
     });
 
+    const { promise: closed, resolve } = Promise.withResolvers();
+
     return {
       url,
-      close: () => {
+      closed,
+      close: async () => {
         requestHandlers.delete(server);
-
-        return call('unlisten', server);
+        await call('unlisten', server);
+        resolve(null);
       },
     };
   },
   open: target => call('open', target),
-  saveAs: files => call('saveAs', files),
+  saveAll: files => call('saveAll', files),
   save: (file, data) => call('save', file, data),
   pdf: () => call('pdf'),
   print: () => call('print'),

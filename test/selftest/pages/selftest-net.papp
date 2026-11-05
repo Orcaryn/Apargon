@@ -78,15 +78,15 @@
 
     const chunks = [];
     const lines = await papp.spawn('sh', ['-c', 'echo one; sleep 1; echo two'], { onOutput: (_stream, text) => chunks.push(text) });
-    result.spawn_streams = (await lines.done).status === 0 && chunks.join('') === 'one\ntwo\n' && chunks[0] === 'one\n';
+    result.spawn_streams = (await lines.closed).status === 0 && chunks.join('') === 'one\ntwo\n' && chunks[0] === 'one\n';
     let echoed = '';
     const cat = await papp.spawn('cat', [], { onOutput: (_stream, text) => (echoed += text) });
     await cat.write('piped');
     await cat.end();
-    result.spawn_input = (await cat.done).status === 0 && echoed === 'piped';
+    result.spawn_input = (await cat.closed).status === 0 && echoed === 'piped';
     const sleeper = await papp.spawn('sh', ['-c', 'sleep 30; echo late']);
-    await sleeper.kill();
-    const stopped = await Promise.race([sleeper.done, new Promise((resolve) => setTimeout(() => resolve(null), 5000))]);
+    await sleeper.close();
+    const stopped = await Promise.race([sleeper.closed, new Promise((resolve) => setTimeout(() => resolve(null), 5000))]);
     result.spawn_kill = stopped?.signal === 'SIGTERM';
     result.spawn_undeclared_refused = await refused(() => papp.spawn('ls'));
     result.spawn_options_as_args_refused = await refused(() => papp.spawn('touch', { cwd: '/' }));
@@ -114,7 +114,7 @@
     const expected = { url: 'http://127.0.0.1:47183', status: 201, header: 'yes', text: 'answered', asked: 'POST /path?q=1 p hello' };
     result.listen_answers = JSON.stringify(answered) === JSON.stringify(expected) || answered;
     await server.close();
-    result.listen_closed = !(await fetchOk('http://127.0.0.1:47183/'));
+    result.listen_closed = await server.closed === null && !(await fetchOk('http://127.0.0.1:47183/'));
 
     result.fetch_declared = await fetchOk('https://example.com/');
     result.fetch_declared_http = await fetchOk('http://example.com/');

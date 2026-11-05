@@ -77,8 +77,8 @@ export function handleRequest(request: PageRequest, { page, permissions, listene
     openFile(request.openFile);
   } else if ('installSkill' in request) {
     offerSkill('The papp skill for coding agents', null);
-  } else if ('saveAs' in request) {
-    const { id, files } = request.saveAs;
+  } else if ('saveAll' in request) {
+    const { id, files } = request.saveAll;
     saveFiles(files).then(
       paths => reply({ answered: id, value: paths }),
       (err: Error) => reply({ answered: id, error: err.message })

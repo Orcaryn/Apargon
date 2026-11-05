@@ -61,21 +61,23 @@ type MenuItem = { separator: true } | { label: string; id?: string; keys?: strin
 // headers by lowercase name; an answer without status is 200, without body is empty
 type Incoming = { method: string; url: string; headers: Record<string, string>; body: Bytes };
 type Answer = { status?: number; headers?: Record<string, string>; body?: string | Bytes };
+// what watch, listen, connect and spawn give: close() stops it; closed resolves once it has stopped, by close() or on its own
+type Handle<Closed> = { close(): Promise<void>; closed: Promise<Closed> };
 
 declare const papp: {
   // the page's folder
   dir: string;
-  // range is in bytes
-  readFile(path: string, encoding?: 'utf8', range?: { offset?: number; length?: number }): Promise<string>;
-  readFile(path: string, encoding: null, range?: { offset?: number; length?: number }): Promise<Bytes>;
+  // offset and length are in bytes, for part of the file
+  readFile(path: string, options?: { encoding?: 'utf8'; offset?: number; length?: number }): Promise<string>;
+  readFile(path: string, options: { encoding: null; offset?: number; length?: number }): Promise<Bytes>;
   // the folder must exist
   writeFile(path: string, data: string | Bytes): Promise<void>;
   appendFile(path: string, data: string | Bytes): Promise<void>;
   copyFile(from: string, to: string): Promise<void>;
   // recursive
   mkdir(path: string): Promise<void>;
-  // recursive
-  rm(path: string): Promise<void>;
+  // a folder only with recursive, which removes everything in it
+  rm(path: string, options?: { recursive?: boolean }): Promise<void>;
   rename(from: string, to: string): Promise<void>;
   readdir(path: string): Promise<string[]>;
   // a link is described as itself, not what it points to
@@ -87,15 +89,16 @@ declare const papp: {
   pick(options?: { folder?: boolean; multiple?: boolean; write?: boolean }): Promise<string[]>;
   // every pick so far
   given(): Promise<{ path: string; write: boolean }[]>;
-  // kept by Apargon, sealed with the OS's store, where no page can read it; one argument reads (null if none), null deletes
-  secret(name: string): Promise<string | null>;
-  secret(name: string, value: string | null): Promise<void>;
+  // kept by Apargon, sealed with the OS's store, where no page can read it; null if none
+  getSecret(name: string): Promise<string | null>;
+  setSecret(name: string, value: string): Promise<void>;
+  deleteSecret(name: string): Promise<void>;
   // needs papp-listen; Apargon listens and passes each request to the handler; url is where to reach it; a free port unless one is given
-  listen(options: { port?: number }, handler: (request: Incoming) => Answer | Promise<Answer>): Promise<{ url: string; close(): Promise<void> }>;
-  // the user picks a folder; never replaces a file: a taken name becomes "name (2)"; [] if cancelled
-  saveAs(files: Record<string, string | Bytes>): Promise<string[]>;
-  // file is only a suggestion; the user picks; may replace a file, after the OS asks; null if cancelled
+  listen(options: { port?: number }, handler: (request: Incoming) => Answer | Promise<Answer>): Promise<Handle<null> & { url: string }>;
+  // one file; file is only a suggestion; the user picks; may replace a file, after the OS asks; null if cancelled
   save(file: string, data: string | Bytes): Promise<string | null>;
+  // several files; the user picks a folder; never replaces a file: a taken name becomes "name (2)"; [] if cancelled
+  saveAll(files: Record<string, string | Bytes>): Promise<string[]>;
   // the page as a PDF; no tag needed
   pdf(): Promise<Bytes>;
   // needs papp-use print; true once sent
@@ -105,16 +108,18 @@ declare const papp: {
   // timeout in ms stops it; encoding null gives bytes
   run(program: string, args?: string[], options?: { cwd?: string; input?: string | Bytes; encoding?: 'utf8' | null; timeout?: number }):
     Promise<Exit & { stdout: string | Bytes; stderr: string | Bytes }>;
+  // close() stops the program; end() ends its input; closed gives how it exited
   spawn(program: string, args?: string[], options?: { cwd?: string; onOutput?: (stream: 'stdout' | 'stderr', text: string) => void }):
-    Promise<{ write(data: string | Bytes): Promise<void>; end(): Promise<void>; kill(): Promise<void>; done: Promise<Exit> }>;
-  // a TCP connection to a host:port papp-net names, as a database or mail client needs; tls: true wraps it in TLS
+    Promise<Handle<Exit> & { write(data: string | Bytes): Promise<void>; end(): Promise<void> }>;
+  // a TCP connection to a host:port papp-net names, as a database or mail client needs; tls: true wraps it in TLS; closed gives the error, or null
   connect(host: string, port: number, options?: { tls?: boolean; onData?: (bytes: Bytes) => void }):
-    Promise<{ write(data: string | Bytes): Promise<void>; close(): Promise<void>; closed: Promise<string | null> }>;
-  // file is relative to the page's folder; a new file counts as changed; resolves to a stop function
-  watch(path: string, callback: (file: string, kind: 'changed' | 'removed') => void, options?: { recursive?: boolean }): Promise<() => Promise<void>>;
+    Promise<Handle<string | null> & { write(data: string | Bytes): Promise<void> }>;
+  // file is relative to the page's folder; a new file counts as changed; closed gives null, or the error if the watch stopped on its own
+  watch(path: string, callback: (file: string, kind: 'changed' | 'removed') => void, options?: { recursive?: boolean }): Promise<Handle<string | null>>;
   // needs papp-use notifications; up to 3 buttons; the button's index, or null
   notify(title: string, body?: string, options?: { buttons?: string[] }): Promise<number | null>;
-  // a menu-bar icon, title up to 24 characters; items of your own above Show and Quit; null removes it (with papp-use background or items, only the title)
+  // a menu-bar icon with a title of up to 24 characters, and items of your own above Show and Quit
+  // null removes the icon; with papp-use background, or with items, the icon stays and only the title goes
   tray(title: string | null, items?: ({ label: string; id: string } | { separator: true })[]): Promise<void>;
   // the clicked tray item's id; returns a stop function
   onTray(callback: (id: string) => void): () => void;
@@ -135,6 +140,7 @@ declare const papp: {
   onShortcut(callback: (keys: string) => void): () => void;
 };
 // A call the tags do not allow rejects with an Error naming the tag to add. File errors carry Node's code, such as 'ENOENT'.
+// An on… call gives a function that stops it, right away.
 ```
 
 ### `papp-system`
@@ -223,7 +229,7 @@ One value per tag, in `<head>` before any `<script>`. Each tag is a line in the 
 - **Connections:** `papp.connect` goes through Apargon's proxy, so it reaches only what `papp-net` names, with the port: `db.example.com:5432`. A host on this computer or the local network needs its port, and a local network address its number: `192.168.1.5:1883`. `close()` sends what is left and ends the connection; a server that does not end it too is cut off after 5 seconds. `closed` resolves with the error, or null.
 - **Global shortcuts:** two different modifiers, or one modifier with a function key. Media keys (`MediaPlayPause`, `MediaNextTrack`, `MediaPreviousTrack`, `MediaStop`) work alone.
 - **Window:** one `papp-window` tag, comma-separated `key=value`. `size=900x600` sets width and height. Pixels: `width`, `height`, `min-width`, `min-height`. `yes` or `no`: `resizable`, `title-bar`, `frame`, `transparent`, `on-top`. `title-bar=no` keeps the OS window buttons, drawn over the page. `frame=no`, `transparent=yes` and `on-top=yes` are yellow.
-- **Printing:** without `papp-use print`, `papp.print()` and `window.print()` reject. To skip the tag, save `papp.pdf()` with `papp.saveAs()`.
+- **Printing:** without `papp-use print`, `papp.print()` and `window.print()` reject. To skip the tag, save `papp.pdf()` with `papp.save()`.
 - **Devices:** `usb`, `serial` and `hid` turn on WebUSB, Web Serial and WebHID; the user picks the device. `midi` turns on Web MIDI, sysex included.
 - **Background:** closing the last window hides it. The tray icon shows or quits it.
 - **Login:** stops when the approval is taken back, the tag is removed, or the file is gone.

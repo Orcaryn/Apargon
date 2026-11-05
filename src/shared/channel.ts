@@ -8,6 +8,9 @@ import type { Permissions } from '../permissions/tags.ts';
 export type Bridge = { port: number; socket: string };
 // replies: a file, where the sandbox passes no more pipes; null when they come on REPLY_FD.
 export type PageConfig = { page: string; permissions: Permissions; pageHash: string | null; proxy: string | null; bridges: Bridge[]; requestFd: number; replies: string | null };
+// A page's own tray items go above Apargon's Show and Quit; a click hands back the item's id.
+export type TrayItem = { label: string; id: string } | { separator: true };
+export type PageTray = { title: string | null; items: TrayItem[] };
 export type SavedFile = { name: string; data: string };
 export type PickOptions = { folder: boolean; multiple: boolean; write: boolean };
 // Headers by lowercase name, repeats joined with a comma as a browser joins them; a body as base64.
@@ -19,7 +22,7 @@ export type PageRequest =
   | { automaticUpdates: boolean }
   | { pageIcon: string }
   | { notify: { id: string } & Notice }
-  | { tray: string | null }
+  | { tray: PageTray }
   | { saveAs: { id: string; files: SavedFile[] } }
   | { save: { id: string; file: string; data: string } }
   | { pick: { id: string } & PickOptions }
@@ -34,7 +37,7 @@ export type PageRequest =
   | { openFile: string };
 // restart quits past the page's beforeunload: the page asked for it with a write pick, and the trampoline opens it again.
 // Requests with an id get one answer: what was saved or picked, a secret, a listener's address, or the notification button the user picked.
-export type PageReply = { show: true } | { quit: true } | { restart: true } | { request: IncomingRequest } | { answered: string; value: string[] | string | number | null } | { answered: string; error: string };
+export type PageReply = { show: true } | { quit: true } | { restart: true } | { trayItem: string } | { request: IncomingRequest } | { answered: string; value: string[] | string | number | null } | { answered: string; error: string };
 // icon: the page's icon as base64 PNG, once it has one.
 export type Notice = { title: string; body: string; buttons: string[]; icon: string | null };
 // A request the trampoline answers later, by the id it is given.

@@ -3,7 +3,7 @@ import { checkPermissions, type Permissions } from './tags.ts';
 // A file or folder the user picked for the page, kept until its approval is taken back.
 export type GivenFile = { path: string; write: boolean };
 
-// The picks as if the tags named them: the sandbox, the checks and the page's menu follow from one rule. Keys and logins stay hidden, as a pick that holds one is refused. A pick must pass what a tag must.
+// The picks as if the tags named them: the sandbox, the checks and the page's menu follow from one rule. A pick must pass what a tag must.
 export function withGiven(permissions: Permissions, given: GivenFile[], page: string): Permissions {
   const merged = {
     ...permissions,

@@ -19,7 +19,7 @@ export type TrampolinePlatform = {
   autoUpdates: boolean;
 };
 
-type Prepared = { command(apargon: string[], env: NodeJS.ProcessEnv): string[]; stdio: StdioOptions; requestFd: number; repliesInFile: boolean; proxyPort: number | null; bridges: Bridge[]; close(): void };
+type Prepared = { command(apargon: string[], env: NodeJS.ProcessEnv): string[]; stdio: StdioOptions; requestFd: number; replies: string | null; proxyPort: number | null; bridges: Bridge[]; close(): void };
 
 // Another system gets Linux's: bwrap is not there, so no page opens.
 export const TRAMPOLINE_PLATFORM: TrampolinePlatform = process.platform === 'darwin' ? macos : process.platform === 'win32' ? windows : linux;

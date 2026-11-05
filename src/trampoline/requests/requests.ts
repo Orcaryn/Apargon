@@ -1,6 +1,6 @@
 import { shell } from 'electron';
 import type { Permissions } from '../../permissions/tags.ts';
-import type { PageReply, PageRequest } from '../../shared/channel.ts';
+import type { PageReply, PageRequest, PageTray } from '../../shared/channel.ts';
 import { EGRESS_LOG, readJson, UPDATE_FILE, writeJson, type UpdateState } from '../../shared/data.ts';
 import { showNotice } from '../../shared/notice.ts';
 import { revoke } from '../dialogs/approve.ts';
@@ -17,7 +17,7 @@ type Page = {
   permissions: Permissions;
   listeners: ReturnType<typeof pageListeners>;
   reply(reply: PageReply): void;
-  setTray(title: string | null): void;
+  setTray(tray: PageTray): void;
   openPage(file: string): void;
   // Quits the page and opens it again, with its sandbox built anew.
   restart(): void;
@@ -34,6 +34,9 @@ export function handleRequest(request: PageRequest, { page, permissions, listene
     TRAMPOLINE_PLATFORM.pageIcon?.(page, request.pageIcon);
   } else if ('showEgressLog' in request) {
     shell.openPath(EGRESS_LOG);
+  } else if ('notify' in request && !permissions.use.includes('notifications')) {
+    // A papp-system page writes the line itself, so the tag is checked here too.
+    reply({ answered: request.notify.id, error: 'Apargon: this page may not show notifications. Ask for it with <meta name="papp-use" content="notifications">.' });
   } else if ('notify' in request) {
     // Field by field: a papp-system page writes the line itself, and could add Electron's other options.
     const { id, title, body, buttons, icon } = request.notify;
@@ -43,18 +46,18 @@ export function handleRequest(request: PageRequest, { page, permissions, listene
   } else if ('openLink' in request) {
     openLink(page, permissions, request.openLink);
   } else if ('openFile' in request) {
-    openFile(request.openFile, permissions);
+    openFile(request.openFile);
   } else if ('installSkill' in request) {
     offerSkill('The papp skill for coding agents', null);
   } else if ('saveAs' in request) {
     const { id, files } = request.saveAs;
-    saveFiles(files, permissions.hidden).then(
+    saveFiles(files).then(
       paths => reply({ answered: id, value: paths }),
       (err: Error) => reply({ answered: id, error: err.message })
     );
   } else if ('save' in request) {
     const { id, file, data } = request.save;
-    saveFile(file, data, permissions.hidden).then(
+    saveFile(file, data).then(
       saved => reply({ answered: id, value: saved }),
       (err: Error) => reply({ answered: id, error: err.message })
     );

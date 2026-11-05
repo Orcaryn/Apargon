@@ -1,10 +1,11 @@
 import { app } from 'electron';
+import { randomUUID } from 'crypto';
 import fs from 'fs';
 import type { AddressInfo } from 'net';
 import path from 'path';
-import { isInside, patternFolder } from '../../permissions/patterns.ts';
+import { isInside, literalBase } from '../../permissions/patterns.ts';
 import type { Use } from '../../permissions/tags.ts';
-import { APP_ROOT, DATA, PAGE_DATA, pageAppId, SECRETS_DATA } from '../../shared/data.ts';
+import { APP_ROOT, DATA, PAGE_DATA, pageAppId, REPLIES_DATA, SECRETS_DATA } from '../../shared/data.ts';
 import type { TrampolinePlatform } from '../platform.ts';
 import { startProxy } from '../network/proxy.ts';
 
@@ -13,23 +14,29 @@ const WXC_EXEC = app.isPackaged ? path.join(process.resourcesPath, 'mxc', 'wxc-e
 
 export const windows: TrampolinePlatform = {
   async prepare(page, permissions) {
-    const written = permissions.write.map(patternFolder);
+    const seen = permissions.read.map(literalBase);
+    const written = permissions.write.map(literalBase);
     const reachesData = written.find(folder => isInside(DATA, folder) || isInside(folder, DATA));
-    const reachesSecrets = [...permissions.read.map(patternFolder), ...written].find(folder => isInside(SECRETS_DATA, folder));
+    const holdsPagesSecrets = [...seen, ...written].find(folder => isInside(SECRETS_DATA, folder) || isInside(REPLIES_DATA, folder));
 
-    // The sandbox nests no read-only folder in a writable one, and the reverse would let a page write in Apargon's data. A folder that holds the secrets would grant them too.
+    // The sandbox nests no read-only folder in a writable one, and the reverse would let a page write in Apargon's data. A folder that holds the secrets, or the replies that carry them, would grant them too.
     if (reachesData) {
       throw new Error(`On Windows a page may not change ${reachesData}: it holds or is inside Apargon's data. Name another folder.`);
-    } else if (reachesSecrets) {
-      throw new Error(`On Windows a page may not see ${reachesSecrets}: it holds the secrets pages keep. Name a folder inside it.`);
+    } else if (holdsPagesSecrets) {
+      throw new Error(`On Windows a page may not see ${holdsPagesSecrets}: it holds the secrets Apargon keeps for pages. Name a folder inside it.`);
     }
+
+    // The trampoline's replies, in a folder only this page's sandbox may read. The file is made now: MXC may not grant one made after the sandbox starts.
+    const replies = path.join(REPLIES_DATA, randomUUID(), 'replies.jsonl');
+    fs.mkdirSync(path.dirname(replies), { recursive: true });
+    fs.writeFileSync(replies, '');
 
     const pageFolder = path.dirname(page);
     // A folder named twice keeps one grant: one also listed could not be read. So each folder is named once, with the most it needs.
     const writable = [fs.realpathSync(app.getPath('temp')), PAGE_DATA, ...written];
     // Every sandbox may read Windows' own folder already.
     const programFolders = Object.values(permissions.run).map(program => path.dirname(program)).filter(folder => !isInside(folder, process.env.SYSTEMROOT!) && !isInside(folder, pageFolder));
-    const readable = [path.dirname(process.execPath), APP_ROOT, DATA, pageFolder, ...permissions.read.map(patternFolder), ...programFolders].filter(folder => !writable.some(writableFolder => isInside(folder, writableFolder)));
+    const readable = [path.dirname(process.execPath), APP_ROOT, DATA, path.dirname(replies), pageFolder, ...seen, ...programFolders].filter(folder => !writable.some(writableFolder => isInside(folder, writableFolder)));
     const granted = [...readable, ...writable];
     fs.mkdirSync(PAGE_DATA, { recursive: true });
     const proxy = permissions.net.length ? await startProxy(permissions.net, null) : null;
@@ -53,7 +60,7 @@ export const windows: TrampolinePlatform = {
           version: '1.0.0',
           containment: 'processcontainer',
           process: { commandLine: apargon.map(arg => `"${arg}"`).join(' '), env: Object.entries(env).map(([name, value]) => `${name}=${value}`), timeout: 0 },
-          filesystem: { readonlyPaths: readable, readwritePaths: writable, deniedPaths: [...permissions.hidden.filter(secret => fs.existsSync(secret)), SECRETS_DATA] },
+          filesystem: { readonlyPaths: readable, readwritePaths: writable, deniedPaths: [SECRETS_DATA] },
           // Deny for every page, not MXC's default. A proxy on this computer's loopback needs both directions of the private network allowed; the firewall rules still let the page reach only the proxy.
           ...(proxyPort === null
             ? { network: { egress: { default: 'deny' } } }
@@ -68,7 +75,7 @@ export const windows: TrampolinePlatform = {
       // MXC's executor passes the page only standard input, output and error, and input only once it closes: messages come on standard output, mixed with the page's other output, which is passed on.
       stdio: ['ignore', 'pipe', 'pipe'],
       requestFd: 1,
-      repliesInFile: true,
+      replies,
       proxyPort,
       bridges: [],
       close: () => proxy?.close(),

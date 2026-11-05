@@ -9,7 +9,7 @@
 <meta name="papp-run" content="node">
 <meta name="papp-env" content="APARGON_TEST_ENV">
 <meta name="papp-write" content="./results/result-win-programs.json">
-<meta name="papp-write" content="./touched*">
+<meta name="papp-write" content="./touched/*">
 <title>Apargon selftest for Windows programs</title>
 <body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
 
@@ -32,8 +32,8 @@
     result.local_port_direct_blocked = await curl('--noproxy', '*', 'http://127.0.0.1:47181/') !== '200';
     result.local_port_undeclared_blocked = await curl('http://127.0.0.1:47182/') !== '200';
 
-    result.program_writes_granted = (await cmd('echo x> touched.tmp')).status === 0;
-    await papp.rm('touched.tmp');
+    result.program_writes_granted = (await cmd('echo x> touched\\x.tmp')).status === 0;
+    await papp.rm('touched/x.tmp');
     result.program_outside_write_blocked = (await cmd('echo x> ..\\touched-outside.tmp')).status !== 0;
     // Under Program Files, outside the folders Apargon grants.
     result.program_installed_runs = (await papp.run('git', ['--version'])).stdout.startsWith('git version');
@@ -57,7 +57,6 @@
     const env = (await cmd('set')).stdout;
     result.program_env_named = env.includes('APARGON_TEST_ENV=passed') && /^SYSTEMROOT=/m.test(env) && /^PATH=/m.test(env);
     result.program_env_unnamed_left_out = !env.includes('APARGON_TEST_ALLOW=') && !env.includes('APARGON=');
-    result.program_ssh_hidden = (await cmd('dir "%USERPROFILE%\\.ssh"')).status !== 0;
     result.undeclared_program_refused = await refused(() => papp.run('where'));
     result.options_as_args_refused = await refused(() => papp.run('cmd', { cwd: 'C:\\' }));
   } catch (err) {

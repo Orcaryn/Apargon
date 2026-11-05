@@ -23,13 +23,6 @@
     result.ungranted_write_refused = err.code === (process.platform === 'darwin' ? 'EPERM' : 'EROFS');
   }
 
-  // Seatbelt denies the folder; on Linux an empty one covers it.
-  try {
-    result.ssh_hidden = fs.readdirSync(path.join(os.homedir(), '.ssh')).length === 0;
-  } catch (err) {
-    result.ssh_hidden = err.code === 'EPERM';
-  }
-
   // Seatbelt denies the folder; on Linux an empty one covers it. selftest.papp left a secret there.
   try {
     result.secrets_hidden = fs.readdirSync(path.join(os.homedir(), process.platform === 'darwin' ? 'Library/Application Support/apargon-secrets' : '.config/apargon-secrets')).length === 0;

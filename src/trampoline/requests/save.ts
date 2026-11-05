@@ -3,12 +3,13 @@ import fs from 'fs';
 import path from 'path';
 import { realPath, runsOutsideSandbox } from '../../permissions/paths.ts';
 import { isInside, PAGE_FILE } from '../../permissions/patterns.ts';
+import { PERMISSIONS_PLATFORM } from '../../permissions/platform.ts';
 import type { SavedFile } from '../../shared/channel.ts';
 import { DATA, INSTALL_FOLDER } from '../../shared/data.ts';
 import { TRAMPOLINE_PLATFORM } from '../platform.ts';
 
 // The page names the files and the user picks the folder, in this process's dialog: a page that breaks out of its sandbox can write nowhere else.
-export async function saveFiles(files: SavedFile[], hidden: string[]) {
+export async function saveFiles(files: SavedFile[]) {
   if (!files.length) {
     throw new Error('Apargon: saveAs takes one or more files.');
   }
@@ -33,7 +34,7 @@ export async function saveFiles(files: SavedFile[], hidden: string[]) {
   }
 
   const folder = filePaths[0];
-  checkFolder(folder, hidden);
+  checkFolder(folder);
 
   // Like a browser's downloads, a taken name gets a number: 'wx' never replaces a file or follows a link.
   return files.map(({ name, data }) => {
@@ -57,7 +58,7 @@ export async function saveFiles(files: SavedFile[], hidden: string[]) {
 }
 
 // The page suggests a file, the user picks the name and folder, and the dialog asks before it replaces one.
-export async function saveFile(suggested: string, data: string, hidden: string[]) {
+export async function saveFile(suggested: string, data: string) {
   app.focus({ steal: true });
   const { canceled, filePath } = await dialog.showSaveDialog({ defaultPath: suggested, properties: ['createDirectory', 'showOverwriteConfirmation'] });
 
@@ -67,7 +68,7 @@ export async function saveFile(suggested: string, data: string, hidden: string[]
     throw new Error(`Apargon: a page may not save as ${path.basename(filePath)}: a hidden name, a .papp, or one with characters that do not show.`);
   }
 
-  checkFolder(path.dirname(filePath), hidden);
+  checkFolder(path.dirname(filePath));
   const file = fs.openSync(filePath, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC | TRAMPOLINE_PLATFORM.noFollow);
 
   try {
@@ -81,16 +82,16 @@ export async function saveFile(suggested: string, data: string, hidden: string[]
   return filePath;
 }
 
-// The first name that is not a plain file name, if any.
+// The first name that is not a plain file name, if any. Windows reads x.papp. as x.papp, and x:y as a stream of x.
 function findBadName(names: string[]) {
-  return names.find(name => !name || path.basename(name) !== name || name.startsWith('.') || PAGE_FILE.test(name) || /[\p{Cc}\p{Cf}]/u.test(name));
+  return names.find(name => !name || path.basename(name) !== name || name.startsWith('.') || PAGE_FILE.test(name) || /[\p{Cc}\p{Cf}]/u.test(name) || PERMISSIONS_PLATFORM.refusePath(name) !== null);
 }
 
-// A link the page planted could lead the user into a folder they did not mean. Keys and logins are hidden names or whole folders, so with plain names the folder is what to check.
-function checkFolder(folder: string, hidden: string[]) {
+// A link the page planted could lead the user into a folder they did not mean.
+function checkFolder(folder: string) {
   if (realPath(folder) !== folder) {
     throw new Error(`Apargon: a page may not save to ${folder}. Pick a folder itself, not a link to it.`);
-  } else if (PAGE_FILE.test(folder) || runsOutsideSandbox(folder) || [DATA, INSTALL_FOLDER ?? [], hidden].flat().some(protectedFolder => isInside(folder, protectedFolder))) {
-    throw new Error(`Apargon: a page may not save to ${folder}: it holds Apargon's data, keys, logins, or files that run on their own.`);
+  } else if (PAGE_FILE.test(folder) || runsOutsideSandbox(folder) || [DATA, INSTALL_FOLDER ?? []].flat().some(protectedFolder => isInside(folder, protectedFolder))) {
+    throw new Error(`Apargon: a page may not save to ${folder}: it holds Apargon's data, or files that run on their own.`);
   }
 }

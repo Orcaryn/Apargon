@@ -4,8 +4,8 @@ import os from 'os';
 import path from 'path';
 import { PROGRAM_ENV } from './env.ts';
 import { LOCAL_HOSTS, privateNetwork } from './network.ts';
-import { absolutePath, BIG_FOLDERS, HOME, realPath, SECRETS } from './paths.ts';
-import { changeableSources, isInside, literalBase, patternFolder } from './patterns.ts';
+import { absolutePath, BIG_FOLDERS, HOME, realPath } from './paths.ts';
+import { changeableSources, isInside, literalBase } from './patterns.ts';
 import { PERMISSIONS_PLATFORM } from './platform.ts';
 
 export type Permissions = {
@@ -17,7 +17,6 @@ export type Permissions = {
   run: Record<string, string>;
   env: string[];
   sockets: string[];
-  hidden: string[];
   system: boolean;
   use: Use[];
   shortcuts: string[];
@@ -42,7 +41,7 @@ const MEDIA_KEYS = ['MediaPlayPause', 'MediaNextTrack', 'MediaPreviousTrack', 'M
 
 export function declaredPermissions(page: string, html = fs.readFileSync(page, 'utf8')) {
   const dir = path.dirname(page);
-  const permissions: Permissions = { own: null, read: [], write: [], net: [], open: [], run: {}, env: [], sockets: [], hidden: [], system: false, use: [], shortcuts: [], window: null, listen: null, tags: [] };
+  const permissions: Permissions = { own: null, read: [], write: [], net: [], open: [], run: {}, env: [], sockets: [], system: false, use: [], shortcuts: [], window: null, listen: null, tags: [] };
   const head = html.replace(/<!--[\s\S]*?-->/g, '').split(/<script\b|<body\b|<\/head\b/i)[0];
 
   for (const [, attrs] of head.matchAll(/<meta\s+([^>]*)>/gi)) {
@@ -73,7 +72,7 @@ export function declaredPermissions(page: string, html = fs.readFileSync(page, '
     if (Object.hasOwn(PERMISSIONS_PLATFORM.refusedTags, kind)) {
       throw new Error(PERMISSIONS_PLATFORM.refusedTags[kind]);
     } else if (kind === 'read' || kind === 'write') {
-      permissions[kind].push(folderPattern(value, dir));
+      permissions[kind].push(pathPattern(value, dir));
     } else if (kind === 'net') {
       permissions.net.push(hostPattern(value));
     } else if (kind === 'open') {
@@ -114,25 +113,24 @@ export function declaredPermissions(page: string, html = fs.readFileSync(page, '
   }
 
   checkPermissions(permissions, page);
-  const { read, write, sockets } = permissions;
-  const named = [...[...read, ...write].map(literalBase), ...sockets];
-  permissions.own = [path.parse(dir).root, HOME, ...BIG_FOLDERS].includes(dir) ? null : dir;
-  permissions.hidden = SECRETS.map(secret => secret.path).filter(secret => !named.some(base => isInside(base, secret)));
+  permissions.own = [path.parse(dir).root, HOME, ...BIG_FOLDERS].includes(dir) ? null : dir + path.sep;
 
   return permissions;
 }
 
 // What the sandbox is built from must pass these, whether a tag or a pick named it: run on the tags here, and again with the picks before the sandbox is built.
 export function checkPermissions(permissions: Permissions, page: string) {
-  const { read, write, run, sockets } = permissions;
+  const { read, write, run, sockets, system } = permissions;
   const dir = path.dirname(page);
   const quoted = [...write, ...sockets].find(folder => folder.includes('"'));
   const refusal = PERMISSIONS_PLATFORM.refuse(permissions, dir);
   const invisible = [page, ...read, ...write, ...Object.values(run), ...sockets].find(text => INVISIBLE.test(text));
-  // A program the page can change is any program: "Run tool" would say nothing. As on disk, like the patterns, so a link cannot hide it. Where the sandbox grants whole folders, a program in one counts too.
+  // A program the page can change is any program: "Run tool" would say nothing. As on disk, like the patterns, so a link cannot hide it. Where the sandbox grants folders whole, a program in one counts too.
   const changeable = changeableSources(permissions).files.map(source => new RegExp(source));
-  const writableFolders = write.map(patternFolder);
-  const rewritable = Object.values(run).find(program => changeable.some(pattern => pattern.test(realPath(program))) || (PERMISSIONS_PLATFORM.writesWholeFolders && writableFolders.some(folder => isInside(realPath(program), folder))));
+  const granted = write.map(literalBase);
+  const rewritable = Object.values(run).find(program => changeable.some(pattern => pattern.test(realPath(program))) || (PERMISSIONS_PLATFORM.writesWholeFolders && granted.some(folder => isInside(realPath(program), folder))));
+  // There a program could rewrite the page too: ./out* grants the page's own folder.
+  const holdsPage = PERMISSIONS_PLATFORM.writesWholeFolders && (system || Object.keys(run).length > 0) && granted.find(folder => isInside(page, folder));
 
   if (quoted) {
     throw new Error(`${quoted} has a " in its path, which the sandbox cannot take. Rename it.`);
@@ -142,6 +140,8 @@ export function checkPermissions(permissions: Permissions, page: string) {
     throw new Error(`${JSON.stringify(invisible)} has a line break or another invisible character, which the popup cannot show. Rename the file.`);
   } else if (rewritable) {
     throw new Error(`The page could change ${rewritable}, which it runs: a papp-write tag or a pick covers it. Keep a program where the page cannot write.`);
+  } else if (holdsPage) {
+    throw new Error(`Here the sandbox lets programs change all of ${holdsPage}, which holds this page, so a program could rewrite it. Write to a folder of its own, such as ./data/*.`);
   }
 }
 
@@ -158,21 +158,32 @@ function readAttributes(attrs: string) {
   return attributes;
 }
 
-function folderPattern(value: string, dir: string) {
+function pathPattern(value: string, dir: string) {
   if (value === '*') {
-    throw new Error('A folder of "*" is unclear. Use / for the whole disk or ~ for your home folder.');
-  } else if (!value || /["\\]/.test(value)) {
-    throw new Error(`Bad folder "${value}". Use a path such as ./data, ~/notes or ~/notes/*.md.`);
+    throw new Error('A path of "*" is unclear. Use / for the whole disk or ~/ for your home folder.');
+  } else if (!value || /["\\]/.test(value) || (value.includes('*') && value.endsWith('/'))) {
+    throw new Error(`Bad path "${value}". Use a path such as ./notes.txt, ~/notes/ or ~/notes/*.md.`);
+  } else if (value.split('**').length > 2 || value.split('/').some(name => name !== '**' && name.split('*').length > 2)) {
+    // More would make each check try every way to split the path between them.
+    throw new Error(`Bad path "${value}". Write one * per name and one ** per path, such as ~/notes/**/*.md.`);
   }
 
+  // A folder ends in /, anything else is a file: the popup shows which, and Apargon makes the right one if it is not there.
+  const folder = value.endsWith('/');
   const absolute = absolutePath(value, dir);
-  const base = absolute.includes('*') || fs.existsSync(absolute) ? literalBase(absolute) : path.dirname(absolute);
+  const stats = absolute.includes('*') ? undefined : fs.statSync(absolute, { throwIfNoEntry: false });
+  const base = absolute.includes('*') || stats ? literalBase(absolute) : path.dirname(absolute);
 
   if (!fs.existsSync(base)) {
     throw new Error(`Folder ${base} does not exist (from "${value}").`);
+  } else if (stats && fs.lstatSync(absolute).isSymbolicLink()) {
+    // The sandbox would grant what it leads to, which the page could change between opens.
+    throw new Error(`${absolute} is a link (from "${value}"). Name what it leads to.`);
+  } else if (stats && stats.isDirectory() !== folder) {
+    throw new Error(stats.isDirectory() ? `${absolute} is a folder: write "${value}/".` : `${absolute} is a file: write "${value.slice(0, -1)}".`);
   }
 
-  return path.join(fs.realpathSync.native(base), path.relative(base, absolute));
+  return path.join(fs.realpathSync.native(base), path.relative(base, absolute), folder ? path.sep : '');
 }
 
 function hostPattern(value: string) {
@@ -275,7 +286,7 @@ function socketPath(value: string, dir: string) {
   if (value.includes('*')) {
     throw new Error('papp-socket takes one socket file or folder, no wildcards.');
   } else if (!value || /["\\]/.test(value)) {
-    throw new Error(`Bad papp-socket value "${value}". Use a path such as /var/run/docker.sock or ~/.gnupg.`);
+    throw new Error(`Bad papp-socket value "${value}". Use a path such as /var/run/docker.sock or ~/.gnupg/.`);
   }
 
   const absolute = absolutePath(value, dir);
@@ -285,9 +296,11 @@ function socketPath(value: string, dir: string) {
     throw new Error(`Socket ${absolute} does not exist (from "${value}"). Start the program that makes it first.`);
   } else if (!stats.isSocket() && !stats.isDirectory()) {
     throw new Error(`${absolute} is not a socket or a folder (from "${value}").`);
+  } else if (stats.isDirectory() !== value.endsWith('/')) {
+    throw new Error(stats.isDirectory() ? `${absolute} is a folder: write "${value}/".` : `${absolute} is a socket: write "${value.slice(0, -1)}".`);
   }
 
-  return fs.realpathSync.native(absolute);
+  return path.join(fs.realpathSync.native(absolute), stats.isDirectory() ? path.sep : '');
 }
 
 // As the viewport tag: key=value pairs, separated by commas.

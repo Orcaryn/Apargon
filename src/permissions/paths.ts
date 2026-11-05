@@ -7,7 +7,7 @@ import { PERMISSIONS_PLATFORM } from './platform.ts';
 // The real path as on disk, as every pattern is: on Windows, in the folder's own case.
 export const HOME = fs.realpathSync.native(os.homedir());
 export const BIG_FOLDERS = ['Desktop', 'Documents', 'Downloads'].map(name => path.join(HOME, name));
-// Hidden on every OS: a home folder can hold another OS's folders, and hiding one that is not there costs nothing.
+// Named on every OS: a home folder can hold another OS's folders.
 const BROWSERS = [
   ...['Google/Chrome', 'Chromium', 'BraveSoftware', 'Microsoft Edge', 'Arc', 'Firefox'].map(name => `Library/Application Support/${name}`),
   ...['.config/google-chrome', '.config/chromium', '.config/BraveSoftware', '.config/microsoft-edge', '.mozilla', 'snap/firefox'],
@@ -47,12 +47,12 @@ export const LAUNCH_FOLDER = PERMISSIONS_PLATFORM.launchFolder && path.join(HOME
 // macOS keeps iCloud Drive, Dropbox, OneDrive and Google Drive in ~/Library. Files there only sync.
 const CLOUD_FOLDERS = ['Library/Mobile Documents', 'Library/CloudStorage'].map(name => path.join(HOME, name));
 
-// As on disk where it can be looked up. One that is not there stays as named, and so does one the page's own sandbox already hides from it: that process only shows the name. Not there includes under a file (ENOTDIR) and a link that loops (ELOOP).
+// As on disk where it can be looked up. One that is not there stays as named: that includes under a file (ENOTDIR) and a link that loops (ELOOP).
 function realSecret(secret: string) {
   try {
     return fs.realpathSync.native(secret);
   } catch (err) {
-    if (!['ENOENT', 'ENOTDIR', 'ELOOP', 'EPERM', 'EACCES'].includes((err as NodeJS.ErrnoException).code!)) {
+    if (!['ENOENT', 'ENOTDIR', 'ELOOP'].includes((err as NodeJS.ErrnoException).code!)) {
       throw err;
     }
 

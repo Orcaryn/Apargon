@@ -107,12 +107,19 @@ declare const papp: {
     Promise<Exit & { stdout: string | Bytes; stderr: string | Bytes }>;
   spawn(program: string, args?: string[], options?: { cwd?: string; onOutput?: (stream: 'stdout' | 'stderr', text: string) => void }):
     Promise<{ write(data: string | Bytes): Promise<void>; end(): Promise<void>; kill(): Promise<void>; done: Promise<Exit> }>;
+  // a TCP connection to a host:port papp-net names, as a database or mail client needs; tls: true wraps it in TLS
+  connect(host: string, port: number, options?: { tls?: boolean; onData?: (bytes: Bytes) => void }):
+    Promise<{ write(data: string | Bytes): Promise<void>; close(): Promise<void>; closed: Promise<string | null> }>;
   // file is relative to the page's folder; a new file counts as changed; resolves to a stop function
   watch(path: string, callback: (file: string, kind: 'changed' | 'removed') => void, options?: { recursive?: boolean }): Promise<() => Promise<void>>;
   // needs papp-use notifications; up to 3 buttons; the button's index, or null
   notify(title: string, body?: string, options?: { buttons?: string[] }): Promise<number | null>;
-  // a menu-bar icon, title up to 24 characters, with Show and Quit; null removes it (with papp-use background, only the title)
-  tray(title: string | null): Promise<void>;
+  // a menu-bar icon, title up to 24 characters; items of your own above Show and Quit; null removes it (with papp-use background or items, only the title)
+  tray(title: string | null, items?: ({ label: string; id: string } | { separator: true })[]): Promise<void>;
+  // the clicked tray item's id; returns a stop function
+  onTray(callback: (id: string) => void): () => void;
+  // a bar on the dock or taskbar icon, 0 to 1; null removes it; Linux shows it only in some docks
+  progress(value: number | null): Promise<void>;
   // top-level menus after Apargon's; [] removes them
   menu(menus: MenuItem[]): Promise<void>;
   // a menu at the pointer
@@ -139,7 +146,7 @@ The page becomes a Node script with a window. Its files stay limited like any pa
 - The page gets Node (`require`, `process`) and Electron's main process (`require('@electron/remote')`) instead of `window.papp`. Use `fs` and `child_process` directly.
 - Programs: any, with all your environment variables.
 - Writes: only what `papp-write` names. A program it runs, like `npm` or `git`, too: name the caches and settings it writes.
-- Reads: every file but keys and logins (Windows: only its folder and `papp-read`).
+- Reads: every file (Windows: only its folder and `papp-read`).
 - All other tags work as usual.
 
 **What it unlocks**
@@ -149,7 +156,7 @@ The page becomes a Node script with a window. Its files stay limited like any pa
 - Electron APIs that `papp` lacks:
   - `screen`: the displays
   - `BrowserWindow`: a window with other content, or on every Space. It uses the default session and skips the page's navigation limits.
-  - `Tray`, `Menu`: a tray icon with its own menu (`papp.tray` has only a title, Show and Quit)
+  - `Tray`, `Menu`: a tray icon with submenus, checkboxes or its own icon (`papp.tray` has a title and plain items, above Show and Quit)
 
 ```js
 require('@electron/remote').getCurrentWindow().setVisibleOnAllWorkspaces(true);
@@ -166,7 +173,7 @@ Its popup line is red and needs "I trust this page".
 | The page has | `papp`                                                 | Node and Electron  |
 | Programs     | only those in `papp-run`                               | any                |
 | Variables    | only `papp-env`                                        | all yours          |
-| Popup        | yellow; red on Windows, and on Linux with `papp-write` | red                |
+| Popup        | yellow; red on Windows, and on Linux with a `papp-write` folder | red                |
 
 For a Node script the page calls, like a build or a converter, use `papp-run node`.
 
@@ -177,9 +184,9 @@ One value per tag, in `<head>` before any `<script>`. Each tag is a line in the 
 | The page needs to                                 | Tag                                                             |
 | ------------------------------------------------- | --------------------------------------------------------------- |
 | See files next to it, or below                    | Nothing, unless it sits in `~`, Desktop, Documents or Downloads |
-| Save next to it                                   | `papp-write` `./notes.txt`, `./data`                            |
-| See a folder elsewhere                            | `papp-read` `~/logs`                                            |
-| Change files elsewhere                            | `papp-write` `~/notes/*.md`                                     |
+| Save next to it                                   | `papp-write` `./notes.txt`, `./data/`                          |
+| See a folder elsewhere                            | `papp-read` `~/logs/`                                           |
+| Change files elsewhere                            | `papp-write` `~/notes/*.md`, or `~/notes/**/*.md` at any depth  |
 | Call a web API                                    | `papp-net` `api.example.com`                                    |
 | Be reached by programs on this computer           | `papp-listen` `localhost`                                       |
 | Be reached by devices on the network, a phone     | `papp-listen` `network`                                         |
@@ -205,21 +212,22 @@ One value per tag, in `<head>` before any `<script>`. Each tag is a line in the 
 | Answer a key anywhere                             | `papp-global-shortcut` `CommandOrControl+Shift+N`               |
 | Use Node, many programs, or what `papp` cannot do | `papp-system` `full`                                            |
 
-- **Folders:** relative to the page, `~/…` or absolute; subfolders are included. `*` matches within one name, and the part before it must exist.
+- **Paths:** relative to the page, `~/…` or absolute. A folder ends in `/` (`./data/`, `~/logs/`), and its subfolders are included; any other path is a file. Apargon refuses one that does not match the disk. `*` matches within one name, `**` any number of folders (`~/notes/**/*.md` is every `.md` file under `~/notes`). One `*` per name, one `**` per path, and the part before the first `*` must exist. A written path that is not there yet is made when the page opens: a folder as a folder, a file as an empty file.
 - **Hosts:** `papp-net` takes a host, no scheme, and `:port` when it is not 443: `api.example.com`, `example.com:8080`. A host on this computer or the local network always needs its port. Any server is `*:443` or `*:*`. `papp-open` takes the host alone. Scripts, fonts and images from another site need its host in `papp-net`. With any `papp-net` tag, `fetch` to a declared host skips CORS.
 - **Sound:** without `papp-use sound`, the page plays muted, with no error.
 - **No tag needed** to write to the clipboard, go fullscreen or lock the pointer.
-- **Programs** the page runs keep its network and write limits, but can read every file except keys and logins. On Windows they see less: the page's folders, their own folder, and folders every app can read, like Program Files. A program from the page's folder (`./bin/ffmpeg`) runs by its name, `ffmpeg`, and is refused if a `papp-write` tag covers it. On macOS, a downloaded program runs only if it is notarized: macOS refuses the rest with its own message.
-- **Picks:** `papp.pick` needs no tag. The dialog is Apargon's and says what the page gets. A pick is kept, so the page sees it on every open; with `write: true`, the page restarts once the user picks, and finds the pick in `papp.given()`. Refused: a link, a folder holding keys and logins (such as `~`), Apargon's own data, and with write a hidden file, a page or a launch folder. Also what a tag may not name: with write a path with a `"` or a folder holding a `papp-run` program, a name with a line break, and on Linux `/tmp` or `/var/tmp` itself, a folder that holds one, or anything in `/run`. The picks show in the popup under "You gave it".
+- **Programs** the page runs keep its network and write limits, but can read every file. On Windows they see less: the page's folders, their own folder, and folders every app can read, like Program Files. A program from the page's folder (`./bin/ffmpeg`) runs by its name, `ffmpeg`, and is refused if a `papp-write` tag covers it. On Linux and Windows, a page that runs programs may not write a folder that holds the page: write `./out/*`, not `./out*` or `./`. On macOS, a downloaded program runs only if it is notarized: macOS refuses the rest with its own message.
+- **Picks:** `papp.pick` needs no tag. The dialog is Apargon's and says what the page gets. A pick is kept, so the page sees it on every open; with `write: true`, the page restarts once the user picks, and finds the pick in `papp.given()`. Refused: a link, Apargon's own data, and with write a hidden file, a page or a launch folder. Also what a tag may not name: with write a path with a `"` or a folder holding a `papp-run` program, a name with a line break, and on Linux `/tmp` or `/var/tmp` itself, a folder that holds one, or anything in `/run`. The picks show in the popup under "You gave it".
 - **Secrets:** `papp.secret` needs no tag. For keys the page should not keep in `localStorage`, which sits on disk in clear. Apargon keeps them sealed with the OS's store, per page, where no page's process can read, and deletes them with the approval. They follow a moved page as its storage does.
 - **Listening:** `papp-listen localhost` or `network`. Apargon listens, not the page, and passes each request to the handler as plain data: `new TextDecoder().decode(request.body)` reads a text body, `new URL(request.url)` its path and query. The handler returns a plain answer, or throws for a 500. The listener runs until `close()`, a reload or quit, and with `papp-use background` after the window closes. `url` is `http://127.0.0.1:<port>`, or with `network` this computer's first address. Both tags are red. A body over 16 MB gets 413. For a sign-in that sends the browser back to the page, listen, open the sign-in link with the listener's `url` as the return address, and close once it comes back.
+- **Connections:** `papp.connect` goes through Apargon's proxy, so it reaches only what `papp-net` names, with the port: `db.example.com:5432`. A host on this computer or the local network needs its port, and a local network address its number: `192.168.1.5:1883`. `close()` sends what is left and ends the connection; a server that does not end it too is cut off after 5 seconds. `closed` resolves with the error, or null.
 - **Global shortcuts:** two different modifiers, or one modifier with a function key. Media keys (`MediaPlayPause`, `MediaNextTrack`, `MediaPreviousTrack`, `MediaStop`) work alone.
 - **Window:** one `papp-window` tag, comma-separated `key=value`. `size=900x600` sets width and height. Pixels: `width`, `height`, `min-width`, `min-height`. `yes` or `no`: `resizable`, `title-bar`, `frame`, `transparent`, `on-top`. `title-bar=no` keeps the OS window buttons, drawn over the page. `frame=no`, `transparent=yes` and `on-top=yes` are yellow.
 - **Printing:** without `papp-use print`, `papp.print()` and `window.print()` reject. To skip the tag, save `papp.pdf()` with `papp.saveAs()`.
 - **Devices:** `usb`, `serial` and `hid` turn on WebUSB, Web Serial and WebHID; the user picks the device. `midi` turns on Web MIDI, sysex included.
 - **Background:** closing the last window hides it. The tray icon shows or quits it.
 - **Login:** stops when the approval is taken back, the tag is removed, or the file is gone.
-- **No tag needed** for menus, `papp.power` or `papp.onSystem`.
+- **No tag needed** for menus, the tray, `papp.progress`, `papp.power` or `papp.onSystem`.
 - **`papp-system`** already allows every program and variable; do not add `papp-run` or `papp-env`.
 - **Windows:**
   - A page with `papp-socket` does not open. `localhost` goes through Apargon's proxy: `fetch` works; a program must honour `http_proxy`.
@@ -235,7 +243,7 @@ These show red in the popup:
 - `papp-write` on a hidden file or folder, on `~/Library` or a folder that holds it (such as `~`), or on a `.papp` page
 - `papp-net` to this computer, the local network, an IPv4 address, any host (`*`), any port (`*`) or a whole top-level domain (`*.com`)
 - `papp-open` for `*`, `*.com`, `localhost` or an IPv4 address
-- `papp-run` on Linux or Windows, if the page also has `papp-write`
+- `papp-run` on Windows, or on Linux if the page also writes a folder
 
 A red line, `papp-run`, or any `papp-net` or `papp-open` host makes the popup demand an extra "I trust this page" tick.
 

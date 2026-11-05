@@ -1,28 +1,28 @@
-import { Menu, nativeImage, Tray } from 'electron';
+import { Menu, nativeImage, Tray, type MenuItemConstructorOptions } from 'electron';
 import path from 'path';
+import type { TrayItem } from '../../../shared/channel.ts';
 
 // A menu, not only a click: Linux sends no clicks, and a page in the background is quit from here.
-export function trayFor(page: string, onShow: () => void, onQuit: () => void) {
+export function trayFor(page: string, onShow: () => void, onQuit: () => void, onItem: (id: string) => void) {
+  const name = path.basename(page);
   let tray: Tray | null = null;
 
-  return (title: string | null) => {
+  return (title: string | null, items: TrayItem[]) => {
     if (title === null) {
       tray?.destroy();
       tray = null;
-    } else if (tray) {
-      tray.setTitle(title);
     } else {
-      const icon = nativeImage.createFromPath(path.join(import.meta.dirname, 'images', 'tray.png'));
-      icon.setTemplateImage(true);
-      tray = new Tray(icon);
-      tray.setToolTip(path.basename(page));
+      if (!tray) {
+        const icon = nativeImage.createFromPath(path.join(import.meta.dirname, 'images', 'tray.png'));
+        icon.setTemplateImage(true);
+        tray = new Tray(icon);
+        tray.setToolTip(name);
+      }
+
+      // Label and id only: a papp-system page writes the request itself, and could add a role that quits Apargon.
+      const pageItems = items.map((item): MenuItemConstructorOptions => ('separator' in item ? { type: 'separator' } : { label: item.label, click: () => onItem(item.id) }));
       tray.setTitle(title);
-      tray.setContextMenu(
-        Menu.buildFromTemplate([
-          { label: `Show ${path.basename(page)}`, click: onShow },
-          { label: `Quit ${path.basename(page)}`, click: onQuit },
-        ])
-      );
+      tray.setContextMenu(Menu.buildFromTemplate([...pageItems, ...(items.length ? [{ type: 'separator' } as const] : []), { label: `Show ${name}`, click: onShow }, { label: `Quit ${name}`, click: onQuit }]));
     }
   };
 }

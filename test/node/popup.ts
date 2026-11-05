@@ -8,11 +8,38 @@ import { hostMatches } from '../../src/permissions/network.ts';
 import { linkHost, OPENABLE } from '../../src/permissions/open.ts';
 import { HOME, LAUNCH_FOLDER, runsOutsideSandbox } from '../../src/permissions/paths.ts';
 import { withGiven } from '../../src/permissions/given.ts';
+import { patternSource } from '../../src/permissions/patterns.ts';
 import { declaredPermissions } from '../../src/permissions/tags.ts';
+
+// Where the sandbox grants whole folders, a page that runs programs may not write the folder that holds it. Each case: tags, and whether they are refused.
+function wholeFolderFailures(page: string, program: string) {
+  fs.mkdirSync(path.join(path.dirname(page), 'data'), { recursive: true });
+  const cases: [string, boolean][] = [
+    [`<meta name="papp-run" content="${program}">\n<meta name="papp-write" content="./out*">`, true],
+    ['<meta name="papp-system" content="full">\n<meta name="papp-write" content="./out*">', true],
+    [`<meta name="papp-run" content="${program}">\n<meta name="papp-write" content="./data/*">`, false],
+    ['<meta name="papp-write" content="./out*">', false],
+  ];
+
+  return cases
+    .filter(([tags, refused]) => {
+      fs.writeFileSync(page, tags);
+
+      try {
+        // As on disk, as approve passes it.
+        declaredPermissions(fs.realpathSync.native(page));
+
+        return refused;
+      } catch (err) {
+        return !(refused && (err as Error).message.includes('holds this page'));
+      }
+    })
+    .map(([tags]) => tags);
+}
 
 if (process.platform === 'linux') {
   const page = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'apargon-popup-')), 'case.papp');
-  const cases = [...['/', '/var', '/var/tmp', '/tmp', '/tmp/*', '/run'].map(folder => ['papp-read', folder]), ...['/', '/tmp', '/run'].map(folder => ['papp-socket', folder])];
+  const cases = [...['/', '/var/', '/var/tmp/', '/tmp/', '/tmp/*', '/run/'].map(folder => ['papp-read', folder]), ...['/', '/tmp/', '/run/'].map(folder => ['papp-socket', folder])];
   const opened = cases.filter(([tag, folder]) => {
     fs.writeFileSync(page, `<meta name="${tag}" content="${folder}">`);
 
@@ -26,7 +53,7 @@ if (process.platform === 'linux') {
   });
   // A pick is checked as a tag is: picked, an emptied folder would bring its sockets back too.
   fs.writeFileSync(page, '');
-  const picked = ['/tmp', '/var/tmp', `/run/user/${os.userInfo().uid}`, '/run']
+  const picked = ['/tmp/', '/var/tmp/', `/run/user/${os.userInfo().uid}/`, '/run/']
     .flatMap(folder => [false, true].map(write => ({ path: folder, write })))
     .filter(pick => {
       try {
@@ -37,9 +64,11 @@ if (process.platform === 'linux') {
         return !(err as Error).message.includes('cannot open');
       }
     });
+  const whole = wholeFolderFailures(page, 'sh');
   console.log(opened.length ? `popup: FAIL, opened ${opened.map(([tag, folder]) => `${tag} ${folder}`).join(', ')}` : 'popup: ok, every emptied folder refused');
   console.log(picked.length ? `popup: FAIL, picks opened ${picked.map(pick => pick.path).join(', ')}` : 'popup: ok, every emptied folder refused as a pick');
-  process.exit(opened.length || picked.length ? 1 : 0);
+  console.log(whole.length ? `popup: FAIL, the page's own folder ${JSON.stringify(whole)}` : "popup: ok, programs never get the page's own folder");
+  process.exit(opened.length || picked.length || whole.length ? 1 : 0);
 }
 
 if (process.platform === 'win32') {
@@ -74,7 +103,11 @@ if (process.platform === 'win32') {
   declaredPermissions(page);
   fs.writeFileSync(page, '<meta name="papp-net" content="localhost:11434">');
   declaredPermissions(page);
-  const failures = [...opened.map(([tag, value]) => `opened ${tag} ${value}`), ...(cmd.toLowerCase().endsWith('\\system32\\cmd.exe') ? [] : [`papp-run cmd found ${cmd}`])];
+  const failures = [
+    ...opened.map(([tag, value]) => `opened ${tag} ${value}`),
+    ...(cmd.toLowerCase().endsWith('\\system32\\cmd.exe') ? [] : [`papp-run cmd found ${cmd}`]),
+    ...wholeFolderFailures(page, 'cmd').map(tags => `own folder ${tags}`),
+  ];
   console.log(failures.length ? `popup: FAIL, ${failures.join(', ')}` : 'popup: ok, every tag Windows cannot fence refused, programs and localhost allowed');
   process.exit(failures.length ? 1 : 0);
 }
@@ -86,12 +119,14 @@ if (process.platform !== 'darwin') {
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apargon-popup-'));
 const page = path.join(dir, 'case.papp');
-fs.writeFileSync(page, '<meta name="papp-write" content="~/LIBRARY">\n<meta name="papp-write" content="./*.papp">\n');
+fs.writeFileSync(page, '<meta name="papp-write" content="~/LIBRARY/">\n<meta name="papp-write" content="./*.papp">\n');
 const lines = describe(declaredPermissions(page)).filter(line => line.id.startsWith('write:'));
 
 fs.mkdirSync(path.join(dir, 'data'));
 fs.mkdirSync(path.join(dir, '.tool'));
 fs.writeFileSync(path.join(dir, 'data', 'tool'), '#!/bin/sh\n', { mode: 0o755 });
+// A named link would grant what it leads to.
+fs.symlinkSync(page, path.join(dir, 'link.txt'));
 const listener = net.createServer().listen(path.join(dir, 'data', 'a.sock'));
 const ownAddress = Object.values(os.networkInterfaces())
   .flat()
@@ -107,7 +142,8 @@ const refusals = [
   { tag: '<meta name="papp-socket" content="./data/*.sock">', reason: 'no wildcards' },
   { tag: '<meta name="papp-socket" content="./data/missing.sock">', reason: 'does not exist' },
   { tag: '<meta name="papp-socket" content="./case.papp">', reason: 'not a socket' },
-  { tag: '<meta name="papp-read" content="./data" data-x="a​b">', reason: 'invisible character' },
+  { tag: '<meta name="papp-read" content="./link.txt">', reason: 'is a link' },
+  { tag: '<meta name="papp-read" content="./data/" data-x="a​b">', reason: 'invisible character' },
   { tag: '<meta name="papp-net" content="169.254.169.254:80">', reason: 'link-local' },
   { tag: '<meta name="papp-net" content="100.100.1.1:*">', reason: 'one port only' },
   { tag: '<meta name="papp-net" content="localhost:*">', reason: 'one port only' },
@@ -145,7 +181,7 @@ const refusals = [
   { tag: `<meta name="papp-global-shortcut" content="${process.platform === 'darwin' ? 'Alt' : 'AltGr'}+Shift+K">`, reason: 'app in front' },
   ...(ownAddress ? [{ tag: `<meta name="papp-net" content="${ownAddress}:80">`, reason: 'own addresses' }] : []),
   { tag: '<meta name="papp-read" content=./data>', reason: 'quoted name and content' },
-  { tag: '<meta name=papp-read content="./data">', reason: 'quoted name and content' },
+  { tag: '<meta name=papp-read content="./data/">', reason: 'quoted name and content' },
   { tag: '<meta name = "papp-net" content="*">', reason: 'quoted name and content' },
   { tag: '<meta NAME="papp-net" content\t="*">', reason: 'quoted name and content' },
   { tag: '<meta name="papp-run" content="/bin/ls">\n<meta name="papp-run" content="ls">', reason: 'Two papp-run' },
@@ -158,13 +194,16 @@ const refusals = [
   { tag: '<meta name="papp-run" content="data/tool">', reason: 'Name one program' },
   { tag: '<meta name="papp-run" content="./data/tool">\n<meta name="papp-write" content="./data/tool">', reason: 'could change' },
   { tag: '<meta name="papp-run" content="./data/tool">\n<meta name="papp-write" content="./data/*">', reason: 'could change' },
-  { tag: `<meta name="papp-run" content="${path.join(dir, 'data', 'tool')}">\n<meta name="papp-write" content="./data">`, reason: 'could change' },
+  { tag: `<meta name="papp-run" content="${path.join(dir, 'data', 'tool')}">\n<meta name="papp-write" content="./data/">`, reason: 'could change' },
   { tag: '<meta name="papp-listen" content="anyone">', reason: 'Bad papp-listen value' },
   { tag: '<meta name="papp-listen" content="localhost">\n<meta name="papp-listen" content="network">', reason: 'Two papp-listen' },
   { tag: '<meta name="papp-net" content="example.com:0443">', reason: 'Bad papp-net value' },
   { tag: '<meta name="papp-open" content="https://x.com">', reason: 'Bad papp-open value' },
   { tag: '<meta name="papp-open" content="x.com:443">', reason: 'Bad papp-open value' },
   { tag: '<meta name="papp-open" content="*.com:443">', reason: 'Bad papp-open value' },
+  { tag: '<meta name="papp-read" content="./data/**/x/**/*.md">', reason: 'one ** per path' },
+  { tag: '<meta name="papp-read" content="./data/a*b*.md">', reason: 'one * per name' },
+  { tag: '<meta name="papp-write" content="./data/a**b">', reason: 'one * per name' },
 ].map(({ tag, reason }) => {
   fs.writeFileSync(page, tag);
 
@@ -207,7 +246,7 @@ const plainPick =
   ).read.length === 2;
 const trust = [
   { tags: '', expected: false },
-  { tags: '<meta name="papp-read" content="./data">', expected: false },
+  { tags: '<meta name="papp-read" content="./data/">', expected: false },
   { tags: '<meta name="papp-net" content="api.github.com">', expected: true },
   { tags: '<meta name="papp-open" content="x.com">', expected: true },
   { tags: '<meta name="papp-use" content="camera">', expected: false },
@@ -215,7 +254,7 @@ const trust = [
   { tags: '<meta name="papp-write" content="./.tool/state.json">', expected: true },
   { tags: '<meta name="papp-run" content="/bin/ls">', expected: true },
   { tags: '<meta name="papp-system" content="full">', expected: true },
-  { tags: '<meta name="papp-system" content="full">\n<meta name="papp-write" content="./data">\n<meta name="papp-read" content="./data">', expected: true },
+  { tags: '<meta name="papp-system" content="full">\n<meta name="papp-write" content="./data/">\n<meta name="papp-read" content="./data/">', expected: true },
   { tags: '<meta name="papp-socket" content="./data/a.sock">', expected: true },
   { tags: '<meta name="papp-listen" content="localhost">', expected: true },
 ].map(({ tags, expected }) => {
@@ -228,8 +267,9 @@ const trust = [
 const colours = [
   { tags: '<meta name="papp-run" content="/bin/ls">\n<meta name="papp-env" content="OPENAI_API_KEY">', kind: 'env:', level: 'yellow', says: '' },
   { tags: '<meta name="papp-run" content="/bin/ls">\n<meta name="papp-env" content="AWS_PROFILE">', kind: 'env:', level: 'plain', says: '' },
-  { tags: '<meta name="papp-read" content="~/.netrc">', kind: 'read:', level: 'yellow', says: 'See files' },
-  { tags: '<meta name="papp-write" content="~/DOCUMENTS">', kind: 'write:', level: 'yellow', says: 'change' },
+  { tags: '<meta name="papp-read" content="~/.netrc">', kind: 'read:', level: 'yellow', says: 'See your saved server passwords' },
+  { tags: '<meta name="papp-read" content="~/.ssh/config">', kind: 'read:', level: 'yellow', says: 'See your SSH keys' },
+  { tags: '<meta name="papp-write" content="~/DOCUMENTS/">', kind: 'write:', level: 'yellow', says: 'change' },
   { tags: '<meta name="papp-run" content="/bin/ls">', kind: 'run:', level: 'yellow', says: 'Run' },
   { tags: '<meta name="papp-run" content="./data/tool">', kind: 'run:', level: 'yellow', says: 'Run' },
   { tags: '<meta name="papp-listen" content="localhost">', kind: 'listen:localhost', level: 'red', says: 'this computer' },
@@ -283,49 +323,53 @@ const colours = [
 // What the page sees, once: a path in a listed folder, its own included, is left out, unless a hidden name keeps it out.
 const seen = [
   {
-    tags: '<meta name="papp-read" content="./data">\n<meta name="papp-write" content="./data/out">\n<meta name="papp-read" content="./data/.tool">',
+    tags: '<meta name="papp-read" content="./data/">\n<meta name="papp-write" content="./data/out">\n<meta name="papp-read" content="./data/.tool">',
     all: false,
     shows: ['', path.join('data', '.tool')],
   },
   { tags: '<meta name="papp-read" content="./data/*.txt">\n<meta name="papp-read" content="./data/a.txt">', all: false, shows: [''] },
-  {
-    tags: '<meta name="papp-system" content="full">\n<meta name="papp-write" content="./data">\n<meta name="papp-read" content="~/.ssh">',
-    all: PERMISSIONS_PLATFORM.readsAll,
-    shows: [path.join(HOME, '.ssh')],
-  },
+  { tags: '<meta name="papp-system" content="full">\n<meta name="papp-write" content="./data/">', all: PERMISSIONS_PLATFORM.readsAll, shows: [] },
 ]
-  // A machine without ~/.ssh cannot declare it.
-  .filter(({ shows }) => shows.every(file => fs.existsSync(file)))
   .map(({ tags, all, shows }) => {
     fs.writeFileSync(page, tags);
     const said = seenFiles(declaredPermissions(fs.realpathSync(page)));
-    const files = said.lines.map(line => line.id.slice('read:'.length));
+    // A folder's id ends in a separator; the expected paths do not.
+    const files = said.lines.map(line => path.resolve(line.id.slice('read:'.length)));
     const expected = shows.map(file => path.resolve(fs.realpathSync(dir), file));
 
     return { tags, ok: said.all === all && files.join('\n') === expected.join('\n'), said: `${said.all ? 'all, ' : ''}${files.join(', ')}` };
   });
 fs.writeFileSync(page, '<meta name="papp-run" content="./data/tool">');
 const bundled = declaredPermissions(page).run.tool === path.join(dir, 'data', 'tool');
-fs.writeFileSync(page, '<meta\n  name="papp-read"\n  content="./data">\n<meta charset="utf-8">');
+fs.writeFileSync(page, '<meta\n  name="papp-read"\n  content="./data/">\n<meta charset="utf-8">');
 const written = declaredPermissions(page).tags;
-const tagsAsWritten = written.length === 1 && written[0] === '<meta name="papp-read" content="./data">';
+const tagsAsWritten = written.length === 1 && written[0] === '<meta name="papp-read" content="./data/">';
 fs.mkdirSync(path.join(dir, "Jon's notes"));
 fs.writeFileSync(
   page,
   [
     '<!doctype html><html><head><meta charset="utf-8">',
     '<!-- <meta name="papp-net" content="*"> -->',
-    '<meta name="papp-read" content="./Jon\'s notes">',
+    '<meta name="papp-read" content="./Jon\'s notes/">',
     '<script>const tpl = `<meta name="papp-system" content="full">`;</script>',
-    '</head><body><meta name="papp-write" content="./data"></body></html>',
+    '</head><body><meta name="papp-write" content="./data/"></body></html>',
   ].join('\n')
 );
 const head = declaredPermissions(page);
-const headOnly = head.tags.length === 1 && head.read[0].endsWith("/Jon's notes") && !head.net.length && !head.write.length && !head.system;
+const headOnly = head.tags.length === 1 && head.read[0].endsWith("/Jon's notes/") && !head.net.length && !head.write.length && !head.system;
 fs.writeFileSync(page, `<meta data-name="papp-net" name="description" content="*">\n<meta name="x" lang=' name="papp-system" content="full" '>`);
 const smuggled = declaredPermissions(page).tags;
 fs.writeFileSync(page, '<meta name="papp-open" content="X.com">\n<meta name="papp-open" content="*.example.com">');
 const { open } = declaredPermissions(page);
+// * is part of one name, ** any number of names; neither matches a hidden one.
+const matches = [
+  { pattern: '/n/**/*.md', file: '/n/a.md', matches: true },
+  { pattern: '/n/**/*.md', file: '/n/x/y/a.md', matches: true },
+  { pattern: '/n/**/*.md', file: '/n/x/a.txt', matches: false },
+  { pattern: '/n/**/*.md', file: '/n/.git/a.md', matches: false },
+  { pattern: '/n/**/*.md', file: '/n/x/.a.md', matches: false },
+  { pattern: '/n/*/*.md', file: '/n/x/y/a.md', matches: false },
+].map(each => ({ ...each, ok: new RegExp(patternSource(each.pattern)).test(each.file) === each.matches }));
 const links = [
   { href: 'https://x.com/jack', opens: true },
   { href: 'http://x.com/jack', opens: true },
@@ -393,6 +437,10 @@ for (const { href, opens, ok } of links) {
   console.log(`${ok ? 'ok  ' : 'FAIL'} papp-open ${opens ? 'opens' : 'asks about'} ${href}`);
 }
 
+for (const { pattern, file, matches: expected, ok } of matches) {
+  console.log(`${ok ? 'ok  ' : 'FAIL'} ${pattern} ${expected ? 'matches' : 'does not match'} ${file}`);
+}
+
 console.log(`${anyLink ? 'ok  ' : 'FAIL'} papp-open * takes any http(s) link and no other scheme`);
 console.log(`${viewers ? 'ok  ' : 'FAIL'} papp.open takes viewable files only`);
 console.log(`${runsOutside ? 'ok  ' : 'FAIL'} papp.saveAs refuses launch agents and hidden folders, not cloud drives`);
@@ -411,6 +459,7 @@ process.exit(
       headOnly &&
       !smuggled.length &&
       links.every(({ ok }) => ok) &&
+      matches.every(({ ok }) => ok) &&
       anyLink &&
       viewers &&
       runsOutside

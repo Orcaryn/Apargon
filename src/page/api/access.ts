@@ -16,7 +16,7 @@ export function pageAccess(permissions: Permissions) {
     return firstWild === -1 ? [] : names.slice(firstWild).map((_, i) => new RegExp(patternSource(path.join(root, ...names.slice(0, firstWild + i)), false)));
   });
   // Apargon's data holds other pages' storage and the approvals: the page's process may read it, the page may not. The secrets, no process may.
-  const offLimits = [permissions.hidden, DATA, SECRETS_DATA, INSTALL_FOLDER ?? []].flat();
+  const offLimits = [DATA, SECRETS_DATA, INSTALL_FOLDER ?? []].flat();
   const isOffLimits = (file: string) => offLimits.some(folder => isInside(file, folder));
   const canSee = (file: string) => visible.some(pattern => pattern.test(file)) && !isOffLimits(file);
 

@@ -24,8 +24,8 @@ export const LINKS_FILE = path.join(DATA, 'links.json');
 export const SEEN_FILE = path.join(DATA, 'seen.json');
 export const NET_DATA = path.join(DATA, 'net');
 export const UPDATE_FILE = path.join(DATA, 'update.json');
-// Pages may read Apargon's data, not write it, so no page can forge another's replies.
-export const REPLIES_DATA = path.join(DATA, 'replies');
+// Beside Apargon's data, which every page's sandbox may read: a reply can hold a secret. Each sandbox reads only its own page's folder here.
+export const REPLIES_DATA = path.join(path.dirname(DATA), 'apargon-replies');
 export const EGRESS_LOG = path.join(app.getPath('logs'), 'egress.log');
 
 // Named after the path: the same app after an edit, another for a copy.

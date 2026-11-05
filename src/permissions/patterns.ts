@@ -1,20 +1,21 @@
-import fs from 'fs';
 import path from 'path';
 import type { Permissions } from './tags.ts';
 
 const SEPARATOR = path.sep === '/' ? '/' : '\\\\';
+// A folder's contents, and **.
+const ANY_NAMES = `(${SEPARATOR}[^.][^${SEPARATOR}]*)*`;
 
-// Seatbelt misreads [^./], so [^.]: paths here are normalized and never meet a separator.
+// Seatbelt misreads [^./], so [^.]: paths here are normalized and never meet a separator. * is any part of one name, ** any number of names; neither matches a hidden one.
 export function patternSource(pattern: string, withContents = true) {
   const { root } = path.parse(pattern);
   const names = pattern
     .slice(root.length)
     .split(path.sep)
     .filter(Boolean)
-    .map(name => (name.startsWith('*') ? '[^.]' : '') + name.split('*').map(text => text.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join(`[^${SEPARATOR}]*`));
+    .map(name => (name === '**' ? ANY_NAMES : SEPARATOR + (name.startsWith('*') ? '[^.]' : '') + name.split('*').map(text => text.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join(`[^${SEPARATOR}]*`)));
   const drive = root.slice(0, -1);
 
-  return `^${drive}${names.map(name => SEPARATOR + name).join('')}${withContents ? `(${SEPARATOR}[^.][^${SEPARATOR}]*)*` : ''}${SEPARATOR}?$`;
+  return `^${drive}${names.join('')}${withContents ? ANY_NAMES : ''}${SEPARATOR}?$`;
 }
 
 export function literalBase(pattern: string) {
@@ -32,13 +33,7 @@ export function isInside(file: string, folder: string) {
   return fromFolder !== '..' && !fromFolder.startsWith('..' + path.sep) && !path.isAbsolute(fromFolder);
 }
 
-export function patternFolder(pattern: string) {
-  const base = literalBase(pattern);
-
-  return pattern.includes('*') || fs.statSync(base, { throwIfNoEntry: false })?.isDirectory() ? base : path.dirname(base);
-}
-
-export const PAGE_SOURCE = '\\.[pP][aA][pP][pP]/?$';
+export const PAGE_SOURCE = `\\.[pP][aA][pP][pP]${SEPARATOR}?$`;
 export const PAGE_FILE = new RegExp(PAGE_SOURCE);
 
 export function changeableSources({ write }: Permissions) {

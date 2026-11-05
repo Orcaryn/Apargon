@@ -2,7 +2,7 @@ import net from 'net';
 import path from 'path';
 import { LOCAL_HOSTS, privateNetwork } from './network.ts';
 import { BIG_FOLDERS, HOME, LAUNCH_FOLDER, runsOutsideSandbox, SECRETS } from './paths.ts';
-import { isInside, literalBase, PAGE_FILE, patternFolder, patternSource } from './patterns.ts';
+import { isInside, literalBase, PAGE_FILE, patternSource } from './patterns.ts';
 import { PERMISSIONS_PLATFORM } from './platform.ts';
 import type { GivenFile } from './given.ts';
 import type { Listen, Permissions, Use, WindowSettings } from './tags.ts';
@@ -30,10 +30,11 @@ const USE_SEES: Use[] = ['clipboard', 'location', 'camera', 'microphone', 'scree
 
 export function describe(permissions: Permissions) {
   const lines: Line[] = [];
-  const writable = [...new Set(permissions.write.map(patternFolder))];
+  // A named file is granted on its own; a folder whole, hidden files in it too.
+  const writableFolders = [...new Set(permissions.write.filter(pattern => pattern.includes('*') || pattern.endsWith(path.sep)).map(literalBase))];
   const programsCan = [
     PERMISSIONS_PLATFORM.programsSendOut && 'send any file it sees anywhere',
-    PERMISSIONS_PLATFORM.writesWholeFolders && writable.length > 0 && `change any file in ${writable.join(', ')}`,
+    PERMISSIONS_PLATFORM.writesWholeFolders && writableFolders.length > 0 && `change any file in ${writableFolders.join(', ')}`,
   ].filter(can => typeof can === 'string');
 
   if (permissions.system) {
@@ -78,13 +79,11 @@ export function needsTrust({ run, net, open, own, read, write, use }: Permission
   return lines.some(line => line.level === 'red') || Object.keys(run).length > 0 || (sees && (net.length > 0 || open.length > 0));
 }
 
-// What the page sees, each path once: one inside another listed path is left out. A papp-system page sees all but keys and logins, so only those add to it.
+// What the page sees, each path once: one inside another listed path is left out. A papp-system page sees all, so nothing adds to it.
 export function seenFiles({ own, read, write, system }: Permissions) {
   const named = [...new Set([own ?? [], read, write].flat())];
   const all = system && PERMISSIONS_PLATFORM.readsAll;
-  const listed = named.filter(pattern =>
-    all ? SECRETS.some(secret => isInside(literalBase(pattern), secret.path)) : !named.some(other => other !== pattern && new RegExp(patternSource(other)).test(literalBase(pattern)))
-  );
+  const listed = all ? [] : named.filter(pattern => !named.some(other => other !== pattern && new RegExp(patternSource(other)).test(literalBase(pattern))));
 
   return { all, lines: listed.map(pattern => folderLine('read', pattern)) };
 }
@@ -114,19 +113,16 @@ function envLine(name: string): Line {
 }
 
 function folderLine(kind: 'read' | 'write', pattern: string): Line {
-  const text = kind === 'read' ? 'See files' : 'See, change and delete files';
   const base = literalBase(pattern);
+  // A path in a key folder shows the whole of it.
+  const secret = SECRETS.find(secret => isInside(base, secret.path));
+  const text = `${kind === 'read' ? 'See' : 'See, change and delete'} ${secret ? `your ${secret.holds}` : 'files'}`;
   // A folder that holds the launch folder reaches it too.
   const runsOutside = runsOutsideSandbox(pattern) || (LAUNCH_FOLDER !== null && isInside(LAUNCH_FOLDER, base));
   const red = kind === 'write' && (runsOutside || PAGE_FILE.test(pattern));
-  const yellow =
-    runsOutside ||
-    pattern.includes('*') ||
-    SECRETS.some(secret => isInside(base, secret.path)) ||
-    path.dirname(pattern) === path.parse(pattern).root ||
-    BIG_FOLDERS.includes(pattern);
+  const yellow = runsOutside || pattern.includes('*') || secret !== undefined || path.dirname(base) === path.parse(base).root || BIG_FOLDERS.includes(base);
   const level = red ? 'red' : yellow ? 'yellow' : 'plain';
-  const short = pattern === path.parse(pattern).root ? 'All your files' : pattern === HOME ? 'Your home folder' : pattern;
+  const short = pattern === path.parse(pattern).root ? 'All your files' : pattern === HOME + path.sep ? 'Your home folder' : pattern;
 
   return { id: `${kind}:${pattern}`, level, text, short };
 }

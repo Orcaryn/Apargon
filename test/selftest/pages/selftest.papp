@@ -2,6 +2,7 @@
 <meta charset="utf-8">
 <meta name="papp-write" content="./results/result.json">
 <meta name="papp-write" content="./scratch*">
+<meta name="papp-write" content="./deep/**/*.md">
 <title>Apargon selftest</title>
 <body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
 
@@ -87,6 +88,13 @@
     await papp.mkdir('scratch-dir');
     result.hidden_below_match_refused = await refused(() => papp.writeFile('scratch-dir/.hidden', 'x'));
     await papp.rm('scratch-dir');
+    // ** is any number of folders, none hidden.
+    await papp.writeFile('deep/top.md', 'x');
+    await papp.writeFile('deep/sub/below.md', 'x');
+    result.any_depth_write = (await papp.readdir('deep/sub')).includes('below.md');
+    await papp.rm('deep/top.md');
+    await papp.rm('deep/sub/below.md');
+    result.any_depth_refused = await refused(() => papp.writeFile('deep/sub/other.txt', 'x')) && await refused(() => papp.writeFile('deep/sub/.hidden/x.md', 'x'));
 
     const listed = await papp.readdir('.', { stats: true });
     const entry = (name) => listed.find((item) => item.name === name);
@@ -105,6 +113,10 @@
     const pdf = await papp.pdf();
     result.pdf_rendered = new TextDecoder().decode(pdf.slice(0, 5)) === '%PDF-';
     result.menu_set = (await papp.menu([{ label: 'Selftest', submenu: [{ label: 'Run', id: 'run', keys: 'CmdOrCtrl+Shift+9' }, { separator: true }, { label: 'Role smuggled', id: 'quit', role: 'quit' }] }])) === undefined;
+    result.tray_set = (await papp.tray('Selftest', [{ label: 'Run', id: 'run' }, { separator: true }, { label: 'Role smuggled', id: 'quit', role: 'quit' }])) === undefined && (await papp.tray(null)) === undefined;
+    result.tray_refused = await refused(() => papp.tray('x', 'not a list')) && await refused(() => papp.tray('x', [null]));
+    result.progress_set = (await papp.progress(0.5)) === undefined && (await papp.progress(null)) === undefined;
+    result.progress_refused = await refused(() => papp.progress(2)) && await refused(() => papp.progress('0.5')) && await refused(() => papp.progress(NaN));
     const power = await papp.power();
     result.power_read = typeof power.idleSeconds === 'number' && typeof power.onBattery === 'boolean';
     result.save_names_refused = (await Promise.all([{}, { '../out.txt': 'x' }, { 'sub/out.txt': 'x' }, { '.zshrc': 'x' }, { 'ok.txt': 'x', 'page.papp': 'x' }, { 'ok.txt': 'x', '': 'x' }].map((files) => refused(() => papp.saveAs(files))))).every(Boolean);

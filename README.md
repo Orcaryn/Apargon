@@ -38,7 +38,7 @@ Once a day Apargon asks GitHub for a new version. **Permissions → Check for Up
 With no tags, a page sees its own folder and nothing else. It asks for more in its `<head>`. A tag that names a file, server, program, variable or socket takes one; `papp-use` and `papp-window` take a list:
 
 ```html
-<meta name="papp-read"            content="~/logs">                   <!-- see a folder -->
+<meta name="papp-read"            content="~/logs/">                  <!-- see a folder -->
 <meta name="papp-write"           content="./notes/*.md">             <!-- change files -->
 <meta name="papp-net"             content="api.example.com">          <!-- one server, port 443 unless you add :port -->
 <meta name="papp-listen"          content="localhost">                <!-- answer programs on this computer; network for devices too -->

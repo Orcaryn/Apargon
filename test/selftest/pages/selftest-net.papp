@@ -16,9 +16,9 @@
 <meta name="papp-run" content="sh">
 <meta name="papp-run" content="./bin/greet">
 <meta name="papp-env" content="APARGON_TEST_ENV">
-<meta name="papp-read" content="../../../examples">
+<meta name="papp-read" content="../../../examples/">
 <meta name="papp-write" content="./results/result-net.json">
-<meta name="papp-write" content="./touched*">
+<meta name="papp-write" content="./touched/*">
 <meta name="papp-use" content="clipboard">
 <meta name="papp-use" content="microphone">
 <title>Apargon selftest (net and programs)</title>
@@ -56,15 +56,13 @@
     result.read_granted = (await papp.readFile('../../../examples/hello.papp')).includes('papp');
     result.read_only = await refused(() => papp.writeFile('../../../examples/x.txt', 'x'));
 
-    result.program_writes_granted = (await papp.run('touch', ['touched.tmp'])).status === 0;
-    await papp.rm('touched.tmp');
+    result.program_writes_granted = (await papp.run('touch', ['touched/x.tmp'])).status === 0;
+    await papp.rm('touched/x.tmp');
     result.program_outside_write_blocked = (await papp.run('touch', ['../touched-outside.tmp'])).status !== 0;
-
-    if (mac) {
-      result.program_hidden_write_blocked = (await papp.run('touch', ['.touched.tmp'])).status !== 0;
-      result.program_own_folder_write_blocked = (await papp.run('touch', ['own.tmp'])).status !== 0;
-      result.program_page_write_blocked = (await papp.run('touch', ['touched.papp'])).status !== 0;
-    }
+    // ./touched/* is a folder of its own: on every OS a program cannot write beside the page or over it.
+    result.program_hidden_write_blocked = (await papp.run('touch', ['.touched.tmp'])).status !== 0;
+    result.program_own_folder_write_blocked = (await papp.run('touch', ['own.tmp'])).status !== 0;
+    result.program_page_write_blocked = (await papp.run('touch', ['touched.papp'])).status !== 0;
 
     result.program_bundled_runs = (await papp.run('greet', ['x'])).stdout === 'bundled x\n';
     result.program_input = (await papp.run('cat', [], { input: 'piped' })).stdout === 'piped';
@@ -92,8 +90,6 @@
     const env = (await papp.run('env')).stdout;
     result.program_env_named = env.includes('APARGON_TEST_ENV=passed') && /^HOME=/m.test(env);
     result.program_env_unnamed_left_out = !env.includes('APARGON_TEST_ALLOW=') && !env.includes('APARGON=');
-    const ssh = await papp.run('sh', ['-c', 'ls -A "$HOME/.ssh"']);
-    result.program_ssh_hidden = mac ? ssh.stderr.includes('Operation not permitted') : ssh.status === 0 && ssh.stdout === '';
     result.undeclared_program_refused = await refused(() => papp.run('ls'));
 
     if (!mac) {
@@ -121,6 +117,19 @@
     result.fetch_wildcard_subdomain = await fetchOk('https://www.example.org/');
     result.fetch_wildcard_apex_blocked = !(await fetchOk('https://example.org/'));
     result.fetch_undeclared_blocked = !(await fetchOk('https://example.net/'));
+    // A raw request over papp.connect, as a database or mail client would speak its own protocol.
+    const talk = async (host, port, options) => {
+      const chunks = [];
+      const connection = await papp.connect(host, port, { ...options, onData: (bytes) => chunks.push(new TextDecoder().decode(bytes)) });
+      await connection.write(`GET / HTTP/1.0\r\nHost: ${host}\r\n\r\n`);
+      await connection.closed;
+
+      return chunks.join('');
+    };
+    result.connect_declared = /^HTTP\/1\.[01] 200/.test(await talk('localhost', 47181));
+    result.connect_tls = /^HTTP\/1\.[01] 200/.test(await talk('example.com', 443, { tls: true }));
+    result.connect_undeclared_refused = (await papp.connect('localhost', 47182).then(() => 'connected', (err) => err.message)).includes('may not connect');
+    result.connect_local_network_refused = (await papp.connect('10.255.255.1', 9).then(() => 'connected', (err) => err.message)).includes('may not connect');
     result.clipboard_read_granted = (await navigator.permissions.query({ name: 'clipboard-read' })).state === 'granted';
     result.microphone_permission_granted = (await navigator.permissions.query({ name: 'microphone' })).state === 'granted';
     result.camera_permission_denied_without_tag = (await navigator.permissions.query({ name: 'camera' })).state === 'denied';

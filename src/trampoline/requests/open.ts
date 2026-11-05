@@ -2,7 +2,6 @@ import { app, dialog, shell } from 'electron';
 import { hostMatches } from '../../permissions/network.ts';
 import { linkHost, viewable } from '../../permissions/open.ts';
 import { realPath } from '../../permissions/paths.ts';
-import { isInside } from '../../permissions/patterns.ts';
 import type { Permissions } from '../../permissions/tags.ts';
 import { LINKS_FILE, readJson, writeJson, type Links } from '../../shared/data.ts';
 
@@ -37,10 +36,10 @@ export async function openLink(page: string, { open }: Permissions, url: string)
 }
 
 // The real path: a symlink without an extension could lead to an app.
-export function openFile(file: string, { hidden }: Permissions) {
+export function openFile(file: string) {
   const target = realPath(file);
 
-  if (viewable(target) && !hidden.some(secret => isInside(target, secret))) {
+  if (viewable(target)) {
     shell.openPath(target);
   }
 }

@@ -18,7 +18,9 @@ const watchCallbacks = new Map();
 const shortcutCallbacks = new Set();
 const menuCallbacks = new Set();
 const systemCallbacks = new Set();
+const trayCallbacks = new Set();
 const jobs = new Map();
+const connections = new Map();
 const requestHandlers = new Map();
 // Subscribes a callback; the function returned takes it off again.
 const listener = callbacks => callback => {
@@ -31,6 +33,11 @@ ipcRenderer.on('apargon-output', (_event, id, stream, text) => jobs.get(id)?.onO
 ipcRenderer.on('apargon-exit', (_event, id, exit) => {
   jobs.get(id)?.resolve(exit);
   jobs.delete(id);
+});
+ipcRenderer.on('apargon-data', (_event, id, bytes) => connections.get(id)?.onData?.(bytes));
+ipcRenderer.on('apargon-closed', (_event, id, error) => {
+  connections.get(id)?.resolve(error);
+  connections.delete(id);
 });
 ipcRenderer.on('apargon-shortcut', (_event, keys) => shortcutCallbacks.forEach(callback => callback(keys)));
 ipcRenderer.on('apargon-request', async (_event, server, request) => {
@@ -57,6 +64,7 @@ ipcRenderer.on('apargon-request', async (_event, server, request) => {
 });
 ipcRenderer.on('apargon-menu', (_event, id) => menuCallbacks.forEach(callback => callback(id)));
 ipcRenderer.on('apargon-system', (_event, event) => systemCallbacks.forEach(callback => callback(event)));
+ipcRenderer.on('apargon-tray', (_event, id) => trayCallbacks.forEach(callback => callback(id)));
 
 contextBridge.exposeInMainWorld('papp', {
   dir: ipcRenderer.sendSync('apargon-dir'),
@@ -80,6 +88,16 @@ contextBridge.exposeInMainWorld('papp', {
     });
 
     return { done, write: data => call('write', id, data), end: () => call('endInput', id), kill: () => call('kill', id) };
+  },
+  connect: async (host, port, { tls, onData } = {}) => {
+    const id = crypto.randomUUID();
+    const closed = new Promise(resolve => connections.set(id, { onData, resolve }));
+    await call('connect', id, host, port, { tls }).catch(err => {
+      connections.delete(id);
+      throw err;
+    });
+
+    return { closed, write: data => call('writeConnection', id, data), close: () => call('closeConnection', id) };
   },
   watch: async (file, callback, options) => {
     const id = crypto.randomUUID();
@@ -127,7 +145,9 @@ contextBridge.exposeInMainWorld('papp', {
   power: () => call('power'),
   onSystem: listener(systemCallbacks),
   notify: (title, body, options) => call('notify', title, body, options),
-  tray: title => call('tray', title),
+  tray: (title, items) => call('tray', title, items),
+  onTray: listener(trayCallbacks),
+  progress: value => call('progress', value),
   closeWindow: () => call('closeWindow'),
   onShortcut: listener(shortcutCallbacks),
 });

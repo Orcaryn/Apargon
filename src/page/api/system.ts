@@ -1,7 +1,7 @@
 import { powerMonitor, type NativeImage } from 'electron';
 import { linkHost, viewable } from '../../permissions/open.ts';
 import type { Permissions } from '../../permissions/tags.ts';
-import { tellTrampoline, type Ask, type Notice } from '../../shared/channel.ts';
+import { tellTrampoline, type Ask, type Notice, type PageTray } from '../../shared/channel.ts';
 import { showNotice } from '../../shared/notice.ts';
 import { PAGE_PLATFORM } from '../platform.ts';
 import type { Scope } from './scope.ts';
@@ -40,8 +40,8 @@ export function systemApi(permissions: Permissions, { where, canSee, need }: Sco
 
       return PAGE_PLATFORM.notifiesHere ? showNotice(notice, toFront) : ask<number | null>(id => ({ notify: { id, ...notice } }));
     },
-    tray(title: string | null) {
-      tellTrampoline({ tray: title === null ? null : String(title).slice(0, 24) });
+    tray(title: PageTray['title'], items: PageTray['items'] = []) {
+      tellTrampoline({ tray: { title: title === null ? null : String(title).slice(0, 24), items: items.map(item => ('separator' in item ? { separator: true } : { label: String(item.label), id: String(item.id) })) } });
     },
     // One argument reads; a string sets; null deletes. The trampoline keeps them where no page's process can read.
     secret(name: string, value?: string | null) {

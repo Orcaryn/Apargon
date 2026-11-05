@@ -3,6 +3,7 @@ import type { Permissions } from '../../permissions/tags.ts';
 import type { Ask } from '../../shared/channel.ts';
 import type { PageMenus } from '../menu.ts';
 import type { pageAccess } from './access.ts';
+import { connectionApi } from './connections.ts';
 import { fileApi } from './files.ts';
 import { listenApi } from './listen.ts';
 import { programApi } from './programs.ts';
@@ -20,12 +21,14 @@ export function pageApi(dir: string, permissions: Permissions, access: ReturnTyp
   const programs = programApi(permissions, scope, win);
   const pageWindow = windowApi(permissions, win, menus);
   const listeners = listenApi(win, ask);
+  const connections = connectionApi(win);
 
   return {
     ...files,
     ...programs,
     ...pageWindow,
     ...listeners,
+    ...connections,
     ...systemApi(permissions, scope, toFront, ask, pageIcon),
     // On each load of the page, and when its window closes: nothing the page before it started outlives it.
     reset() {
@@ -33,6 +36,7 @@ export function pageApi(dir: string, permissions: Permissions, access: ReturnTyp
       programs.reset();
       pageWindow.reset();
       listeners.reset();
+      connections.reset();
       scope.picked.length = 0;
     },
   };

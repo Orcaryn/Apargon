@@ -28,7 +28,7 @@ export const windows: PermissionsPlatform = {
   refusePath: file => (/^[\\/]{2}/.test(file) || file.includes(':', 2) || /[. ]([\\/]|$)/.test(file) ? `Apargon: Windows reads ${file} as a network path or as another file's name, so Apargon never opens it.` : null),
   // The Startup folder.
   launchFolder: 'AppData',
-  // MXC grants each writable folder whole.
+  // MXC grants each folder whole.
   writesWholeFolders: true,
   // Windows looks up the server of \\<data>.example.com\x outside the sandbox.
   programsSendOut: true,

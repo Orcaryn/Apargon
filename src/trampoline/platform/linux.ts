@@ -4,7 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { localPorts } from '../../permissions/network.ts';
-import { patternFolder } from '../../permissions/patterns.ts';
+import { literalBase } from '../../permissions/patterns.ts';
 import { PRIVATE } from '../../permissions/platform/linux.ts';
 import type { Permissions, Use } from '../../permissions/tags.ts';
 import { REQUEST_FD, relay, type Bridge } from '../../shared/channel.ts';
@@ -37,7 +37,7 @@ export const linux: TrampolinePlatform = {
       command: apargon => ['bwrap', ...bwrapArgs(page, permissions, socketFolder), ...apargon],
       stdio: ['ignore', 'pipe', 'pipe', 'pipe', trampolineNetworkFd, 'pipe'],
       requestFd: REQUEST_FD,
-      repliesInFile: false,
+      replies: null,
       proxyPort: proxyBridge?.port ?? null,
       bridges: proxyBridge ? [proxyBridge, ...localBridges] : [],
       close() {
@@ -110,8 +110,12 @@ function pageTitle(page: string) {
   const title = /<title[^>]*>([^<]*)<\/title>/i.exec(fs.readFileSync(page, 'utf8'))?.[1] ?? '';
   const text = title
     .replace(/&(amp|lt|gt|quot|apos);/g, (_match, name: string) => ({ amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" })[name]!)
-    .replace(/&#x([0-9a-f]+);/gi, (_match, hex: string) => String.fromCodePoint(parseInt(hex, 16)))
-    .replace(/&#(\d+);/g, (_match, dec: string) => String.fromCodePoint(+dec))
+    // Number reads x41 as hex and 65 as decimal. Past Unicode's last, fromCodePoint would throw and the page would not open.
+    .replace(/&#(x[0-9a-f]+|\d+);/gi, (_match, reference: string) => {
+      const code = Number(`0${reference}`);
+
+      return code <= 0x10ffff ? String.fromCodePoint(code) : '';
+    })
     .replace(/[\p{Cc}\p{Cf}\s]+/gu, ' ')
     .trim();
 
@@ -138,7 +142,8 @@ function unusedPort(declared: Bridge[]) {
 
 function bwrapArgs(page: string, permissions: Permissions, socketFolder: string | null) {
   const temp = fs.realpathSync(app.getPath('temp'));
-  const writable = [...(PRIVATE.includes(temp) ? [] : [temp]), ...permissions.write.map(patternFolder)];
+  const written = permissions.write.map(literalBase);
+  const writable = [...(PRIVATE.includes(temp) ? [] : [temp]), ...written];
   const sound = permissions.use.includes('sound') || permissions.use.includes('microphone');
   const soundSockets = sound ? ['pipewire-0', 'pulse'].map(name => path.join(RUNTIME, name)).filter(file => fs.existsSync(file)) : [];
   const printSocket = permissions.use.includes('print') && fs.existsSync('/run/cups/cups.sock') ? ['/run/cups/cups.sock'] : [];
@@ -152,18 +157,18 @@ function bwrapArgs(page: string, permissions: Permissions, socketFolder: string 
     ...(permissions.use.includes('usb') ? ['/dev/bus/usb'] : []),
     ...fs.readdirSync('/dev').filter(name => devicePatterns.some(pattern => pattern.test(name))).map(name => `/dev/${name}`),
   ].filter(file => fs.existsSync(file));
-  const named = [path.dirname(page), ...permissions.read.map(patternFolder), ...permissions.sockets, ...displaySockets(), ...soundSockets, ...printSocket, ...udev];
-  [...writable, PAGE_DATA].forEach(folder => fs.mkdirSync(folder, { recursive: true }));
-  const covered = permissions.hidden.filter(file => fs.existsSync(file)).flatMap(file => (fs.statSync(file).isDirectory() ? ['--tmpfs', file] : ['--ro-bind', '/dev/null', file]));
+  // bwrap binds only what is there. The trampoline made the written paths.
+  const seen = [...permissions.read, ...permissions.sockets].map(literalBase).filter(file => fs.existsSync(file));
+  const named = [path.dirname(page), ...seen, ...displaySockets(), ...soundSockets, ...printSocket, ...udev];
+  fs.mkdirSync(PAGE_DATA, { recursive: true });
 
-  // Later mounts cover earlier ones: Apargon's own data and the secrets must stay last.
+  // Later mounts cover earlier ones: Apargon's own data must stay last.
   return [
     ...['--unshare-net', '--unshare-pid', '--unshare-user', '--disable-userns', '--new-session', '--die-with-parent', '--ro-bind', '/', '/', '--dev', '/dev', '--proc', '/proc'],
     ...devices.flatMap(file => ['--dev-bind', file, file]),
     ...PRIVATE.flatMap(folder => ['--tmpfs', folder]),
     ...named.flatMap(file => ['--ro-bind', file, file]),
     ...writable.flatMap(folder => ['--bind', folder, folder]),
-    ...covered,
     ...['--ro-bind', DATA, DATA, '--tmpfs', NET_DATA, ...(socketFolder ? ['--ro-bind', socketFolder, socketFolder] : []), '--bind', PAGE_DATA, PAGE_DATA, '--tmpfs', SECRETS_DATA],
   ];
 }

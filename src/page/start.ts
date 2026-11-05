@@ -139,6 +139,8 @@ export async function startPage({ page, permissions, pageHash, bridges }: PageCo
       toFront();
     } else if ('quit' in reply) {
       app.quit();
+    } else if ('trayItem' in reply) {
+      pageWindows().forEach(other => other.webContents.send('apargon-tray', reply.trayItem));
     } else if ('restart' in reply) {
       pageWindows().forEach(other => other.webContents.once('will-prevent-unload', event => event.preventDefault()));
       app.quit();

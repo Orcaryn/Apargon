@@ -6,7 +6,7 @@ import type { AddressInfo } from 'net';
 import os from 'os';
 import path from 'path';
 import { localPorts } from '../../permissions/network.ts';
-import { changeableSources, PAGE_SOURCE } from '../../permissions/patterns.ts';
+import { changeableSources, literalBase, PAGE_SOURCE } from '../../permissions/patterns.ts';
 import type { Permissions } from '../../permissions/tags.ts';
 import { REQUEST_FD } from '../../shared/channel.ts';
 import { APP_ROOT, DATA, INSTALL_FOLDER, PAGE_DATA, pageAppId, SECRETS_DATA } from '../../shared/data.ts';
@@ -19,7 +19,7 @@ export const macos: TrampolinePlatform = {
     const proxyPort = proxy && (proxy.address() as AddressInfo).port;
     const profile = seatbeltProfile(permissions, proxyPort);
 
-    return { command: apargon => ['sandbox-exec', '-p', profile, ...apargon], stdio: ['ignore', 'pipe', 'pipe', 'pipe', 'ignore', 'pipe'], requestFd: REQUEST_FD, repliesInFile: false, proxyPort, bridges: [], close: () => proxy?.close() };
+    return { command: apargon => ['sandbox-exec', '-p', profile, ...apargon], stdio: ['ignore', 'pipe', 'pipe', 'pipe', 'ignore', 'pipe'], requestFd: REQUEST_FD, replies: null, proxyPort, bridges: [], close: () => proxy?.close() };
   },
   installHint: '',
   // The quarantine mark says the file was downloaded; Spotlight keeps where from, the page last.
@@ -77,7 +77,7 @@ function seatbeltProfile(permissions: Permissions, proxyPort: number | null) {
   const rules = [
     fs.readFileSync(path.join(import.meta.dirname, 'profiles', 'macos.sb'), 'utf8'),
     ...ports.map(port => `(allow network-outbound (remote ip "localhost:${port}"))`),
-    ...permissions.sockets.map(socket => `(allow network-outbound (${fs.statSync(socket).isDirectory() ? 'subpath' : 'literal'} "${socket}"))`),
+    ...permissions.sockets.map(socket => `(allow network-outbound (${socket.endsWith(path.sep) ? 'subpath' : 'literal'} "${literalBase(socket)}"))`),
     // The print server, which sends jobs on to the printers it knows.
     ...(permissions.use.includes('print') ? ['(allow network-outbound (literal "/private/var/run/cupsd"))'] : []),
     // Another app, or an Apple Event to one, would run outside the sandbox.
@@ -90,7 +90,6 @@ function seatbeltProfile(permissions: Permissions, proxyPort: number | null) {
     ...files.map(source => `(allow file-write* (regex #"${source}"))`),
     `(deny file-write* (regex #"${PAGE_SOURCE}"))`,
     ...pages.map(source => `(allow file-write* (regex #"${source}"))`),
-    ...permissions.hidden.map(secret => `(deny file-read* file-write* (subpath "${secret}"))`),
     `(deny file-read* file-write* (subpath "${SECRETS_DATA}"))`,
     `(deny file-write* (subpath "${DATA}"))`,
     `(allow file-write* (subpath "${PAGE_DATA}"))`,

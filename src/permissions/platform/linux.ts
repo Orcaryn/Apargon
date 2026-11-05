@@ -1,6 +1,5 @@
-import fs from 'fs';
 import path from 'path';
-import { patternFolder } from '../patterns.ts';
+import { isInside, literalBase } from '../patterns.ts';
 import type { PermissionsPlatform } from '../platform.ts';
 
 // Emptied in the sandbox: they hold sockets to programs outside it.
@@ -13,10 +12,9 @@ export const linux: PermissionsPlatform = {
   refusedTags: {},
   refuse(permissions, dir) {
     const { read, write, sockets, use } = permissions;
-    const socketFolders = sockets.filter(socket => fs.statSync(socket).isDirectory());
-    const reopened = [dir, ...[...read, ...write].map(patternFolder), ...socketFolders].find(
-      folder => folder.startsWith('/run/') || PRIVATE.some(emptied => emptied === folder || emptied.startsWith(path.join(folder, '/')))
-    );
+    const socketFolders = sockets.filter(socket => socket.endsWith(path.sep)).map(literalBase);
+    // In one, or holding one: a socket file bound into the emptied folder would reach its program as well.
+    const reopened = [dir, ...[...read, ...write].map(literalBase), ...socketFolders].find(file => PRIVATE.some(emptied => isInside(file, emptied) || isInside(emptied, file)));
 
     if (reopened) {
       return `On Linux Apargon cannot open ${reopened}: it would bring back sockets to programs outside the sandbox. Use a folder of its own, such as /tmp/apargon.`;
@@ -28,7 +26,7 @@ export const linux: PermissionsPlatform = {
   },
   refusePath: () => null,
   launchFolder: null,
-  // bwrap binds each writable folder whole.
+  // bwrap binds each folder whole.
   writesWholeFolders: true,
   programsSendOut: false,
   readsAll: true,

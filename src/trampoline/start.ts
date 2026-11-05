@@ -1,14 +1,14 @@
 import { app, dialog } from 'electron';
 import { spawn } from 'child_process';
-import { randomUUID } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
 import type { Readable, Writable } from 'stream';
 import { PAGE_ENV } from '../permissions/env.ts';
 import { withGiven } from '../permissions/given.ts';
-import { REPLY_FD, type PageConfig, type PageReply, type PageRequest } from '../shared/channel.ts';
-import { APP_ROOT, GIVEN_FILE, PAGE_DATA, readJson, REPLIES_DATA, SECRETS_DATA, SEEN_FILE, type Given } from '../shared/data.ts';
+import { literalBase } from '../permissions/patterns.ts';
+import { REPLY_FD, type PageConfig, type PageReply, type PageRequest, type PageTray } from '../shared/channel.ts';
+import { APP_ROOT, GIVEN_FILE, PAGE_DATA, readJson, SECRETS_DATA, SEEN_FILE, type Given } from '../shared/data.ts';
 import { approve } from './dialogs/approve.ts';
 import { welcome } from './dialogs/skill.ts';
 import { checkForUpdates } from './network/update.ts';
@@ -70,19 +70,23 @@ async function startPageProcess({ page, permissions: declared, pageHash }: Pick<
   // The sandboxes hide the folder, so it must be there to hide.
   fs.mkdirSync(SECRETS_DATA, { recursive: true });
   const permissions = withGiven(declared, readJson<Given>(GIVEN_FILE)[page] ?? [], page);
+
+  // The sandbox grants a written path itself, so it must be there: a folder or a wildcard's folder is made as a folder, a file as an empty file. wx refuses a link the page planted, which would make its target.
+  for (const pattern of permissions.write) {
+    if (pattern.includes('*') || pattern.endsWith(path.sep)) {
+      fs.mkdirSync(literalBase(pattern), { recursive: true });
+    } else if (!fs.existsSync(pattern)) {
+      fs.writeFileSync(pattern, '', { flag: 'wx' });
+    }
+  }
+
   const sandbox = await TRAMPOLINE_PLATFORM.prepare(page, permissions);
   TRAMPOLINE_PLATFORM.startAtLogin(page, permissions.use.includes('login'));
   const proxy = sandbox.proxyPort === null ? null : `127.0.0.1:${sandbox.proxyPort}`;
   // By name, as Windows finds Path for PATH.
   const passed = permissions.system ? Object.keys(process.env) : [...PAGE_ENV, ...permissions.env];
   const inherited = passed.filter(name => name in process.env).map(name => [name, process.env[name]]);
-  const replies = sandbox.repliesInFile ? path.join(REPLIES_DATA, `${randomUUID()}.jsonl`) : null;
-
-  if (replies) {
-    fs.mkdirSync(REPLIES_DATA, { recursive: true });
-    fs.writeFileSync(replies, '');
-  }
-
+  const { replies } = sandbox;
   const env: NodeJS.ProcessEnv = { ...Object.fromEntries(inherited), APARGON: JSON.stringify({ page, permissions, pageHash, proxy, bridges: sandbox.bridges, requestFd: sandbox.requestFd, replies } satisfies PageConfig) };
 
   // Programs reach a declared localhost port through the proxy too: no no_proxy, not even the user's.
@@ -107,12 +111,13 @@ async function startPageProcess({ page, permissions: declared, pageHash }: Pick<
   const showTray = trayFor(
     page,
     () => reply({ show: true }),
-    () => reply({ quit: true })
+    () => reply({ quit: true }),
+    id => reply({ trayItem: id })
   );
-  // A page in the background keeps an icon: it is how the user finds it again.
-  const noTitle = permissions.use.includes('background') ? '' : null;
-  const setTray = (title: string | null) => showTray(title ?? noTitle);
-  setTray(null);
+  // A page in the background, or with tray items of its own, keeps an icon: it is how the user finds it again.
+  const background = permissions.use.includes('background');
+  const setTray = ({ title, items }: PageTray) => showTray(title ?? (background || items.length ? '' : null), items);
+  setTray({ title: null, items: [] });
   const listeners = pageListeners(permissions, reply);
   let reopen = false;
 
@@ -144,12 +149,12 @@ async function startPageProcess({ page, permissions: declared, pageHash }: Pick<
   child.on('close', () => {
     running.splice(running.indexOf(page), 1);
     noteContent(page, PAGE_DATA, SEEN_FILE);
-    showTray(null);
+    showTray(null, []);
     listeners.closeAll();
     sandbox.close();
 
     if (replies) {
-      fs.rmSync(replies);
+      fs.rmSync(path.dirname(replies), { recursive: true });
     }
 
     // Before openPage counts this one closed, so the app does not quit in between.

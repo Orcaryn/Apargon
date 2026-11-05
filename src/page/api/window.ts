@@ -36,8 +36,20 @@ export function windowApi(permissions: Permissions, win: BrowserWindow, menus: P
     closeWindow() {
       win.close();
     },
+    // A bar on the window's dock or taskbar icon, from 0 to 1; null removes it.
+    progress(value: number | null) {
+      if (value !== null && !(typeof value === 'number' && value >= 0 && value <= 1)) {
+        throw new Error('Apargon: progress takes a number from 0 to 1, or null to remove the bar.');
+      }
+
+      win.setProgressBar(value ?? -1);
+    },
     reset() {
       menus.clearPageMenus(win);
+
+      if (!win.isDestroyed()) {
+        win.setProgressBar(-1);
+      }
     },
   };
 }

@@ -4,7 +4,7 @@ import { windows } from './platform/windows.ts';
 import type { Permissions } from './tags.ts';
 
 export type PermissionsPlatform = {
-  // Hidden from a page unless named, beside the shared list: a path in the home folder, to what it holds.
+  // Named in the popup when a tag covers one, beside the shared list: a path in the home folder, to what it holds.
   secrets: Record<string, string>;
   // Passed to the page's programs, beside PROGRAM_ENV, and so to the page process too.
   programEnv: string[];
@@ -18,7 +18,7 @@ export type PermissionsPlatform = {
   writesWholeFolders: boolean;
   // A program can send what it sees past the sandbox.
   programsSendOut: boolean;
-  // The sandbox lets the page's process read every file but keys and logins, not only what its tags name: a papp-system page sees it all, and a picked file can be read before the sandbox is rebuilt.
+  // The sandbox lets the page's process read every file, not only what its tags name: a papp-system page sees it all, and a picked file can be read before the sandbox is rebuilt.
   readsAll: boolean;
   soundServerRecords: boolean;
   programFolders: string[];

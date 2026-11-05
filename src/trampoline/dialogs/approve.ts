@@ -42,15 +42,15 @@ export async function approve(file: string) {
       return line.short.replaceAll(HOME + path.sep, `~${path.sep}`);
     }
 
-    return file === folder ? 'This folder' : `.${path.sep}${path.relative(folder, file)}`;
+    // relative drops a folder's trailing separator; the popup shows it.
+    const relative = path.relative(folder, file) + (file.endsWith(path.sep) ? path.sep : '');
+
+    return relative === path.sep ? 'This folder' : `.${path.sep}${relative}`;
   };
 
   const seen = seenFiles(permissions);
   const seenPaths = seen.lines.map(shortOf).join(', ');
-  const seenShort =
-    !seen.all ? seenPaths
-    : seenPaths === '' ? 'All your files, except passwords and keys'
-    : `All your files, including ${seenPaths}, except other passwords and keys`;
+  const seenShort = seen.all ? 'All your files' : seenPaths;
   const seenLevel: Line['level'] = seen.all || seen.lines.some(line => line.level === 'yellow') ? 'yellow' : 'plain';
   const order = { red: 0, yellow: 1, plain: 2 };
   const isFolder = (file: string) => fs.statSync(file, { throwIfNoEntry: false })?.isDirectory() === true;
@@ -86,7 +86,7 @@ export async function approve(file: string) {
       ]),
     ].sort((a, b) => order[a.level] - order[b.level]),
     // A papp-system page's line already says so.
-    note: seen.lines.length > 0 && !seen.all ? 'Hidden files, passwords and keys stay out unless named.' : null,
+    note: seen.lines.length > 0 && !seen.all ? 'Hidden files stay out unless named.' : null,
     folder: (folder + path.sep).replaceAll(HOME + path.sep, `~${path.sep}`),
     tags: permissions.tags,
     trust: needsTrust(permissions, lines),

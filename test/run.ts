@@ -20,6 +20,7 @@ const steps = [
   [node, 'test/selftest/refuse.ts'],
   [node, 'test/selftest/daemons.ts'],
   [electron, '.', `${pages}/selftest.papp`],
+  [node, 'test/selftest/trampoline-gone.ts'],
   ...(process.platform === 'win32' ?
     [
       [node, 'test/selftest/listen.ts', electron, '.', `${pages}/selftest-win.papp`],

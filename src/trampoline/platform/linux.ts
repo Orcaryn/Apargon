@@ -7,19 +7,20 @@ import { localPorts } from '../../permissions/network.ts';
 import { isInside, literalBase } from '../../permissions/patterns.ts';
 import { PRIVATE } from '../../permissions/platform/linux.ts';
 import type { Permissions, Use } from '../../permissions/tags.ts';
-import { REQUEST_FD, relay, type Bridge } from '../../shared/channel.ts';
+import { relay, REPLY_FD, REQUEST_FD, type Bridge } from '../../shared/channel.ts';
 import { APP_ROOT, DATA, NET_DATA, pageAppId, pageStorage, SECRETS_DATA } from '../../shared/data.ts';
 import type { TrampolinePlatform } from '../platform.ts';
 import { startProxy } from '../network/proxy.ts';
+import { startPiped } from './pipes.ts';
 
 const RUNTIME = process.env.XDG_RUNTIME_DIR ?? `/run/user/${os.userInfo().uid}`;
 const APPLICATIONS = path.join(process.env.XDG_DATA_HOME ?? path.join(os.homedir(), '.local', 'share'), 'applications');
 const ICONS = path.join(DATA, 'icons');
 const AUTOSTART = path.join(process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), '.config'), 'autostart');
 // The files in /dev each kind of device gets.
-const DEVICE_FILES: Partial<Record<Use, RegExp>> = { hid: /^hidraw\d+$/, serial: /^tty(USB|ACM)\d+$/, camera: /^video\d+$/ };
+const DEVICE_FILES: Partial<Record<Use, RegExp>> = { hid: /^hidraw\d+$/, serial: /^tty(?:USB|ACM)\d+$/, camera: /^video\d+$/ };
 // MIDI's own files in /dev/snd: the rest record from every microphone.
-const MIDI_FILES = /^(seq|timer|controlC\d+|midiC\d+D\d+)$/;
+const MIDI_FILES = /^(?:seq|timer|controlC\d+|midiC\d+D\d+)$/;
 
 export const linux: TrampolinePlatform = {
   // The page's network holds only its own loopback, so the proxy and declared ports reach it as socket files.
@@ -34,10 +35,9 @@ export const linux: TrampolinePlatform = {
     const trampolineNetworkFd = fs.openSync('/proc/self/ns/net', 'r');
 
     return {
-      command: apargon => ['bwrap', ...bwrapArgs(page, permissions, socketFolder), ...apargon],
-      stdio: ['ignore', 'pipe', 'pipe', 'pipe', trampolineNetworkFd, 'pipe'],
+      start: (apargon, env) => startPiped(['bwrap', ...bwrapArgs(page, permissions, socketFolder), ...apargon], ['ignore', 'pipe', 'pipe', 'pipe', trampolineNetworkFd, 'pipe'], env),
       requestFd: REQUEST_FD,
-      replies: null,
+      replyFd: REPLY_FD,
       proxyPort: proxyBridge?.port ?? null,
       bridges: proxyBridge ? [proxyBridge, ...localBridges] : [],
       close() {

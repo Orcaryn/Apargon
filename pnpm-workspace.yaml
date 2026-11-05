@@ -3,6 +3,14 @@ allowBuilds:
   electron-winstaller: false
   koffi: false
   node-pty: false
+# koffi's Windows binaries, so pnpm dist:win from macOS ships MXC's loader.
+supportedArchitectures:
+  os:
+    - current
+    - win32
+  cpu:
+    - x64
+    - arm64
 overrides:
   minimatch@9: ^11.0.1
   minimatch@10: ^11.0.1

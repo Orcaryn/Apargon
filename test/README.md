@@ -20,12 +20,13 @@ Plain Node, without the app.
 
 The app on real pages.
 
-| File         | Checks                                                                                                                                                                                                            | Needs Electron |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| `refuse.ts`  | that the page process refuses to open while it has network                                                                                                                                                        | yes            |
-| `daemons.ts` | macOS: that the system services `swift/leak.swift` asks would fetch from outside the sandbox, so `selftest-system` is a real test                                                                                 | no             |
-| `listen.ts`  | nothing: runs a page while a port and a socket file it declares, and one of each it does not, listen; `/reach` tells the page whether its own listener answers on loopback and on this computer's network address | no             |
-| `check.ts`   | that every page wrote every check for this platform, all true                                                                                                                                                     | no             |
+| File                 | Checks                                                                                                                                                                                                            | Needs Electron |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| `refuse.ts`          | that the page process refuses to open while it has network                                                                                                                                                        | yes            |
+| `daemons.ts`         | macOS: that the system services `swift/leak.swift` asks would fetch from outside the sandbox, so `selftest-system` is a real test                                                                                 | no             |
+| `listen.ts`          | nothing: runs a page while a port and a socket file it declares, and one of each it does not, listen; `/reach` tells the page whether its own listener answers on loopback and on this computer's network address | no             |
+| `trampoline-gone.ts` | that the page quits when the trampoline dies, and not before: its pipe from the trampoline ends                                                                                                                   | yes            |
+| `check.ts`           | that every page wrote every check for this platform, all true                                                                                                                                                     | no             |
 
 ### `selftest/pages/`
 
@@ -42,6 +43,7 @@ The pages Apargon opens, one per kind of access. Each writes its results to `res
 | `selftest-win-system.papp`   | `result-win-system.json`   | Windows only: `papp-system`, no network, Apargon's data kept                                        |
 | `selftest-win-devices.papp`  | `result-win-devices.json`  | Windows only: the device capabilities in the sandbox's token, read by `tokencaps`                   |
 
+- `stay.papp` asks for nothing and stays open: `trampoline-gone.ts` opens it.
 - `subfolder/` is part of `selftest.papp`'s folder: a file to read, a frame to refuse, a folder named like an app.
 - `bin/greet` is the program `selftest-net.papp` ships, as `papp-run ./bin/greet`.
 - `results/` holds what the run makes, `result*.json`, `leak`, `leak.der` and the sockets, and git ignores all of it.

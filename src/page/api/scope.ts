@@ -32,7 +32,17 @@ export function pageScope(dir: string, access: ReturnType<typeof pageAccess>) {
     canList,
     canChange: access.canChange,
     need,
-    where: (file: string) => realPath(absolutePath(file, dir)),
+    // The sandbox may refuse to resolve a path the page never asked for, as MXC does with EPERM: that is this refusal, in the OS's words.
+    where: (file: string) => {
+      try {
+        return realPath(absolutePath(file, dir));
+      } catch (err) {
+        const { code } = err as NodeJS.ErrnoException;
+        need(code !== 'EPERM' && code !== 'EACCES', 'see');
+
+        throw err;
+      }
+    },
     loaded,
     reset() {
       picked.length = 0;

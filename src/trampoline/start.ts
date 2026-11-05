@@ -1,13 +1,11 @@
 import { app, dialog } from 'electron';
-import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
-import type { Readable, Writable } from 'stream';
 import { PAGE_ENV } from '../permissions/env.ts';
 import { withGiven } from '../permissions/given.ts';
 import { literalBase } from '../permissions/patterns.ts';
-import { REPLY_FD, type PageConfig, type PageTray } from '../shared/channel.ts';
+import type { PageConfig, PageTray } from '../shared/channel.ts';
 import { handleLine, type Tell, type TrampolineEvents } from '../shared/protocol.ts';
 import { APP_ROOT, PAGE_RECORDS, pageStorage, SECRETS_DATA } from '../shared/data.ts';
 import { approve } from './dialogs/approve.ts';
@@ -97,8 +95,7 @@ async function startPageProcess({ page, permissions: declared, pageHash }: Pick<
   // By name, as Windows finds Path for PATH.
   const passed = permissions.system ? Object.keys(process.env) : [...PAGE_ENV, ...permissions.env];
   const inherited = passed.filter(name => name in process.env).map(name => [name, process.env[name]]);
-  const { replies } = sandbox;
-  const env: NodeJS.ProcessEnv = { ...Object.fromEntries(inherited), APARGON: JSON.stringify({ page, permissions, pageHash, proxy, bridges: sandbox.bridges, requestFd: sandbox.requestFd, replies, bounds: records.get(page).window ?? null, menu: menuState() } satisfies PageConfig) };
+  const env: NodeJS.ProcessEnv = { ...Object.fromEntries(inherited), APARGON: JSON.stringify({ page, permissions, pageHash, proxy, bridges: sandbox.bridges, requestFd: sandbox.requestFd, replyFd: sandbox.replyFd, bounds: records.get(page).window ?? null, menu: menuState() } satisfies PageConfig) };
 
   // Programs reach a declared localhost port through the proxy too: no no_proxy, not even the user's.
   if (proxy) {
@@ -106,19 +103,14 @@ async function startPageProcess({ page, permissions: declared, pageHash }: Pick<
   }
 
   app.dock?.hide();
-  const [command, ...args] = sandbox.command([process.execPath, '--no-sandbox', ...(app.isPackaged ? [] : [APP_ROOT]), page], env);
-  const child = spawn(command, args, { stdio: sandbox.stdio, env });
+  const child = await sandbox.start([process.execPath, '--no-sandbox', ...(app.isPackaged ? [] : [APP_ROOT]), page], env).catch((err: Error) => {
+    sandbox.close();
 
-  const sendToPage = (message: object) => {
-    const line = JSON.stringify(message) + '\n';
-
-    if (replies) {
-      fs.appendFileSync(replies, line);
-    } else {
-      (child.stdio.at(REPLY_FD) as Writable).write(line);
-    }
-  };
-
+    throw new Error(`Could not start the sandbox: ${err.message}${TRAMPOLINE_PLATFORM.installHint}`);
+  });
+  // A pick or a notice answered after the page quit has no one to read it: the pipe refuses the write, and that is all.
+  child.replies.on('error', () => undefined);
+  const sendToPage = (message: object) => child.replies.write(JSON.stringify(message) + '\n');
   const tell: Tell<TrampolineEvents> = (event, ...args) => sendToPage({ event, args: args[0] });
   const showTray = trayFor(
     page,
@@ -141,12 +133,12 @@ async function startPageProcess({ page, permissions: declared, pageHash }: Pick<
   const { events, calls } = pageHandlers({ page, permissions, listeners, tell, setTray, openPage, restart, refreshMenus });
 
   // The page's requests, and its output as plain text: given the terminal itself, it could type commands into the shell that started Apargon.
-  new Set([sandbox.requestFd, 1, 2]).forEach(fd => {
-    readline.createInterface({ input: child.stdio[fd] as Readable }).on('line', line => {
+  new Set([child.requests, child.output, child.errors]).forEach(stream => {
+    readline.createInterface({ input: stream }).on('line', line => {
       let handled = false;
 
       // Where requests share standard output, a line that is no event or call is output. A papp-system page writes the line itself: one that throws is logged, not shown as an error box.
-      if (fd === sandbox.requestFd && line.startsWith('{')) {
+      if (stream === child.requests && line.startsWith('{')) {
         try {
           handled = handleLine(parseLine(line), events, calls, sendToPage);
         } catch (err) {
@@ -156,11 +148,10 @@ async function startPageProcess({ page, permissions: declared, pageHash }: Pick<
       }
 
       if (!handled && line.trim()) {
-        (fd === 2 ? console.error : console.log)(line.replace(/[\p{Cc}\p{Cf}]/gu, ''));
+        (stream === child.errors ? console.error : console.log)(line.replace(/[\p{Cc}\p{Cf}]/gu, ''));
       }
     });
   });
-  child.on('error', err => dialog.showErrorBox('Apargon', `Could not start the sandbox: ${err.message}${TRAMPOLINE_PLATFORM.installHint}`));
   const entry = { page, tell };
   running.push(entry);
   child.on('close', () => {
@@ -169,10 +160,6 @@ async function startPageProcess({ page, permissions: declared, pageHash }: Pick<
     showTray(null, []);
     listeners.closeAll();
     sandbox.close();
-
-    if (replies) {
-      fs.rmSync(path.dirname(replies), { recursive: true });
-    }
 
     // Before openPage counts this one closed, so the app does not quit in between.
     if (reopen) {

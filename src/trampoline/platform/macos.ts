@@ -8,10 +8,11 @@ import path from 'path';
 import { localPorts } from '../../permissions/network.ts';
 import { changeableSources, literalBase, PAGE_SOURCE } from '../../permissions/patterns.ts';
 import type { Permissions } from '../../permissions/tags.ts';
-import { REQUEST_FD } from '../../shared/channel.ts';
+import { REPLY_FD, REQUEST_FD } from '../../shared/channel.ts';
 import { APP_ROOT, DATA, INSTALL_FOLDER, pageAppId, pageStorage, SECRETS_DATA } from '../../shared/data.ts';
 import type { TrampolinePlatform } from '../platform.ts';
 import { startProxy } from '../network/proxy.ts';
+import { startPiped } from './pipes.ts';
 
 export const macos: TrampolinePlatform = {
   async prepare(page, permissions) {
@@ -19,7 +20,7 @@ export const macos: TrampolinePlatform = {
     const proxyPort = proxy && (proxy.address() as AddressInfo).port;
     const profile = seatbeltProfile(page, permissions, proxyPort);
 
-    return { command: apargon => ['sandbox-exec', '-p', profile, ...apargon], stdio: ['ignore', 'pipe', 'pipe', 'pipe', 'ignore', 'pipe'], requestFd: REQUEST_FD, replies: null, proxyPort, bridges: [], close: () => proxy?.close() };
+    return { start: (apargon, env) => startPiped(['sandbox-exec', '-p', profile, ...apargon], ['ignore', 'pipe', 'pipe', 'pipe', 'ignore', 'pipe'], env), requestFd: REQUEST_FD, replyFd: REPLY_FD, proxyPort, bridges: [], close: () => proxy?.close() };
   },
   installHint: '',
   // The quarantine mark says the file was downloaded; Spotlight keeps where from, the page last.

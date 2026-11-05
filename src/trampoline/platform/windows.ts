@@ -1,16 +1,16 @@
 import { app } from 'electron';
-import { randomUUID } from 'crypto';
+import { EventEmitter } from 'events';
 import fs from 'fs';
 import type { AddressInfo } from 'net';
 import path from 'path';
+import type { ContainerRequest } from '@microsoft/mxc-sdk/v1';
 import { isInside, literalBase } from '../../permissions/patterns.ts';
 import type { Use } from '../../permissions/tags.ts';
-import { APP_ROOT, DATA, pageAppId, pageStorage, REPLIES_DATA, SECRETS_DATA } from '../../shared/data.ts';
-import type { TrampolinePlatform } from '../platform.ts';
+import { APP_ROOT, DATA, pageAppId, pageStorage, SECRETS_DATA } from '../../shared/data.ts';
+import type { PageProcess, TrampolinePlatform } from '../platform.ts';
 import { startProxy } from '../network/proxy.ts';
 
 const DEVICE_CAPABILITIES: Partial<Record<Use, string>> = { camera: 'webcam', microphone: 'microphone', location: 'location', usb: 'usb', serial: 'serialcommunication', hid: 'humaninterfacedevice' };
-const WXC_EXEC = app.isPackaged ? path.join(process.resourcesPath, 'mxc', 'wxc-exec.exe') : path.join(APP_ROOT, 'node_modules', '@microsoft', 'mxc-sdk', 'bin', process.arch, 'wxc-exec.exe');
 
 export const windows: TrampolinePlatform = {
   async prepare(page, permissions) {
@@ -20,24 +20,19 @@ export const windows: TrampolinePlatform = {
     // Every sandbox may read Windows' own folder already.
     const programFolders = Object.values(permissions.run).map(program => path.dirname(program)).filter(folder => !isInside(folder, process.env.SYSTEMROOT!) && !isInside(folder, pageFolder));
     const reachesData = written.find(folder => isInside(DATA, folder) || isInside(folder, DATA));
-    const holdsPagesSecrets = [...seen, ...written, pageFolder, ...programFolders].find(folder => isInside(SECRETS_DATA, folder) || isInside(REPLIES_DATA, folder));
+    const holdsPagesSecrets = [...seen, ...written, pageFolder, ...programFolders].find(folder => isInside(SECRETS_DATA, folder));
 
-    // The sandbox nests no read-only folder in a writable one, and the reverse would let a page write in Apargon's data. A folder that holds the secrets, or the replies that carry them, would grant them too: a tag's, the page's own, or a program's.
+    // The sandbox nests no read-only folder in a writable one, and the reverse would let a page write in Apargon's data. A folder that holds the secrets would grant them too: a tag's, the page's own, or a program's.
     if (reachesData) {
       throw new Error(`On Windows a page may not change ${reachesData}: it holds or is inside Apargon's data. Name another folder.`);
     } else if (holdsPagesSecrets) {
       throw new Error(`On Windows a page may not see ${holdsPagesSecrets}: it holds the secrets Apargon keeps for pages. Keep the page, its programs and its folders inside a folder of their own.`);
     }
 
-    // The trampoline's replies, in a folder only this page's sandbox may read. The file is made now: MXC may not grant one made after the sandbox starts.
-    const replies = path.join(REPLIES_DATA, randomUUID(), 'replies.jsonl');
-    fs.mkdirSync(path.dirname(replies), { recursive: true });
-    fs.writeFileSync(replies, '');
-
     // A folder named twice keeps one grant: one also listed could not be read. So each folder is named once, with the most it needs.
     const storage = pageStorage(page);
     const writable = [fs.realpathSync(app.getPath('temp')), storage, ...written];
-    const readable = [path.dirname(process.execPath), APP_ROOT, DATA, path.dirname(replies), pageFolder, ...seen, ...programFolders].filter(folder => !writable.some(writableFolder => isInside(folder, writableFolder)));
+    const readable = [path.dirname(process.execPath), APP_ROOT, DATA, pageFolder, ...seen, ...programFolders].filter(folder => !writable.some(writableFolder => isInside(folder, writableFolder)));
     const granted = [...readable, ...writable];
     fs.mkdirSync(storage, { recursive: true });
     const proxy = permissions.net.length ? await startProxy(permissions.net, null) : null;
@@ -56,27 +51,22 @@ export const windows: TrampolinePlatform = {
     }
 
     return {
-      command: (apargon, env) => {
-        const request = {
-          version: '1.0.0',
-          containment: 'processcontainer',
-          process: { commandLine: apargon.map(arg => `"${arg}"`).join(' '), env: Object.entries(env).map(([name, value]) => `${name}=${value}`), timeout: 0 },
+      start: (apargon, env) =>
+        startContained({
+          command: apargon.map(arg => `"${arg}"`).join(' '),
+          environment: env,
+          // Not where Apargon was started from: MXC would grant that folder.
+          workingDirectory: pageFolder,
+          containment: { type: 'processcontainer', config: { filesystem: { enumeratePaths: [...parents] }, capabilities: permissions.use.flatMap(name => DEVICE_CAPABILITIES[name] ?? []) } },
           filesystem: { readonlyPaths: readable, readwritePaths: writable, deniedPaths: [SECRETS_DATA] },
           // Deny for every page, not MXC's default. A proxy on this computer's loopback needs both directions of the private network allowed; the firewall rules still let the page reach only the proxy.
-          ...(proxyPort === null
-            ? { network: { egress: { default: 'deny' } } }
-            : { network: { egress: { default: 'deny' }, ingress: { default: 'allow', hostLoopback: 'allow' } }, runtimeConfig: { networkProxy: `http://127.0.0.1:${proxyPort}` } }),
+          network: proxyPort === null ? { egress: { default: 'deny' } } : { egress: { default: 'deny' }, ingress: { default: 'allow', hostLoopback: 'allow' }, runtimeConfig: { networkProxy: `http://127.0.0.1:${proxyPort}` } },
           // Chromium decides what the page may read from the clipboard; the user's own paste needs the rest.
           ui: { disable: false, clipboard: 'all' },
-          processContainer: { filesystem: { enumeratePaths: [...parents] }, capabilities: permissions.use.flatMap(name => DEVICE_CAPABILITIES[name] ?? []) },
-        };
-
-        return [WXC_EXEC, '--config-base64', Buffer.from(JSON.stringify(request)).toString('base64')];
-      },
-      // MXC's executor passes the page only standard input, output and error, and input only once it closes: messages come on standard output, mixed with the page's other output, which is passed on.
-      stdio: ['ignore', 'pipe', 'pipe'],
+        }),
+      // The page's requests come on its standard output, mixed with its other output, which is passed on. The replies go to its standard input.
       requestFd: 1,
-      replies,
+      replyFd: 0,
       proxyPort,
       bridges: [],
       close: () => proxy?.close(),
@@ -105,3 +95,26 @@ export const windows: TrampolinePlatform = {
   noFollow: 0,
   autoUpdates: false,
 };
+
+// Through MXC's library, not its wxc-exec.exe: that one hands the page its standard input only once it closes, so no reply could arrive while the page runs.
+async function startContained(request: ContainerRequest): Promise<PageProcess> {
+  // The installed app keeps the library beside the others in its resources, outside the archive it cannot load one from.
+  if (app.isPackaged) {
+    process.env.MXC_FFI_DIR = path.join(process.resourcesPath, 'mxc');
+  }
+
+  // Loaded here: it loads a Windows library, which the other systems' builds leave out.
+  const { spawn } = await import('@microsoft/mxc-sdk/v1');
+  const contained = await spawn(request, { telemetry: { enabled: false } });
+  const output = contained.standardOutput!;
+  const page = Object.assign(new EventEmitter(), { requests: output, output, errors: contained.standardError!, replies: contained.standardInput! });
+  contained
+    .wait()
+    .finally(() => {
+      contained.dispose();
+      page.emit('close');
+    })
+    .catch((err: Error) => console.error(`Apargon: ${err.message}`));
+
+  return page;
+}

@@ -1,4 +1,5 @@
-import type { StdioOptions } from 'child_process';
+import type { EventEmitter } from 'events';
+import type { Readable, Writable } from 'stream';
 import type { Permissions } from '../permissions/tags.ts';
 import type { Bridge } from '../shared/channel.ts';
 import { linux } from './platform/linux.ts';
@@ -19,7 +20,11 @@ export type TrampolinePlatform = {
   autoUpdates: boolean;
 };
 
-type Prepared = { command(apargon: string[], env: NodeJS.ProcessEnv): string[]; stdio: StdioOptions; requestFd: number; replies: string | null; proxyPort: number | null; bridges: Bridge[]; close(): void };
+// The page's process, once started. requests and output may be one stream: a line that is no request is output. It emits close once the process is gone.
+export type PageProcess = EventEmitter & { requests: Readable; output: Readable; errors: Readable; replies: Writable };
+
+// requestFd and replyFd: where the page writes its requests and reads the trampoline's replies.
+type Prepared = { start(apargon: string[], env: NodeJS.ProcessEnv): Promise<PageProcess>; requestFd: number; replyFd: number; proxyPort: number | null; bridges: Bridge[]; close(): void };
 
 // Another system gets Linux's: bwrap is not there, so no page opens.
 export const TRAMPOLINE_PLATFORM: TrampolinePlatform = process.platform === 'darwin' ? macos : process.platform === 'win32' ? windows : linux;

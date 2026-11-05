@@ -11,8 +11,8 @@ import type { Answer, Calls, EventHandlers, PageEvents, Tell, TrampolineEvents }
 export type Bridge = { port: number; socket: string };
 // What Apargon's menu shows: the approved pages, and whether it checks for updates.
 export type MenuState = { approved: string[]; automaticUpdates: boolean };
-// replies: a file, where the sandbox passes no more pipes; null when they come on REPLY_FD. bounds: where the user left the window, if anywhere.
-export type PageConfig = { page: string; permissions: Permissions; pageHash: string | null; proxy: string | null; bridges: Bridge[]; requestFd: number; replies: string | null; bounds: Rectangle | null; menu: MenuState };
+// requestFd and replyFd: the page's pipes to and from the trampoline, REQUEST_FD and REPLY_FD where the sandbox passes them, standard output and input on Windows. bounds: where the user left the window, if anywhere.
+export type PageConfig = { page: string; permissions: Permissions; pageHash: string | null; proxy: string | null; bridges: Bridge[]; requestFd: number; replyFd: number; bounds: Rectangle | null; menu: MenuState };
 // A page's own tray items go above Apargon's Show and Quit; a click hands back the item's id.
 export type TrayItem = { label: string; id: string } | { separator: true };
 export type PageTray = { title: string | null; items: TrayItem[] };
@@ -59,10 +59,8 @@ export function callTrampoline<K extends keyof Calls>(call: K, ...args: Calls[K]
   return answer.promise as Promise<Calls[K]['result']>;
 }
 
-// The pipe ends with the trampoline; the file tells nothing, so there only the next request finds out.
+// The pipe ends with the trampoline, and the page with it. A socket, not process.stdin: in Electron's main process on Windows, that one ends at once.
 export function onTrampolineEvent(events: EventHandlers<TrampolineEvents>) {
-  const { replies } = PAGE_CONFIG!;
-
   const read = (line: string) => {
     const message: { event: keyof TrampolineEvents; args: unknown } | Answer = JSON.parse(line);
 
@@ -80,20 +78,10 @@ export function onTrampolineEvent(events: EventHandlers<TrampolineEvents>) {
     }
   };
 
-  if (replies) {
-    // A last line without its newline is still being written: it is read next time.
-    let done = 0;
-    fs.watchFile(replies, { interval: 100 }, () => {
-      const text = fs.readFileSync(replies, 'utf8');
-      text.slice(done).split('\n').slice(0, -1).forEach(read);
-      done = text.lastIndexOf('\n') + 1;
-    });
-  } else {
-    readline
-      .createInterface({ input: new net.Socket({ fd: REPLY_FD, writable: false }) })
-      .on('line', read)
-      .on('close', () => app.exit());
-  }
+  readline
+    .createInterface({ input: new net.Socket({ fd: PAGE_CONFIG!.replyFd, readable: true, writable: false }) })
+    .on('line', read)
+    .on('close', () => app.exit());
 }
 
 export async function relay(from: net.ListenOptions, to: net.NetConnectOpts) {

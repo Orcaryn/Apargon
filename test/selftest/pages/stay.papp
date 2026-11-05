@@ -1,0 +1,4 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Apargon selftest: stays open</title>
+<body style="font: 14px ui-monospace, monospace; padding: 20px">Stays open until Apargon closes it.</body>

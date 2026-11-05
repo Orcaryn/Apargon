@@ -62,9 +62,9 @@ Keys and logins are files like any other. A tag that names one, the popup names:
 - Offline check: connecting to `127.0.0.1:9` and to `192.0.2.1:9`, an address no network routes, must both fail with `EACCES`. MXC refuses every address that way at once. A sandbox that only blocks loopback, or no sandbox, answers differently for the second.
 - Writes: limited by path, as on Linux. A named file can be changed in place or deleted, not renamed. A write folder in or around Apargon's data is refused, and a folder that holds the secrets.
 - As on Linux, a page that runs programs, or has `papp-system`, may not write a folder that holds the page.
-- A page, or a program it runs, in a folder that holds Apargon's data, like your home folder, is refused: the sandbox would see the secrets and the other pages' replies.
+- A page, or a program it runs, in a folder that holds Apargon's data, like your home folder, is refused: the sandbox would see the secrets.
 - The secrets folder is on the denied list. Untested: the folder is outside every granted one, so it is unreadable either way.
-- The trampoline answers a page through a file, as MXC passes no more pipes. A reply can hold a secret, so each page's file is in a folder of its own beside Apargon's data, which only that page's sandbox may read. Untested on Windows.
+- The page's requests go out on its standard output, and the trampoline's replies come back on its standard input, a pipe. Apargon starts the page through MXC's library: its `wxc-exec.exe` passes standard input only once it closes. A reply can hold a secret; a program the page runs gets a standard input of its own, not the page's.
 - `localhost` ports: through the proxy. Chromium is told not to bypass it for loopback. A program that ignores `http_proxy` is refused by MXC.
 - Programs: only `.com` and `.exe`. A batch file runs through `cmd.exe`, which reads its arguments as commands.
 - Apargon refuses `\\` paths, `file://host/`, `:` streams and names ending in a dot or a space.
@@ -116,7 +116,7 @@ Keys and logins are files like any other. A tag that names one, the popup names:
 - `papp.saveAll` writes only new files, into the folder the user picks.
 - `papp.save` can replace a file. The OS asks first, but the page suggests the name and folder, so the user only has to press Save and Replace.
 - On Windows, `papp.save` follows a link at the chosen name. Windows has no flag that refuses one.
-- Apargon's data, its secrets and replies folders, and its install folder are refused. So are hidden folders and `~/Library` or `AppData`: files saved there can run on their own. macOS cloud drives in `~/Library` (iCloud Drive, `~/Library/CloudStorage`) are allowed: files there only sync.
+- Apargon's data, its secrets folder, and its install folder are refused. So are hidden folders and `~/Library` or `AppData`: files saved there can run on their own. macOS cloud drives in `~/Library` (iCloud Drive, `~/Library/CloudStorage`) are allowed: files there only sync.
 - On macOS and Windows, saved files get the download mark, so the OS warns before one runs. Linux has no such mark, nor does a drive that cannot hold one, like a USB stick on Windows: the file is saved without it.
 - A program could swap the picked folder for a link between check and write.
 

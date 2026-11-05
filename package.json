@@ -21,7 +21,6 @@
   "packageManager": "pnpm@11.1.2",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@microsoft/mxc-sdk": "1.0.1",
     "@stylistic/eslint-plugin": "^5.10.0",
     "@types/node": "^22.20.5",
     "electron": "^45.0.0",
@@ -37,7 +36,9 @@
     "productName": "Apargon",
     "files": [
       "src/**",
-      "skills/**"
+      "skills/**",
+      "!node_modules/@microsoft/mxc-sdk/bin/**",
+      "!node_modules/node-pty/**"
     ],
     "electronFuses": {
       "runAsNode": false,
@@ -76,7 +77,13 @@
         "NSLocationUsageDescription": "A page you opened in Apargon asked for this computer's location.",
         "NSLocationWhenInUseUsageDescription": "A page you opened in Apargon asked for this computer's location.",
         "NSBluetoothAlwaysUsageDescription": "A page you opened in Apargon asked for a serial port; macOS lists Bluetooth ones among them."
-      }
+      },
+      "files": [
+        "!node_modules/@microsoft/**",
+        "!node_modules/koffi/**",
+        "!node_modules/@koromix/**",
+        "!node_modules/semver/**"
+      ]
     },
     "deb": {
       "artifactName": "${name}_${arch}.${ext}",
@@ -101,7 +108,13 @@
       ],
       "category": "Development",
       "maintainer": "HaMMeR",
-      "icon": "build/icon.png"
+      "icon": "build/icon.png",
+      "files": [
+        "!node_modules/@microsoft/**",
+        "!node_modules/koffi/**",
+        "!node_modules/@koromix/**",
+        "!node_modules/semver/**"
+      ]
     },
     "win": {
       "target": [
@@ -114,18 +127,23 @@
           "from": "node_modules/@microsoft/mxc-sdk/bin/${arch}",
           "to": "mxc",
           "filter": [
-            "wxc-exec.exe",
+            "mxc_ffi.dll",
             "wslcsdk.dll"
           ]
         }
+      ],
+      "files": [
+        "!node_modules/@koromix/koffi-darwin-*/**"
       ]
     },
     "nsis": {
       "perMachine": true,
       "buildUniversalInstaller": false
-    }
+    },
+    "npmRebuild": false
   },
   "dependencies": {
-    "@electron/remote": "^2.1.3"
+    "@electron/remote": "^2.1.3",
+    "@microsoft/mxc-sdk": "1.0.1"
   }
 }

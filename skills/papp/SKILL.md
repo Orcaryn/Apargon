@@ -58,7 +58,7 @@ type Stat = { isFile: boolean; isDirectory: boolean; size?: number; mtimeMs?: nu
 type Exit = { status: number | null; signal: string | null };
 // keys as in papp-global-shortcut, such as 'CommandOrControl+S'
 type MenuItem = { separator: true } | { label: string; id?: string; keys?: string; submenu?: MenuItem[] };
-// checked makes a checkbox, with radio a radio button; up to 50 items a menu, nested 3 deep
+// checked makes a checkbox, with radio a radio button; up to 50 items a menu, nested 3 deep, 200 in all
 type TrayItem = { separator: true } | { label: string; id: string; checked?: boolean; radio?: boolean } | { label: string; submenu: TrayItem[] };
 type Rect = { x: number; y: number; width: number; height: number };
 type Size = { width: number; height: number };

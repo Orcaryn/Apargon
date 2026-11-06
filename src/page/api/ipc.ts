@@ -1,4 +1,4 @@
-import { ipcMain, type BrowserWindow } from 'electron';
+import { ipcMain, type BrowserWindow, type BrowserWindowConstructorOptions } from 'electron';
 import type { Permissions } from '../../permissions/tags.ts';
 import type { IncomingRequest } from '../../shared/channel.ts';
 import type { pageAccess } from './access.ts';
@@ -23,8 +23,8 @@ export function serveApi(dir: string, permissions: Permissions, access: ReturnTy
   });
 
   return {
-    enable(win: BrowserWindow) {
-      const api = pageApi(dir, permissions, access, win, shared);
+    enable(win: BrowserWindow, options: BrowserWindowConstructorOptions) {
+      const api = pageApi(dir, permissions, access, win, shared, options);
       const id = win.webContents.id;
       apiBySender.set(id, api as Record<string, (...args: unknown[]) => unknown>);
       win.on('closed', () => {

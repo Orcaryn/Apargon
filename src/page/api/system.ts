@@ -79,7 +79,7 @@ export function systemApi(permissions: Permissions, { where, canSee, need }: Sco
         return target;
       });
 
-      PAGE_PLATFORM.share(win, { texts: text === undefined ? [] : [text], urls: url === undefined ? [] : [url], filePaths });
+      PAGE_PLATFORM.share(win, { texts: text === undefined ? [] : [String(text)], urls: url === undefined ? [] : [url], filePaths });
     },
     // A name another app announces, such as com.spotify.client.PlaybackStateChanged: each one heard goes to the page with what came along.
     hear(id: string, name: string) {
@@ -87,8 +87,13 @@ export function systemApi(permissions: Permissions, { where, canSee, need }: Sco
 
       if (!PAGE_PLATFORM.hear) {
         throw new Error('Apargon: hearing other apps is on macOS only.');
+      } else if (typeof name !== 'string' || !name) {
+        // macOS takes null as every name.
+        throw new Error('Apargon: hear takes the name of one notification, such as com.spotify.client.PlaybackStateChanged.');
       }
 
+      // An id given twice: the first stops, or nothing could reach it.
+      hearing.get(id)?.();
       hearing.set(id, PAGE_PLATFORM.hear(name, (info, sender) => win.webContents.send('apargon-broadcast', id, { name, sender, info })));
     },
     unhear(id: string) {

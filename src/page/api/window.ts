@@ -1,4 +1,4 @@
-import { app, Menu, powerSaveBlocker, screen, type BrowserWindow, type Rectangle } from 'electron';
+import { app, Menu, powerSaveBlocker, screen, type BrowserWindow, type BrowserWindowConstructorOptions, type Rectangle } from 'electron';
 import type { Permissions } from '../../permissions/tags.ts';
 import type { PageMenus } from '../menu.ts';
 import { pageMenuItems, type PageMenuItem } from '../../shared/menuItems.ts';
@@ -11,8 +11,9 @@ type WindowChange = { onTop?: boolean; allSpaces?: boolean; clickThrough?: boole
 // Below this a window on top would be a pane no one sees, catching the clicks meant for the app under it.
 const LEAST_OPACITY = 0.3;
 
-export function windowApi(permissions: Permissions, { where, canSee, need }: Scope, win: BrowserWindow, menus: PageMenus) {
-  const { onTop = false, allSpaces = false, clickThrough: mayClickThrough = false, private: privateWindow = false, resizable = true, frame = true } = permissions.window ?? {};
+export function windowApi(permissions: Permissions, { where, canSee, need }: Scope, win: BrowserWindow, menus: PageMenus, { resizable = true, frame = true }: BrowserWindowConstructorOptions) {
+  // What may be turned on is the tag's; resizable and frame are this window's own, as Electron has no getter for frame.
+  const { onTop = false, allSpaces = false, clickThrough: mayClickThrough = false, private: privateWindow = false } = permissions.window ?? {};
   // As the window opened, from the tag or window.open's features: what a reload goes back to.
   const [minWidth, minHeight] = win.getMinimumSize();
   // This window's own: a reload lets go of only these.
@@ -21,6 +22,8 @@ export function windowApi(permissions: Permissions, { where, canSee, need }: Sco
   let clickThrough = false;
   let aspectRatio = 0;
   let shape: Rectangle[] = [];
+  // Windows flashes until told to stop.
+  win.on('focus', () => win.flashFrame(false));
 
   return {
     // Changes what it is given, then answers how the window is. What the tags did not turn on stays off: the popup said so.
@@ -186,7 +189,6 @@ export function windowApi(permissions: Permissions, { where, canSee, need }: Sco
     attention() {
       if (!win.isFocused()) {
         win.flashFrame(true);
-        win.once('focus', () => win.flashFrame(false));
       }
     },
     pdf() {

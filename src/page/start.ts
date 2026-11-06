@@ -151,7 +151,8 @@ export async function startPage({ page, permissions, pageHash, proxy, bridges, b
     }
   };
 
-  const setUpWindow = (opened: BrowserWindow) => {
+  // options: what the window opened with; its calls are checked against them.
+  const setUpWindow = (opened: BrowserWindow, options: Electron.BrowserWindowConstructorOptions) => {
     opened.webContents.on('will-frame-navigate', stayOnPage);
     opened.webContents.on('will-redirect', stayOnPage);
     // window.open on the page itself opens a second window, with the tag's settings and its own on top, such as 'size=320x80, frame=no'.
@@ -170,7 +171,7 @@ export async function startPage({ page, permissions, pageHash, proxy, bridges, b
         return { action: 'deny' };
       }
     });
-    opened.webContents.on('did-create-window', setUpWindow);
+    opened.webContents.on('did-create-window', (child, { options }) => setUpWindow(child, options));
     opened.webContents.setAudioMuted(!permissions.use.includes('sound'));
     // Windows tells a window, not powerMonitor, that the session ends.
     opened.on('session-end', () => opened.webContents.send('apargon-system', 'shutdown'));
@@ -192,10 +193,10 @@ export async function startPage({ page, permissions, pageHash, proxy, bridges, b
       }
     });
 
-    api.enable(opened);
+    api.enable(opened, options);
   };
 
-  setUpWindow(win);
+  setUpWindow(win, mainOptions);
   void win.loadFile(page);
 
   if (background) {

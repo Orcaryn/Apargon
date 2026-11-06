@@ -1,4 +1,4 @@
-import type { BrowserWindow, NativeImage } from 'electron';
+import type { BrowserWindow, BrowserWindowConstructorOptions, NativeImage } from 'electron';
 import type { Permissions } from '../../permissions/tags.ts';
 import type { PageMenus } from '../menu.ts';
 import type { pageAccess } from './access.ts';
@@ -14,11 +14,11 @@ import { windowApi } from './window.ts';
 export type PageProcess = { menus: PageMenus; toFront: () => void; pageIcon: () => NativeImage | null; proxy: string | null; pickShortcuts: (keys: string[]) => void };
 
 // What the page's process does on its behalf, when its sandbox allows the page none of it: window.papp in the page is a mirror of this object.
-export function pageApi(dir: string, permissions: Permissions, access: ReturnType<typeof pageAccess>, win: BrowserWindow, { menus, toFront, pageIcon, proxy, pickShortcuts }: PageProcess) {
+export function pageApi(dir: string, permissions: Permissions, access: ReturnType<typeof pageAccess>, win: BrowserWindow, { menus, toFront, pageIcon, proxy, pickShortcuts }: PageProcess, options: BrowserWindowConstructorOptions) {
   const scope = pageScope(dir, access);
   const files = fileApi(dir, scope, win);
   const programs = programApi(permissions, scope, win);
-  const pageWindow = windowApi(permissions, scope, win, menus);
+  const pageWindow = windowApi(permissions, scope, win, menus, options);
   const listeners = listenApi(scope, win);
   const connections = connectionApi(scope, win, proxy);
   const system = systemApi(permissions, scope, toFront, pageIcon, win);

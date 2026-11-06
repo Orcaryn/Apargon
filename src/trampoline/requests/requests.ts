@@ -32,6 +32,8 @@ type Page = {
 
 // What a page may send, by name. A papp-system page writes the line itself, so each handler takes the fields it uses, one by one, and checks a tag the page process already checked.
 export function pageHandlers({ page, permissions, listeners, tell, setTray, openPage, restart, refreshMenus }: Page) {
+  // Once: a pick that adds a write starts the page again.
+  const access = pageAccess(permissions);
   const events: EventHandlers<PageEvents> = {
     open: openPage,
     // Only approved pages, as the menu lists them. Forgetting another page takes its picks and secrets too, so the user confirms. Either way every page's menu is sent again.
@@ -116,7 +118,7 @@ export function pageHandlers({ page, permissions, listeners, tell, setTray, open
     trash: async ({ file }) => {
       const target = realPath(file);
 
-      if (!pageAccess(permissions).canChangeAll(target)) {
+      if (!access.canChangeAll(target)) {
         throw new Error('Apargon: this page may not change that. Ask for it with <meta name="papp-write" content="...">.');
       }
 

@@ -24,8 +24,9 @@ export function trayFor(page: string, onShow: () => void, onQuit: () => void, on
       return;
     }
 
-    menu = Menu.buildFromTemplate([...trayItems(cleanTrayItems(items), onItem), ...(items.length ? [{ type: 'separator' } as const] : []), { label: `Show ${name}`, click: onShow }, { label: `Quit ${name}`, click: onQuit }]);
+    // The icon first: one that is refused leaves the tray as it was, its menu too.
     const image = icon === null ? apargonIcon : iconFromPixels(icon);
+    menu = Menu.buildFromTemplate([...trayItems(cleanTrayItems(items), onItem), ...(items.length ? [{ type: 'separator' } as const] : []), { label: `Show ${name}`, click: onShow }, { label: `Quit ${name}`, click: onQuit }]);
 
     if (!tray) {
       const made = new Tray(image);

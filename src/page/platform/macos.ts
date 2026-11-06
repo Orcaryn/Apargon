@@ -1,4 +1,4 @@
-import { app } from 'electron';
+import { app, ShareMenu, systemPreferences } from 'electron';
 import net from 'net';
 import { tellTrampoline } from '../../shared/channel.ts';
 import type { PagePlatform } from '../platform.ts';
@@ -9,6 +9,12 @@ export const macos: PagePlatform = {
   processGroups: true,
   programsInheritFds: true,
   appMenu: true,
+  hear(name, heard) {
+    const subscribed = systemPreferences.subscribeNotification(name, (_name, info, sender) => heard(info, sender));
+
+    return () => systemPreferences.unsubscribeNotification(subscribed);
+  },
+  share: (win, item) => new ShareMenu(item).popup({ window: win }),
   // The trampoline sets the file's icon: this process may not write there.
   showIcon(_win, icon, madeHere) {
     app.dock?.setIcon(icon);

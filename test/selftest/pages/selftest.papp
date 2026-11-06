@@ -12,6 +12,13 @@
     await new Promise(() => {});
   }
 
+  // A second window that asked for its own settings tells the first how it came out: with no frame, its window is as high as its page.
+  if (location.hash === '#mini') {
+    const { bounds, onTop } = await papp.window();
+    opener.postMessage({ width: bounds.width, framed: bounds.height > innerHeight, onTop }, '*');
+    await new Promise(() => {});
+  }
+
   const result = {};
   // Refused by Apargon itself, not failed some other way: a renamed call or a crash is not a refusal. What else happened goes to check.ts, as refused_wrongly.
   const wrong = [];
@@ -67,6 +74,12 @@
     result.granted_write = await papp.readFile('scratch.txt') === 'hi' && (await papp.readdir('.')).includes('scratch.txt');
     result.page_write_refused = await refused(() => papp.writeFile('scratch.papp', 'x')) && await refused(() => papp.writeFile('selftest-system.papp', 'x'));
     result.page_rename_refused = await refused(() => papp.rename('scratch.txt', 'scratch.papp')) && await refused(() => papp.rename('selftest-system.papp', 'scratch.txt'));
+    // To the user's Trash, from where the tags allow a change and nowhere else.
+    await papp.writeFile('scratch.trash', 'bin me');
+    await papp.trash('scratch.trash');
+    result.trash_granted = !(await papp.exists('scratch.trash'));
+    result.trash_refused = await refused(() => papp.trash('selftest-system.papp')) && await refused(() => papp.trash('../../../package.json'));
+    result.window_shape_refused = await refused(() => papp.window({ shape: [{ x: 0, y: 0, width: 100, height: 100 }] }));
     result.options_refused = await refused(() => papp.readFile('scratch.txt', { flag: 'w' })) && await papp.readFile('scratch.txt') === 'hi';
 
     result.watch_folder = await changeSeen('.', () => papp.writeFile('scratch.txt', 'again')) === 'scratch.txt changed';
@@ -126,6 +139,26 @@
     result.tray_refused = await refused(() => papp.tray('x', 'not a list')) && await refused(() => papp.tray('x', [null]));
     result.progress_set = (await papp.progress(0.5)) === undefined && (await papp.progress(null)) === undefined;
     result.progress_refused = await refused(() => papp.progress(2)) && await refused(() => papp.progress('0.5')) && await refused(() => papp.progress(NaN));
+    // The window stays on a screen, and what the tags did not turn on stays off, even after a refusal.
+    const screens = await papp.displays();
+    const { workArea: area } = screens.find((each) => each.primary);
+    result.displays_listed = Number.isInteger(area.width) && screens.every((each) => each.scaleFactor > 0);
+    const placed = await papp.window({ bounds: { x: area.x + 20, y: area.y + 20, width: 640, height: 480 } });
+    result.window_bounds_set = placed.bounds.x === area.x + 20 && placed.bounds.width === 640 && placed.bounds.height === 480;
+    result.window_offscreen_refused = await refused(() => papp.window({ bounds: { x: area.x + area.width - 10 } }));
+    const switches = await Promise.all([{ onTop: true }, { allSpaces: true }, { clickThrough: true }, { private: true }, { visible: false }, { opacity: 0.1 }, { state: 'fullscreen' }].map((change) => refused(() => papp.window(change))));
+    const after = await papp.window();
+    result.window_switches_refused = switches.every(Boolean) && !after.onTop && !after.allSpaces && !after.clickThrough && !after.private && after.visible && after.opacity === 1 && after.bounds.width === 640;
+    result.shortcuts_refused = await refused(() => papp.shortcuts(['CommandOrControl+Alt+Shift+F12']));
+    const letSleep = await papp.keepAwake({ display: true });
+    result.keep_awake = typeof letSleep === 'function' && (await letSleep()) === undefined;
+    result.badge_set = (await papp.badge(3)) === undefined && (await papp.badge(null)) === undefined;
+    result.attention_asked = (await papp.attention()) === undefined;
+    // A 1 × 1 red PNG, which the page's process sizes to 32 × 32.
+    const icon = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==';
+    result.tray_rich_set = (await papp.tray('Selftest', [{ label: 'Mode', submenu: [{ label: 'Fast', id: 'fast', checked: true, radio: true }] }, { label: 'Sync', id: 'sync', checked: false }], { icon })) === undefined && (await papp.tray(null)) === undefined;
+    const nestedTray = (depth) => [depth === 1 ? { label: 'x', id: 'x' } : { label: 'x', submenu: nestedTray(depth - 1) }];
+    result.tray_icon_refused = await refused(() => papp.tray('x', [], { icon: 'data:text/plain,hi' })) && await refused(() => papp.tray('x', nestedTray(4)));
     const power = await papp.power();
     result.power_read = typeof power.idleSeconds === 'number' && typeof power.onBattery === 'boolean';
     result.save_names_refused = (await Promise.all([{}, { '../out.txt': 'x' }, { 'sub/out.txt': 'x' }, { '.zshrc': 'x' }, { 'ok.txt': 'x', 'page.papp': 'x' }, { 'ok.txt': 'x', '': 'x' }].map((files) => refused(() => papp.saveAll(files))))).every(Boolean);
@@ -156,12 +189,23 @@
     result.run_refused = await refused(() => papp.run('ls'));
     result.listen_refused = await refused(() => papp.listen({}, () => ({ body: 'x' })));
     result.spawn_refused = await refused(() => papp.spawn('ls'));
-    result.use_refused = await refused(() => papp.notify('selftest', 'should not show')) && await refused(() => papp.print()) && await refused(() => window.print());
+    result.use_refused = await refused(() => papp.notify('selftest', 'should not show')) && await refused(() => papp.print()) && await refused(() => window.print()) && await refused(() => papp.cursor()) && await refused(() => papp.share({ text: 'should not show' })) && await refused(() => papp.hear('com.apple.screenIsLocked', () => {}));
     result.open_type_refused = await refused(() => papp.open('selftest.papp')) && await refused(() => papp.open('subfolder/frame.html')) && await refused(() => papp.open('subfolder/bundle.app'));
     result.open_outside_refused = await refused(() => papp.open('../../../package.json'));
     result.open_scheme_refused = (await Promise.all(['vscode://file/etc/passwd', 'file:///etc/passwd', 'javascript:1'].map((href) => refused(() => papp.open(href))))).every(Boolean);
     result.screen_capture_refused = await refused(() => navigator.mediaDevices.getDisplayMedia({ video: true }), /^NotAllowedError: /);
     result.other_file_window_refused = window.open('subfolder/frame.html') === null;
+    // Its own size and frame, but on top only as the tag says, and this page has none.
+    result.second_window_settings = await new Promise((done) => {
+      const mini = window.open('#mini', '', 'size=320x200, frame=no, on-top=yes');
+      const report = setTimeout(() => done(false), 5000);
+      addEventListener('message', ({ data }) => {
+        clearTimeout(report);
+        mini.close();
+        done(data.width === 320 && !data.framed && !data.onTop);
+      }, { once: true });
+    });
+    result.second_window_bad_settings_refused = window.open('#second', '', 'on-top=maybe') === null;
 
     result.fetch_blocked = await fetched;
     result.outside_file_url_refused = !(await loads('../../../package.json'));

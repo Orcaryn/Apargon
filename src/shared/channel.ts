@@ -13,9 +13,12 @@ export type Bridge = { port: number; socket: string };
 export type MenuState = { approved: string[]; automaticUpdates: boolean };
 // requestFd and replyFd: the page's pipes to and from the trampoline, REQUEST_FD and REPLY_FD where the sandbox passes them, standard output and input on Windows. bounds: where the user left the window, if anywhere.
 export type PageConfig = { page: string; permissions: Permissions; pageHash: string | null; proxy: string | null; bridges: Bridge[]; requestFd: number; replyFd: number; bounds: Rectangle | null; menu: MenuState };
-// A page's own tray items go above Apargon's Show and Quit; a click hands back the item's id.
-export type TrayItem = { label: string; id: string } | { separator: true };
-export type PageTray = { title: string | null; items: TrayItem[] };
+// A page's own tray items go above Apargon's Show and Quit; a click hands back the item's id. checked makes a checkbox, with radio a radio button.
+export type TrayItem = { separator: true } | { label: string; id: string; checked?: boolean; radio?: boolean } | { label: string; submenu: TrayItem[] };
+// Raw pixels, decoded and sized in the page's process: the trampoline, which has network, decodes no image a page sends.
+export type TrayIcon = { width: number; height: number; pixels: string };
+// click: a click on the icon goes to the page, with where the icon is, and a right-click opens the menu. Where the OS sends no clicks, the menu opens as before.
+export type PageTray = { title: string | null; items: TrayItem[]; icon: TrayIcon | null; click: boolean };
 export type SavedFile = { name: string; data: string };
 export type PickOptions = { folder: boolean; multiple: boolean; write: boolean };
 // Headers by lowercase name, repeats joined with a comma as a browser joins them; a body as base64.

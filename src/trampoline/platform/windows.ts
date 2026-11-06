@@ -94,6 +94,7 @@ export const windows: TrampolinePlatform = {
   // Windows has none; making a link there needs an administrator or developer mode.
   noFollow: 0,
   autoUpdates: false,
+  trayClicks: true,
 };
 
 // Through MXC's library, not its wxc-exec.exe: that one hands the page its standard input only once it closes, so no reply could arrive while the page runs.

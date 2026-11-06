@@ -71,6 +71,7 @@ export const macos: TrampolinePlatform = {
   },
   noFollow: fs.constants.O_NOFOLLOW,
   autoUpdates: true,
+  trayClicks: true,
 };
 
 function seatbeltProfile(page: string, permissions: Permissions, proxyPort: number | null) {

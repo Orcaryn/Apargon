@@ -75,6 +75,7 @@ export const linux: TrampolinePlatform = {
   },
   noFollow: fs.constants.O_NOFOLLOW,
   autoUpdates: false,
+  trayClicks: false,
 };
 
 // The dock names a window after the launcher entry its class matches, and shows that entry's icon: one per page, under its title, that reopens it. Hidden from the app grid, so opening a page installs nothing visible.

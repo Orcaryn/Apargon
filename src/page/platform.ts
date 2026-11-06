@@ -14,6 +14,10 @@ export type PagePlatform = {
   processGroups: boolean;
   // A child keeps every open fd that is not close-on-exec, the page's pipes to the trampoline included.
   programsInheritFds: boolean;
+  // Hears what other apps announce under a name, macOS's distributed notifications, until the function it returns is called. Where there are none, papp.hear refuses.
+  hear?(name: string, heard: (info: Record<string, unknown>, sender: string) => void): () => void;
+  // The system's share menu, over the window. Where there is none, papp.share refuses.
+  share?(win: BrowserWindow, item: Electron.SharingItem): void;
 };
 
 // Another system gets Linux's, whose offline check fails there.

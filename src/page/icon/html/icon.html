@@ -4,6 +4,7 @@
 <title>Apargon icon</title>
 <script>
   // The sharpest favicon: an SVG, else the one with the most pixels. One that does not decode is left out.
+  // With a badge, on a white rounded square with the badge at the top right; without, papp-window mark=no, the favicon alone, nearly edge to edge.
   async function paint(faviconUrls, badgeUrl) {
     const favicons = (await Promise.all(faviconUrls.map(url => load(url).catch(() => null)))).filter(image => image !== null);
 
@@ -13,22 +14,25 @@
 
     const pixels = image => (image.src.startsWith('data:image/svg+xml') ? Infinity : image.naturalWidth * image.naturalHeight);
     const favicon = favicons.reduce((sharpest, image) => (pixels(image) > pixels(sharpest) ? image : sharpest));
-    const badge = await load(badgeUrl);
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = 1024;
     const g = canvas.getContext('2d');
     g.imageSmoothingQuality = 'high';
 
-    g.beginPath();
-    g.roundRect(100, 100, 824, 824, 188);
-    g.fillStyle = '#fff';
-    g.fill();
+    if (badgeUrl !== null) {
+      g.beginPath();
+      g.roundRect(100, 100, 824, 824, 188);
+      g.fillStyle = '#fff';
+      g.fill();
+    }
 
-    const scale = 600 / Math.max(favicon.naturalWidth, favicon.naturalHeight);
+    const scale = (badgeUrl === null ? 824 : 600) / Math.max(favicon.naturalWidth, favicon.naturalHeight);
     const [w, h] = [favicon.naturalWidth * scale, favicon.naturalHeight * scale];
     g.drawImage(favicon, 512 - w / 2, 512 - h / 2, w, h);
 
-    g.drawImage(badge, 644, 40, 340, 340);
+    if (badgeUrl !== null) {
+      g.drawImage(await load(badgeUrl), 644, 40, 340, 340);
+    }
 
     return canvas.toDataURL('image/png');
   }

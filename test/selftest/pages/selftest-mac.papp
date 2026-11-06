@@ -7,7 +7,9 @@
 <meta name="papp-run" content="/usr/sbin/ipconfig">
 <meta name="papp-run" content="/usr/bin/defaults">
 <meta name="papp-write" content="./results/result-mac.json">
-<meta name="papp-window" content="width=700, height=500, resizable=no">
+<meta name="papp-window" content="width=700, height=500, resizable=no, on-top=yes, all-spaces=yes, click-through=yes, private=yes, blur=yes, mark=no">
+<meta name="papp-use" content="cursor, broadcasts, share">
+<meta name="papp-global-shortcut" content="any">
 <title>Apargon selftest (macOS programs)</title>
 <body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
 
@@ -22,12 +24,64 @@
     // activate, not a query: a query also fails without the sandbox, on the Automation permission, so it would not notice the rule gone.
     result.program_apple_event_blocked = (await papp.run('osascript', ['-e', 'tell application "Finder" to activate'])).status !== 0;
     result.window_size_declared = innerWidth === 700;
+    // What the tag turned on, the page may turn off and on again.
+    const start = await papp.window();
+    const off = await papp.window({ onTop: false, allSpaces: false });
+    const on = await papp.window({ onTop: true, allSpaces: true });
+    result.window_switches_declared = start.onTop && start.allSpaces && !off.onTop && !off.allSpaces && on.onTop && on.allSpaces;
+    // Private from the start, as the tag says; clickable until the page lets clicks through.
+    const through = await papp.window({ clickThrough: true, private: false });
+    const back = await papp.window({ clickThrough: false, private: true });
+    result.window_click_through_private = start.private && !start.clickThrough && through.clickThrough && !through.private && !back.clickThrough && back.private;
+    // Checked as the tag is; the same keys written twice count once.
+    await papp.shortcuts(['CommandOrControl+Alt+Shift+F12', 'cmdorctrl+alt+shift+f12']);
+    const badKeys = await papp.shortcuts(['Shift+A']).then(() => false, (err) => err.message.includes('app in front'));
+    result.shortcuts_picked = badKeys && (await papp.shortcuts([])) === undefined;
+    result.window_opacity = (await papp.window({ opacity: 0.5 })).opacity === 0.5 && (await papp.window({ opacity: 1 })).opacity === 1;
+    const refusedHere = (change) => papp.window(change).then(() => false, (err) => err.message.startsWith('Apargon: '));
+    result.window_fixed_size_refused = (await refusedHere({ bounds: { width: 800 } })) && (await refusedHere({ state: 'maximized' })) && (await papp.window({ bounds: { x: on.bounds.x + 1 } })).bounds.x === on.bounds.x + 1;
+    // Minimising animates: wait for it, then back.
+    const reaches = async (state) => {
+      for (let waited = 0; waited < 3000; waited += 100) {
+        if ((await papp.window()).state === state) {
+          return true;
+        }
+        await new Promise((done) => setTimeout(done, 100));
+      }
+      return false;
+    };
+    await papp.window({ state: 'minimized' });
+    const minimized = await reaches('minimized');
+    await papp.window({ state: 'normal' });
+    result.window_minimize = minimized && (await reaches('normal'));
     result.program_preference_write_blocked = (await papp.run('defaults', ['write', 'com.apargon.selftest', 'leaked', '-bool', 'true'])).status !== 0;
+    // Size rules while it runs; resizable=no in the tag keeps it fixed.
+    const rules = await papp.window({ minSize: { width: 300, height: 200 }, maxSize: { width: 0, height: 0 }, aspectRatio: 1.5, resizable: false });
+    result.window_size_rules = rules.minSize.width === 300 && rules.minSize.height === 200 && rules.aspectRatio === 1.5 && !rules.resizable && (await refusedHere({ resizable: true }));
+    // The file in the title bar: only one the page may see.
+    const shown = await papp.window({ file: 'results/result-mac.json', edited: true });
+    const cleared = await papp.window({ file: null, edited: false });
+    result.window_document = shown.file === `${papp.dir}/results/result-mac.json` && shown.edited && cleared.file === null && !cleared.edited && (await refusedHere({ file: '/etc/hosts' }));
+    const cursor = await papp.cursor();
+    result.cursor_read = Number.isFinite(cursor.x) && Number.isFinite(cursor.y);
+    // Another app's announcement, posted by a program outside the page: osascript, which the sandbox lets talk to the notification center or not.
+    const name = `com.apargon.selftest.${crypto.randomUUID()}`;
+    const { promise: heard, resolve: hear } = Promise.withResolvers();
+    const stop = await papp.hear(name, (broadcast) => hear(broadcast.name === name && broadcast.info.said === 'hello'));
+    const post = `ObjC.import('Foundation'); $.NSDistributedNotificationCenter.defaultCenter.postNotificationNameObjectUserInfoDeliverImmediately('${name}', $(), $({ said: 'hello' }), true)`;
+    const posted = await papp.run('osascript', ['-l', 'JavaScript', '-e', post]);
+    result.hear_other_app = posted.status === 0 ? await Promise.race([heard, new Promise((done) => setTimeout(() => done('nothing heard'), 3000))]) : `post failed: ${posted.stderr.trim()}`;
+    await stop();
+    await papp.share({ text: 'Apargon selftest' });
+    result.share_unseen_refused = (await papp.share({ files: ['/etc/hosts'] }).then(() => false, (err) => err.message.startsWith('Apargon: '))) && (await papp.share({ url: 'file:///etc/hosts' }).then(() => false, (err) => err.message.startsWith('Apargon: ')));
+    await papp.tray('selftest', [{ label: 'Item', id: 'item' }], { click: true });
+    result.tray_click_set = true;
   } catch (err) {
     result.error = err.message;
   }
 
   document.body.textContent = JSON.stringify(result);
   await papp.writeFile('results/result-mac.json', JSON.stringify(result, null, 2) + '\n');
-  setTimeout(() => window.close(), 200);
+  // papp.quit, not window.close: if it did not quit, the run would wait here until its timeout.
+  setTimeout(() => papp.quit(), 200);
 </script>

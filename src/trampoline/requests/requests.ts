@@ -1,5 +1,7 @@
 import { app, dialog, shell } from 'electron';
 import fs from 'fs';
+import { pageAccess } from '../../page/api/access.ts';
+import { realPath } from '../../permissions/paths.ts';
 import type { Permissions } from '../../permissions/tags.ts';
 import type { PageTray } from '../../shared/channel.ts';
 import { EGRESS_LOG } from '../../shared/data.ts';
@@ -109,6 +111,18 @@ export function pageHandlers({ page, permissions, listeners, tell, setTray, open
 
       // Field by field: Electron takes other options too.
       return showNotice({ title, body, buttons, icon }, () => tell('show'));
+    },
+    // Checked again here, as the page's process did: a papp-system page could name a file it may not change.
+    trash: async ({ file }) => {
+      const target = realPath(file);
+
+      if (!pageAccess(permissions).canChangeAll(target)) {
+        throw new Error('Apargon: this page may not change that. Ask for it with <meta name="papp-write" content="...">.');
+      }
+
+      await shell.trashItem(target);
+
+      return null;
     },
   };
 

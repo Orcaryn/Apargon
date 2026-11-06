@@ -16,8 +16,8 @@ const IMAGE_TYPES: Record<string, string> = {
   '.webp': 'image/webp',
 };
 
-// Draws the page's favicon as its icon whenever it changes. Returns the icon as last drawn, which notifications show.
-export function followFavicon(win: BrowserWindow, canSee: (file: string) => boolean, madeHere: boolean) {
+// Draws the page's favicon as its icon whenever it changes. Returns the icon as last drawn, which notifications show. marked: with Apargon's badge, unless papp-window says mark=no.
+export function followFavicon(win: BrowserWindow, canSee: (file: string) => boolean, madeHere: boolean, marked: boolean) {
   let faviconUrls: string[] = [];
   let drawn: NativeImage | null = null;
 
@@ -31,7 +31,7 @@ export function followFavicon(win: BrowserWindow, canSee: (file: string) => bool
       return;
     }
 
-    const icon = await drawIcon(favicons);
+    const icon = await drawIcon(favicons, marked);
 
     // None decoded: the icon as last drawn stays.
     if (icon === null) {
@@ -89,15 +89,15 @@ async function readFavicon(win: BrowserWindow, url: string, canSee: (file: strin
   return type !== undefined && canSee(file) && fs.statSync(file).size <= MAX_FAVICON_BYTES ? `data:${type};base64,${fs.readFileSync(file).toString('base64')}` : undefined;
 }
 
-async function drawIcon(favicons: string[]) {
+async function drawIcon(favicons: string[], marked: boolean) {
   const html = fs.readFileSync(path.join(import.meta.dirname, 'html', 'icon.html')).toString('base64');
-  const badge = fs.readFileSync(path.join(import.meta.dirname, 'images', 'badge.svg')).toString('base64');
+  const badge = marked ? `data:image/svg+xml;base64,${fs.readFileSync(path.join(import.meta.dirname, 'images', 'badge.svg')).toString('base64')}` : null;
   // Not the page's session, so not one of its windows.
   const win = new BrowserWindow({ show: false, webPreferences: { session: session.fromPartition('icon'), sandbox: true, contextIsolation: true } });
 
   try {
     await win.loadURL(`data:text/html;base64,${html}`);
-    const png: string | null = await win.webContents.executeJavaScript(`paint(${JSON.stringify(favicons)}, 'data:image/svg+xml;base64,${badge}')`);
+    const png: string | null = await win.webContents.executeJavaScript(`paint(${JSON.stringify(favicons)}, ${JSON.stringify(badge)})`);
 
     return png === null ? null : nativeImage.createFromDataURL(png);
   } finally {

@@ -25,8 +25,11 @@ const USE_LINES: Record<Use, Omit<Line, 'id'>> = {
   hid: { level: 'yellow', text: 'Use an input device you pick, which can be a keyboard', short: 'Input devices' },
   midi: { level: 'plain', text: 'Use MIDI instruments, and change their settings', short: 'MIDI' },
   print: { level: 'yellow', text: 'Print what it shows, on any printer this computer can reach', short: 'Printing' },
+  cursor: { level: 'yellow', text: 'See where your mouse is, outside its window too', short: 'Mouse position' },
+  broadcasts: { level: 'yellow', text: 'Hear what other apps announce, such as the song playing', short: 'Other apps' },
+  share: { level: 'plain', text: 'Hand text, links or files it sees to an app you pick in the share menu', short: 'Share menu' },
 };
-const USE_SEES: Use[] = ['clipboard', 'location', 'camera', 'microphone', 'screen'];
+const USE_SEES: Use[] = ['clipboard', 'location', 'camera', 'microphone', 'screen', 'cursor', 'broadcasts'];
 
 export function describe(permissions: Permissions) {
   const lines: Line[] = [];
@@ -56,6 +59,7 @@ export function describe(permissions: Permissions) {
     ...permissions.open.map(openLine),
     ...permissions.use.map(name => ({ id: `use:${name}`, ...USE_LINES[name] })),
     ...permissions.shortcuts.map(keys => ({ id: `shortcut:${keys}`, level: 'yellow' as const, text: 'A shortcut that works in every app', short: keys })),
+    ...(permissions.anyShortcut ? [{ id: 'shortcut:any', level: 'yellow' as const, text: 'Shortcuts it picks later, which work in every app', short: 'Any shortcut' }] : []),
     ...(permissions.listen ? [listenLine(permissions.listen)] : [])
   );
 
@@ -127,8 +131,8 @@ function folderLine(kind: 'read' | 'write', pattern: string): Line {
   return { id: `${kind}:${pattern}`, level, text, short };
 }
 
-// Each setting the tag makes, so none goes unseen. Yellow where the window could pass for another app's: without a frame, see-through, or over every other window.
-function windowLine({ width, height, minWidth, minHeight, resizable, titleBar, frame, transparent, onTop }: WindowSettings): Line {
+// Each setting the tag makes, so none goes unseen. Yellow where the window could pass for another app's, or hide from the user: without a frame, see-through or blurred, over every other window, on every desktop, clicked through, out of screen sharing, with no dock icon, or with an icon that lacks Apargon's mark.
+function windowLine({ width, height, minWidth, minHeight, resizable, titleBar, frame, transparent, onTop, allSpaces, clickThrough, private: privateWindow, dock, blur, mark }: WindowSettings): Line {
   const settings = [
     (width || height) && `${width ?? 'usual'} × ${height ?? 'usual'}`,
     (minWidth || minHeight) && `at least ${minWidth ?? 0} × ${minHeight ?? 0}`,
@@ -137,8 +141,14 @@ function windowLine({ width, height, minWidth, minHeight, resizable, titleBar, f
     frame !== undefined && (frame ? 'frame' : 'no frame'),
     transparent !== undefined && (transparent ? 'see-through' : 'not see-through'),
     onTop !== undefined && (onTop ? 'stays on top of other apps' : 'not on top'),
+    allSpaces !== undefined && (allSpaces ? 'on every desktop' : 'one desktop'),
+    clickThrough !== undefined && (clickThrough ? 'clicks can pass through it' : 'clickable'),
+    privateWindow !== undefined && (privateWindow ? 'hidden from screenshots and screen sharing' : 'shown in screen sharing'),
+    dock !== undefined && (dock ? 'dock icon' : 'no dock or taskbar icon'),
+    blur !== undefined && (blur ? 'blurs what is behind it' : 'no blur'),
+    mark !== undefined && (mark ? "Apargon's mark on its icon" : "its own icon, without Apargon's mark"),
   ].filter(text => typeof text === 'string');
-  const looksLikeAnotherApp = frame === false || transparent === true || onTop === true;
+  const looksLikeAnotherApp = frame === false || transparent === true || onTop === true || allSpaces === true || clickThrough === true || privateWindow === true || dock === false || blur === true || mark === false;
 
   return { id: `window:${settings.join(', ')}`, level: looksLikeAnotherApp ? 'yellow' : 'plain', text: `Window: ${settings.join(', ')}`, short: 'Window' };
 }

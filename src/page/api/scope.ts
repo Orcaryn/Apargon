@@ -31,6 +31,7 @@ export function pageScope(dir: string, access: ReturnType<typeof pageAccess>) {
     canSee,
     canList,
     canChange: access.canChange,
+    canChangeAll: access.canChangeAll,
     need,
     // The sandbox may refuse to resolve a path the page never asked for, as MXC does with EPERM: that is this refusal, in the OS's words.
     where: (file: string) => {

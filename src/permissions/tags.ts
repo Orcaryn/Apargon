@@ -20,6 +20,8 @@ export type Permissions = {
   system: boolean;
   use: Use[];
   shortcuts: string[];
+  // papp-global-shortcut any: the page may pick shortcuts while it runs, with papp.shortcuts.
+  anyShortcut: boolean;
   window: WindowSettings | null;
   listen: Listen | null;
   tags: string[];
@@ -28,12 +30,12 @@ export type Use = (typeof USES)[number];
 // Who may send the page requests: programs on this computer, or devices on the network too.
 export type Listen = 'localhost' | 'network';
 // Only the keys the tag sets.
-export type WindowSettings = { width?: number; height?: number; minWidth?: number; minHeight?: number; resizable?: boolean; titleBar?: boolean; frame?: boolean; transparent?: boolean; onTop?: boolean };
+export type WindowSettings = { width?: number; height?: number; minWidth?: number; minHeight?: number; resizable?: boolean; titleBar?: boolean; frame?: boolean; transparent?: boolean; onTop?: boolean; allSpaces?: boolean; clickThrough?: boolean; private?: boolean; dock?: boolean; blur?: boolean; mark?: boolean };
 
 const INVISIBLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
-const USES = ['notifications', 'clipboard', 'location', 'sound', 'camera', 'microphone', 'screen', 'background', 'login', 'usb', 'serial', 'hid', 'midi', 'print'] as const;
+const USES = ['notifications', 'clipboard', 'location', 'sound', 'camera', 'microphone', 'screen', 'background', 'login', 'usb', 'serial', 'hid', 'midi', 'print', 'cursor', 'broadcasts', 'share'] as const;
 const SIZES = { width: 'width', height: 'height', 'min-width': 'minWidth', 'min-height': 'minHeight' } as const;
-const SWITCHES = { resizable: 'resizable', 'title-bar': 'titleBar', frame: 'frame', transparent: 'transparent', 'on-top': 'onTop' } as const;
+const SWITCHES = { resizable: 'resizable', 'title-bar': 'titleBar', frame: 'frame', transparent: 'transparent', 'on-top': 'onTop', 'all-spaces': 'allSpaces', 'click-through': 'clickThrough', private: 'private', dock: 'dock', blur: 'blur', mark: 'mark' } as const;
 const MODIFIERS: Partial<Record<string, string>> = { commandorcontrol: 'CommandOrControl', cmdorctrl: 'CommandOrControl', command: 'Command', cmd: 'Command', control: 'Control', ctrl: 'Control', alt: 'Alt', option: 'Alt', altgr: 'AltGr', shift: 'Shift', super: 'Super', meta: 'Super' };
 const KEYS = [...Array.from({ length: 24 }, (_, i) => `F${i + 1}`), 'Space', 'Tab', 'Backspace', 'Delete', 'Insert', 'Return', 'Enter', 'Up', 'Down', 'Left', 'Right', 'Home', 'End', 'PageUp', 'PageDown', 'Escape', 'Esc'];
 // Taken alone: no app types with them.
@@ -41,7 +43,7 @@ const MEDIA_KEYS = ['MediaPlayPause', 'MediaNextTrack', 'MediaPreviousTrack', 'M
 
 export function declaredPermissions(page: string, html = fs.readFileSync(page, 'utf8')) {
   const dir = path.dirname(page);
-  const permissions: Permissions = { own: null, read: [], write: [], net: [], open: [], run: {}, env: [], sockets: [], system: false, use: [], shortcuts: [], window: null, listen: null, tags: [] };
+  const permissions: Permissions = { own: null, read: [], write: [], net: [], open: [], run: {}, env: [], sockets: [], system: false, use: [], shortcuts: [], anyShortcut: false, window: null, listen: null, tags: [] };
   const head = html.replace(/<!--[\s\S]*?-->/g, '').split(/<script\b|<body\b|<\/head\b/i)[0];
 
   for (const [, attrs] of head.matchAll(/<meta\s+([^>]*)>/gi)) {
@@ -91,6 +93,8 @@ export function declaredPermissions(page: string, html = fs.readFileSync(page, '
       throw new Error(`Bad papp-system value "${value}". The only value is "full".`);
     } else if (kind === 'use') {
       permissions.use.push(...value.split(',').map(name => useName(name.trim())));
+    } else if (kind === 'global-shortcut' && value === 'any') {
+      permissions.anyShortcut = true;
     } else if (kind === 'global-shortcut') {
       permissions.shortcuts.push(shortcut(value));
     } else if (kind === 'window' && permissions.window) {
@@ -110,6 +114,8 @@ export function declaredPermissions(page: string, html = fs.readFileSync(page, '
     throw new Error('papp-system already allows every program and variable. Remove papp-run and papp-env.');
   } else if (permissions.env.length && !Object.keys(permissions.run).length) {
     throw new Error('papp-env passes a variable to the programs a page runs, and this page runs none. Add papp-run, or remove papp-env.');
+  } else if (permissions.window?.dock === false && !permissions.use.includes('background')) {
+    throw new Error('papp-window dock=no leaves the page no icon to find it by. Add <meta name="papp-use" content="background">, which keeps its tray icon.');
   }
 
   checkPermissions(permissions, page);
@@ -315,8 +321,8 @@ function socketPath(value: string, dir: string) {
   return path.join(fs.realpathSync.native(absolute), stats.isDirectory() ? path.sep : '');
 }
 
-// As the viewport tag: key=value pairs, separated by commas.
-function windowSettings(value: string) {
+// As the viewport tag: key=value pairs, separated by commas. window.open's features take the same.
+export function windowSettings(value: string) {
   const settings: WindowSettings = {};
   const seen = new Set<string>();
   const keys = ['size', ...Object.keys(SIZES), ...Object.keys(SWITCHES)].join(', ');
@@ -355,7 +361,8 @@ function useName(value: string) {
   return name;
 }
 
-function shortcut(value: string) {
+// Also for papp.shortcuts, on the keys a page picks while it runs.
+export function shortcut(value: string) {
   const parts = value.split('+');
   const last = parts[parts.length - 1];
   const named = parts.slice(0, -1).map(part => MODIFIERS[part.toLowerCase()]);

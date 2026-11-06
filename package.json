@@ -143,7 +143,6 @@
     "npmRebuild": false
   },
   "dependencies": {
-    "@electron/remote": "^2.1.3",
     "@microsoft/mxc-sdk": "1.0.1"
   }
 }

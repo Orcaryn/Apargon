@@ -18,6 +18,8 @@ export type TrampolinePlatform = {
   // The open flag that refuses a link, so a save never writes where one leads.
   noFollow: number;
   autoUpdates: boolean;
+  // Whether the tray icon reports clicks: Linux's shows only its menu.
+  trayClicks: boolean;
 };
 
 // The page's process, once started. requests and output may be one stream: a line that is no request is output. It emits close once the process is gone.

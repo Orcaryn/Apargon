@@ -9,7 +9,6 @@ Plain Node, without the app, on `node:test`: `run.ts` runs them all with `node -
 | File           | Checks                                                                                                                            |
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | `platforms.ts` | that no file outside a `platform.ts` asks which OS this is                                                                        |
-| `preload.ts`   | that a `papp-system` page outside Apargon's folder finds `@electron/remote`                                                       |
 | `popup.ts`     | how tags are read and what the popup shows for them                                                                               |
 | `storage.ts`   | one file per page, and that a page's storage follows it when it moves, only then                                                  |
 | `menus.ts`     | that a page's menu and tray items reach Electron with no role or click of their own                                               |

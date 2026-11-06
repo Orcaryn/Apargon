@@ -116,12 +116,13 @@ async function startPageProcess({ page, permissions: declared, pageHash }: Pick<
     page,
     () => tell('show'),
     () => tell('quit'),
-    id => tell('trayItem', id)
+    id => tell('trayItem', id),
+    bounds => tell('trayClick', bounds)
   );
   // A page in the background, or with tray items of its own, keeps an icon: it is how the user finds it again.
   const background = permissions.use.includes('background');
-  const setTray = ({ title, items }: PageTray) => showTray(title ?? (background || items.length ? '' : null), items);
-  setTray({ title: null, items: [] });
+  const setTray = ({ title, items, icon, click }: PageTray) => showTray(title ?? (background || items.length ? '' : null), items, icon, click === true);
+  setTray({ title: null, items: [], icon: null, click: false });
   const listeners = pageListeners(permissions, request => tell('request', request));
   let reopen = false;
 
@@ -157,7 +158,7 @@ async function startPageProcess({ page, permissions: declared, pageHash }: Pick<
   child.on('close', () => {
     running.splice(running.indexOf(entry), 1);
     noteContent(page, pageStorage, records);
-    showTray(null, []);
+    showTray(null, [], null, false);
     listeners.closeAll();
     sandbox.close();
 

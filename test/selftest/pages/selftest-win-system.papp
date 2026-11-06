@@ -2,6 +2,7 @@
 <meta charset="utf-8">
 <meta name="papp-system" content="full">
 <meta name="papp-write" content="./results/result-win-system.json">
+<meta name="papp-window" content="frame=no">
 <title>Apargon selftest for Windows (full Node)</title>
 <body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
 
@@ -11,7 +12,7 @@
   const path = require('path');
   const dns = require('dns');
   const { fileURLToPath } = require('url');
-  const { execSync } = require('child_process');
+  const { exec, execSync } = require('child_process');
 
   const here = path.dirname(fileURLToPath(location.href));
   const result = {};
@@ -27,11 +28,6 @@
 
   result.child_process = execSync('echo ok', { windowsHide: true }).toString().trim() === 'ok';
   result.storage_apart = localStorage.getItem('apargon-selftest') === null;
-
-  const win = require('@electron/remote').getCurrentWindow();
-  win.setAlwaysOnTop(true, 'floating');
-  result.electron_window = win.isAlwaysOnTop();
-  win.setAlwaysOnTop(false);
 
   try {
     fs.appendFileSync(path.join(process.env.APPDATA, 'apargon', 'grants.json'), '');
@@ -62,10 +58,24 @@
     }, () => true);
   const resolved = new Promise((done) => dns.lookup('example.com', (err) => done(!!err)));
 
-  // The print spooler, as papp-use print needs it: every Windows runner has Microsoft Print to PDF.
-  const printers = win.webContents.getPrintersAsync().then((list) => list.length > 0, () => false);
+  // The print spooler, as papp-use print needs it, from a program in the page's own sandbox: every Windows runner has Microsoft Print to PDF. Through winspool, as Chromium's print backend reaches it, not Get-Printer, which asks WMI, which the sandbox hides. No cmdlet at all: PowerShell cannot load its modules in the sandbox, so even Add-Type is "not recognized"; .NET types load without them.
+  const printers = new Promise((done) =>
+    exec(`powershell -NoProfile -Command "[void][Reflection.Assembly]::LoadWithPartialName('System.Drawing'); [Console]::Out.WriteLine([System.Drawing.Printing.PrinterSettings]::InstalledPrinters.Count)"`, { windowsHide: true }, (err, out, stderr) =>
+      done(!err && Number(out) > 0 ? true : (err?.message ?? `${stderr} ${out}`).trim())
+    )
+  );
 
-  Promise.all([fetched, resolved, printers]).then(([fetchBlocked, dnsBlocked, printersReachable]) => {
+  const pappChecked = (async () => {
+    result.papp_api = typeof papp === 'object' && (await papp.displays()).length > 0 && (await papp.window()).visible === true;
+    result.papp_tags_checked = await papp.window({ onTop: true }).then(() => false, (err) => err.message.startsWith('Apargon: '));
+    // frame=no lets the page shape its window; the shape it set comes back, and [] takes it off.
+    const shaped = await papp.window({ shape: [{ x: 0, y: 0, width: 200, height: 100 }] });
+    result.window_shape_set = shaped.shape.length === 1 && shaped.shape[0].width === 200 && (await papp.window({ shape: [] })).shape.length === 0;
+  })().catch((err) => {
+    result.papp_error = err.message;
+  });
+
+  Promise.all([fetched, resolved, printers, pappChecked]).then(([fetchBlocked, dnsBlocked, printersReachable]) => {
     result.fetch_blocked = fetchBlocked;
     result.dns_blocked = dnsBlocked;
     result.printers_reachable = printersReachable;

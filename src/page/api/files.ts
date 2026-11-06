@@ -6,16 +6,8 @@ import { patternSource } from '../../permissions/patterns.ts';
 import { callTrampoline } from '../../shared/channel.ts';
 import type { Scope } from './scope.ts';
 
-export function fileApi(dir: string, { where, canSee, canList, canChange, need, picked, loaded }: Scope, win: BrowserWindow) {
+export function fileApi(dir: string, { where, canSee, canList, canChange, canChangeAll, need, picked, loaded }: Scope, win: BrowserWindow) {
   const watchers = new Map<string, fs.FSWatcher>();
-
-  const needChangeAll = (file: string) => {
-    need(canChange(file), 'change');
-
-    if (fs.lstatSync(file).isDirectory()) {
-      fs.readdirSync(file).forEach(name => needChangeAll(path.join(file, name)));
-    }
-  };
 
   const visibleStats = (file: string, stats: fs.Stats) => {
     const kind = { isFile: stats.isFile(), isDirectory: stats.isDirectory() };
@@ -108,17 +100,19 @@ export function fileApi(dir: string, { where, canSee, canList, canChange, need, 
     rm(file: string, { recursive = false }: { recursive?: boolean } = {}) {
       const target = where(file);
 
-      if (recursive) {
-        needChangeAll(target);
-      } else {
-        need(canChange(target), 'change');
-      }
-
+      need(recursive ? canChangeAll(target) : canChange(target), 'change');
       fs.rmSync(target, { recursive });
+    },
+    // To the user's Trash, where they can bring it back. The trampoline moves it: this process may not write there.
+    trash(file: string) {
+      const target = where(file);
+      need(canChangeAll(target), 'change');
+
+      return callTrampoline('trash', { file: target });
     },
     rename(from: string, to: string) {
       const [source, destination] = [where(from), where(to)];
-      needChangeAll(source);
+      need(canChangeAll(source), 'change');
       need(canChange(destination), 'change');
 
       fs.renameSync(source, destination);

@@ -19,6 +19,8 @@ const shortcutCallbacks = new Set();
 const menuCallbacks = new Set();
 const systemCallbacks = new Set();
 const trayCallbacks = new Set();
+const trayClickCallbacks = new Set();
+const hearing = new Map();
 const jobs = new Map();
 const connections = new Map();
 const requestHandlers = new Map();
@@ -69,8 +71,10 @@ ipcRenderer.on('apargon-request', async (_event, server, request) => {
 ipcRenderer.on('apargon-menu', (_event, id) => menuCallbacks.forEach(callback => callback(id)));
 ipcRenderer.on('apargon-system', (_event, event) => systemCallbacks.forEach(callback => callback(event)));
 ipcRenderer.on('apargon-tray', (_event, id) => trayCallbacks.forEach(callback => callback(id)));
+ipcRenderer.on('apargon-tray-click', (_event, bounds) => trayClickCallbacks.forEach(callback => callback(bounds)));
+ipcRenderer.on('apargon-broadcast', (_event, id, broadcast) => hearing.get(id)?.(broadcast));
 
-contextBridge.exposeInMainWorld('papp', {
+const papp = {
   dir: ipcRenderer.sendSync('apargon-dir'),
   readFile: (file, options) => call('readFile', file, options),
   writeFile: (file, data) => call('writeFile', file, data),
@@ -82,6 +86,7 @@ contextBridge.exposeInMainWorld('papp', {
   mkdir: file => call('mkdir', file),
   rm: (file, options) => call('rm', file, options),
   rename: (from, to) => call('rename', from, to),
+  trash: file => call('trash', file),
   run: (program, args, options) => call('run', program, args, options),
   spawn: async (program, args, { cwd, onOutput } = {}) => {
     const id = crypto.randomUUID();
@@ -158,9 +163,46 @@ contextBridge.exposeInMainWorld('papp', {
   power: () => call('power'),
   onSystem: listener(systemCallbacks),
   notify: (title, body, options) => call('notify', title, body, options),
-  tray: (title, items) => call('tray', title, items),
+  tray: (title, items, options) => call('tray', title, items, options),
   onTray: listener(trayCallbacks),
+  onTrayClick: listener(trayClickCallbacks),
+  quit: () => call('quit'),
+  cursor: () => call('cursor'),
+  share: item => call('share', item),
+  // Refused without the tag, so it waits for the answer; the stop function it gives stops hearing that name.
+  hear: async (name, callback) => {
+    const id = crypto.randomUUID();
+    hearing.set(id, callback);
+    await call('hear', id, name).catch(err => {
+      hearing.delete(id);
+      throw err;
+    });
+
+    return () => {
+      hearing.delete(id);
+
+      return call('unhear', id);
+    };
+  },
   progress: value => call('progress', value),
+  window: change => call('window', change),
+  displays: () => call('displays'),
+  // The stop function lets this keep-awake go; a close or reload lets every one go.
+  keepAwake: async options => {
+    const id = await call('keepAwake', options);
+
+    return () => call('letSleep', id);
+  },
+  badge: count => call('badge', count),
+  attention: () => call('attention'),
+  shortcuts: keys => call('shortcuts', keys),
   closeWindow: () => call('closeWindow'),
   onShortcut: listener(shortcutCallbacks),
-});
+};
+
+// A papp-system page has no context isolation, and contextBridge works only isolated.
+if (process.contextIsolated) {
+  contextBridge.exposeInMainWorld('papp', papp);
+} else {
+  window.papp = papp;
+}

@@ -18,6 +18,7 @@ export type Calls = {
   listen: { args: { server: string; port: number | null }; result: string };
   // The button the user picked, or null.
   notify: { args: Notice; result: number | null };
+  trash: { args: { file: string }; result: null };
 };
 
 // What a page tells the trampoline, with no answer.
@@ -45,6 +46,8 @@ export type TrampolineEvents = {
   restart: undefined;
   refreshMenu: MenuState;
   trayItem: string;
+  // A click on the tray icon, of a page that asked for clicks: where the icon is on the screen.
+  trayClick: Rectangle;
   // A request the page's listener got; the page answers with respond.
   request: IncomingRequest;
 };

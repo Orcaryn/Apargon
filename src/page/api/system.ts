@@ -1,12 +1,22 @@
-import { powerMonitor, type NativeImage } from 'electron';
+import { app, nativeImage, powerMonitor, screen, type BrowserWindow, type NativeImage } from 'electron';
 import { linkHost, viewable } from '../../permissions/open.ts';
 import type { Permissions } from '../../permissions/tags.ts';
-import { callTrampoline, tellTrampoline, type Notice, type PageTray } from '../../shared/channel.ts';
+import { callTrampoline, tellTrampoline, type Notice, type PageTray, type TrayIcon } from '../../shared/channel.ts';
+import { cleanTrayItems } from '../../shared/menuItems.ts';
 import { showNotice } from '../../shared/notice.ts';
 import { PAGE_PLATFORM } from '../platform.ts';
 import type { Scope } from './scope.ts';
 
-export function systemApi(permissions: Permissions, { where, canSee, need }: Scope, toFront: () => void, pageIcon: () => NativeImage | null) {
+export function systemApi(permissions: Permissions, { where, canSee, need }: Scope, toFront: () => void, pageIcon: () => NativeImage | null, win: BrowserWindow) {
+  // What this window hears, by the id its page gave, each with what stops it: a reload stops them all.
+  const hearing = new Map<string, () => void>();
+
+  const needUse = (name: Permissions['use'][number], what: string) => {
+    if (!permissions.use.includes(name)) {
+      throw new Error(`Apargon: this page may not ${what}. Ask for it with <meta name="papp-use" content="${name}">.`);
+    }
+  };
+
   return {
     // The trampoline shows the dialog and writes: this process may not write where the user picks.
     saveAll(files: Record<string, string | Uint8Array>) {
@@ -32,20 +42,58 @@ export function systemApi(permissions: Permissions, { where, canSee, need }: Sco
     },
     // The button the user picked, or null when they click the notification itself or close it.
     notify(title: string, body = '', { buttons = [] }: { buttons?: string[] } = {}) {
-      if (!permissions.use.includes('notifications')) {
-        throw new Error('Apargon: this page may not show notifications. Ask for it with <meta name="papp-use" content="notifications">.');
-      }
+      needUse('notifications', 'show notifications');
 
       const notice: Notice = { title: String(title), body: String(body), buttons: buttons.slice(0, 3).map(String), icon: pageIcon()?.toPNG().toString('base64') ?? null };
 
       return PAGE_PLATFORM.notifiesHere ? showNotice(notice, toFront) : callTrampoline('notify', notice);
     },
-    tray(title: PageTray['title'], items: PageTray['items'] = []) {
-      if (!Array.isArray(items) || !items.every(item => typeof item === 'object' && item !== null)) {
-        throw new Error('Apargon: tray takes a title and a list of items, each { label, id } or { separator: true }.');
+    // icon: PNG or JPEG bytes, or a data: URL of one; null is Apargon's. click: a click on the icon goes to papp.onTrayClick, and a right-click opens the menu.
+    tray(title: PageTray['title'], items: unknown = [], { icon = null, click = false }: { icon?: string | Uint8Array | null; click?: boolean } = {}) {
+      tellTrampoline('tray', { title: title === null ? null : String(title).slice(0, 24), items: cleanTrayItems(items), icon: icon === null ? null : trayIcon(icon), click });
+    },
+    // The whole page, every window: as Quit in its tray menu.
+    quit() {
+      app.quit();
+    },
+    // Where the pointer is on the screen, in the points of papp.displays.
+    cursor() {
+      needUse('cursor', 'see where the mouse is');
+
+      return screen.getCursorScreenPoint();
+    },
+    // The user picks the app in the system's menu. Only an http(s) link: a file: one would hand over a file the page may not see.
+    share({ text, url, files = [] }: { text?: string; url?: string; files?: string[] } = {}) {
+      needUse('share', 'open the share menu');
+
+      if (!PAGE_PLATFORM.share) {
+        throw new Error('Apargon: the share menu is on macOS only.');
+      } else if (url !== undefined && !/^https?:\/\//i.test(url)) {
+        throw new Error('Apargon: share takes an http(s) link as url.');
       }
 
-      tellTrampoline('tray', { title: title === null ? null : String(title).slice(0, 24), items: items.map(item => ('separator' in item ? { separator: true } : { label: String(item.label), id: String(item.id) })) });
+      const filePaths = files.map(file => {
+        const target = where(file);
+        need(canSee(target), 'see');
+
+        return target;
+      });
+
+      PAGE_PLATFORM.share(win, { texts: text === undefined ? [] : [text], urls: url === undefined ? [] : [url], filePaths });
+    },
+    // A name another app announces, such as com.spotify.client.PlaybackStateChanged: each one heard goes to the page with what came along.
+    hear(id: string, name: string) {
+      needUse('broadcasts', 'hear other apps');
+
+      if (!PAGE_PLATFORM.hear) {
+        throw new Error('Apargon: hearing other apps is on macOS only.');
+      }
+
+      hearing.set(id, PAGE_PLATFORM.hear(name, (info, sender) => win.webContents.send('apargon-broadcast', id, { name, sender, info })));
+    },
+    unhear(id: string) {
+      hearing.get(id)?.();
+      hearing.delete(id);
     },
     // The trampoline keeps them where no page's process can read. Null when there is none.
     getSecret(name: string) {
@@ -70,7 +118,26 @@ export function systemApi(permissions: Permissions, { where, canSee, need }: Sco
     power() {
       return { idleSeconds: powerMonitor.getSystemIdleTime(), onBattery: powerMonitor.isOnBatteryPower() };
     },
+    reset() {
+      hearing.forEach(stop => stop());
+      hearing.clear();
+    },
   };
+}
+
+// Decoded here, in the sandbox, and sent as pixels: 32 high, as a menu bar shows it on a sharp screen, at most 64 wide.
+function trayIcon(icon: string | Uint8Array): TrayIcon {
+  const image = typeof icon === 'string' ? nativeImage.createFromDataURL(icon) : nativeImage.createFromBuffer(Buffer.from(icon));
+
+  if (image.isEmpty()) {
+    throw new Error('Apargon: a tray icon is PNG or JPEG bytes, or a data: URL of one.');
+  }
+
+  const size = image.getSize();
+  const scale = Math.min(32 / size.height, 64 / size.width);
+  const [width, height] = [size.width, size.height].map(side => Math.max(1, Math.round(side * scale)));
+
+  return { width, height, pixels: image.resize({ width, height, quality: 'best' }).toBitmap().toString('base64') };
 }
 
 function checkSecretName(name: string) {

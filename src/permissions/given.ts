@@ -1,21 +1,40 @@
+import fs from 'fs';
 import path from 'path';
 import { realPath } from './paths.ts';
 import { checkPermissions, type Permissions } from './tags.ts';
 
-// A file or folder the user picked for the page, kept until its approval is taken back.
+// A file or folder picked by the user, remembered until approval is taken back.
 export type GivenFile = { path: string; write: boolean };
 
-// The picks as if the tags named them: the sandbox, the checks and the page's menu follow from one rule. A pick must pass what a tag must.
-// One that now goes through a link is dropped: the sandbox would grant what it leads to, which a program could have changed.
-export function withGiven(permissions: Permissions, given: GivenFile[], page: string): Permissions {
-  // resolve drops a folder pick's trailing separator, as the real path does.
-  const kept = given.filter(file => realPath(file.path) === path.resolve(file.path));
-  const merged = {
+export function withGiven(permissions: Permissions, picks: GivenFile[], page: string): Permissions {
+  // Validate every saved pick before checking availability: a missing path does not excuse invalid policy.
+  checkPermissions({
     ...permissions,
-    read: [...permissions.read, ...kept.filter(file => !file.write).map(file => file.path)],
-    write: [...permissions.write, ...kept.filter(file => file.write).map(file => file.path)],
-  };
-  checkPermissions(merged, page);
+    read: [...permissions.read, ...picks.filter(pick => !pick.write).map(pick => pick.path)],
+    write: [...permissions.write, ...picks.filter(pick => pick.write).map(pick => pick.path)],
+  }, page);
 
-  return merged;
+  const availablePicks = picks.filter(pick => {
+    try {
+      const pickedPath = path.resolve(pick.path);
+      const stats = fs.lstatSync(pickedPath, { throwIfNoEntry: false });
+
+      // Keep the original kind and real path; neither a link nor a replacement directory widens a grant.
+      return !!stats && !stats.isSymbolicLink() && stats.isDirectory() === pick.path.endsWith(path.sep) && realPath(pickedPath) === pickedPath;
+    } catch (err) {
+      const { code } = err as NodeJS.ErrnoException;
+
+      if (code && ['ENOENT', 'ENOTDIR', 'ELOOP', 'EPERM', 'EACCES'].includes(code)) {
+        return false;
+      }
+
+      throw err;
+    }
+  });
+
+  return {
+    ...permissions,
+    read: [...permissions.read, ...availablePicks.filter(pick => !pick.write).map(pick => pick.path)],
+    write: [...permissions.write, ...availablePicks.filter(pick => pick.write).map(pick => pick.path)],
+  };
 }

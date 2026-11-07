@@ -32,16 +32,25 @@
     result.secrets_hidden = err.code === 'EPERM';
   }
 
+  // A papp-system page sees all: the home folder too, which any other page's process is kept out of.
+  result.system_reads_home = fs.readdirSync(os.homedir()).includes('.ssh');
+
   result.child_process = execSync('echo ok').toString().trim() === 'ok';
 
   result.storage_apart = localStorage.getItem('apargon-selftest') === null;
 
   const data = path.join(os.homedir(), process.platform === 'darwin' ? 'Library/Application Support/apargon' : '.config/apargon');
-  try {
-    fs.appendFileSync(path.join(data, 'grants.json'), '');
-    result.grants_protected = false;
-  } catch (err) {
-    result.grants_protected = err.code === refusal || err.code;
+  const recordName = require('crypto').createHash('sha256').update(fs.realpathSync.native(path.join(here, 'selftest-system.papp'))).digest('hex') + '.json';
+  const record = path.join(data, 'pages-saved', recordName);
+  if (!fs.existsSync(record)) {
+    result.grants_protected = 'the actual approval record is missing';
+  } else {
+    try {
+      fs.appendFileSync(record, '');
+      result.grants_protected = false;
+    } catch (err) {
+      result.grants_protected = err.code === refusal || err.code;
+    }
   }
 
   // Only its own storage: another page's holds settings that page trusts, like its window. Partitions holds this page's own, so it exists.

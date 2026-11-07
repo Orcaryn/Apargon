@@ -79,6 +79,13 @@
     await papp.trash('scratch.trash');
     result.trash_granted = !(await papp.exists('scratch.trash'));
     result.trash_refused = await refused(() => papp.trash('selftest-system.papp')) && await refused(() => papp.trash('../../../package.json'));
+    const fixtures = JSON.parse(await papp.readFile('results/home-probe.json'));
+    if (fixtures.symlinks) {
+      await papp.trash('scratch-link');
+      result.trash_symlink = !(await papp.readdir('.')).includes('scratch-link') && await papp.readFile('scratch-target.txt') === 'target kept';
+      await papp.trash('scratch-dangling');
+      result.trash_dangling = !(await papp.readdir('.')).includes('scratch-dangling');
+    }
     result.window_shape_refused = await refused(() => papp.window({ shape: [{ x: 0, y: 0, width: 100, height: 100 }] }));
     result.options_refused = await refused(() => papp.readFile('scratch.txt', { flag: 'w' })) && await papp.readFile('scratch.txt') === 'hi';
 
@@ -129,11 +136,22 @@
     result.append_refused = await refused(() => papp.appendFile('own.txt', 'x')) && await refused(() => papp.appendFile('selftest-system.papp', 'x'));
     await papp.copyFile('subfolder/note.txt', 'scratch-copy.txt');
     result.copy = await papp.readFile('scratch-copy.txt') === note;
+    await papp.copyFile('scratch-copy.txt', './scratch-copy.txt');
+    result.copy_onto_itself = await papp.readFile('scratch-copy.txt') === note;
     await papp.rm('scratch-copy.txt');
     result.copy_refused = await refused(() => papp.copyFile('../../../package.json', 'scratch-copy.txt')) && await refused(() => papp.copyFile('subfolder/note.txt', 'own.txt')) && await refused(() => papp.copyFile('selftest.papp', 'scratch.papp'));
     await papp.rm('scratch.txt');
     const pdf = await papp.pdf();
     result.pdf_rendered = new TextDecoder().decode(pdf.slice(0, 5)) === '%PDF-';
+    // Chromium's own file loader ignores Range, so Apargon answers it: media seeks by range.
+    const part = await fetch('subfolder/note.txt', { headers: { range: 'bytes=2-5' } });
+    result.range_served = (part.status === 206 && await part.text() === note.slice(2, 6)) || { status: part.status };
+    const video = document.createElement('video');
+    video.src = 'subfolder/clip.mp4';
+    await new Promise((done) => { video.onloadedmetadata = done; video.onerror = done; });
+    video.currentTime = video.duration - 2;
+    await new Promise((done) => { video.onseeked = done; video.onerror = done; });
+    result.media_seeks = video.currentTime >= 17 || { error: video.error?.message, at: video.currentTime };
     result.menu_set = (await papp.menu([{ label: 'Selftest', submenu: [{ label: 'Run', id: 'run', keys: 'CmdOrCtrl+Shift+9' }, { separator: true }, { label: 'Role smuggled', id: 'quit', role: 'quit' }] }])) === undefined;
     result.tray_set = (await papp.tray('Selftest', [{ label: 'Run', id: 'run' }, { separator: true }, { label: 'Role smuggled', id: 'quit', role: 'quit' }])) === undefined && (await papp.tray(null)) === undefined;
     result.tray_refused = await refused(() => papp.tray('x', 'not a list')) && await refused(() => papp.tray('x', [null]));
@@ -170,6 +188,13 @@
     await papp.setSecret('gone', 'x');
     await papp.deleteSecret('gone');
     result.secret_roundtrip = await papp.getSecret('token') === 'kept by selftest.papp' && await papp.getSecret('gone') === null && await papp.getSecret('never') === null;
+    const objectNames = ['constructor', 'toString', '__proto__'];
+    await Promise.all(objectNames.map((name) => papp.deleteSecret(name)));
+    const absent = await Promise.all(objectNames.map((name) => papp.getSecret(name)));
+    await Promise.all(objectNames.map((name) => papp.setSecret(name, `secret ${name}`)));
+    const stored = await Promise.all(objectNames.map((name) => papp.getSecret(name)));
+    await Promise.all(objectNames.map((name) => papp.deleteSecret(name)));
+    result.secret_object_names = absent.every((value) => value === null) && stored.every((value, i) => value === `secret ${objectNames[i]}`);
     // The trampoline's replies, on each OS's pipe: a 4 MB one arrives whole, and answers to calls made at once each reach their own call.
     const large = 'ü✓'.repeat(1024 * 1024) + 'end';
     await papp.setSecret('large', large);
@@ -185,6 +210,22 @@
     result.outside_read_refused = await refused(() => papp.readFile('../../../package.json'));
     result.outside_write_refused = await refused(() => papp.writeFile('../outside.txt', 'x'));
     result.home_read_refused = await refused(() => papp.readdir('~'));
+    // Past Apargon's own check: a Worker's file: read skips the page's handlers. fixtures.ts supplies a real existing SSH directory on every OS, independently of the checkout's location.
+    const workerRead = (url) => new Promise((done) => {
+      const worker = new Worker('worker.js');
+      worker.onmessage = (event) => { worker.terminate(); done(event.data); };
+      worker.onerror = (event) => { worker.terminate(); done({ error: event.message }); };
+      worker.postMessage(url);
+    });
+    const { sshURL } = fixtures;
+    const probe = new URL(sshURL);
+    if (probe.protocol !== 'file:' || probe.host || !decodeURIComponent(probe.pathname).endsWith('/.ssh/')) {
+      throw new Error('Invalid home-fence fixture; run node test/selftest/fixtures.ts first.');
+    }
+    const ownRead = await workerRead(new URL('subfolder/note.txt', location.href).href);
+    const homeRead = await workerRead(probe.href);
+    // Unfenced, the known existing directory answers with its listing. The control proves the Worker can read files.
+    result.worker_home_refused = (ownRead.status === 200 && homeRead.status !== 200) || { sshURL, ownRead, homeRead };
     result.hidden_write_refused = await refused(() => papp.writeFile('.hidden', 'x'));
     result.run_refused = await refused(() => papp.run('ls'));
     result.listen_refused = await refused(() => papp.listen({}, () => ({ body: 'x' })));

@@ -12,6 +12,7 @@ Keys and logins are files like any other. A tag that names one, the popup names:
 
 - The OS blocks all network. Only Apargon's proxy, declared `localhost` ports and declared socket files get through.
 - The proxy only goes to declared hosts.
+- On macOS and Linux the OS keeps the page's process out of every home folder and plugged-in disk, except what the tags name. System files stay readable. Its programs get an empty home folder of the page's own.
 - With `papp-listen`, the trampoline listens and passes each request to the page as data. The page's process never listens.
 - A `papp-system` page runs any program, with all your variables. Trust it like a script.
 - Windows: only the proxy gets through. Declared `localhost` ports go through it too. `papp-socket` is refused. A page's programs can send data out through Windows itself, see "Not enforced".
@@ -21,9 +22,10 @@ Keys and logins are files like any other. A tag that names one, the popup names:
 
 - **Two processes.** The trampoline has network. The page runs in an OS sandbox.
 - **Offline check.** The page must prove it is offline before its window opens. No flag skips this.
-- **Apargon checks reads, not the OS.** Chromium's own sandbox cannot run inside `sandbox-exec`, `bwrap` or MXC. The OS only enforces network and writes.
+- **The OS fences the home folders; Apargon checks the rest.** Chromium's own sandbox cannot run inside `sandbox-exec`, `bwrap` or MXC. So the OS keeps the page's process out of every home folder and plugged-in disk, and puts back only the `.papp` file, what its tags name, its own storage, fonts and the desktop's settings (`HOME_FOLDERS` and `HOME_READS` in `src/permissions/paths.ts`). System files stay readable: they are the same on every computer. Apargon's own check covers them, and the names of the folders above a wildcard. A `papp-system` page is not fenced.
+- **Programs get an isolated home** in the page's storage. Their approved executable itself is granted, by its real path; additional libraries, scripts and user settings need their own read tags. A read tag does not change HOME or make a tool discover those settings: select them explicitly with the tool's arguments or a declared configuration variable, such as `GIT_CONFIG_GLOBAL` for Git. A tool may otherwise use defaults, not fail.
 - **Tags are read from the file on disk**, before the page runs. Only the part before the first `<script`, `<body` or `</head` counts. An unknown tag, a bad value or an invisible character refuses the page.
-- **An approval = a path + the exact popup lines.** A downloaded page is also tied to its content. If the content changes, Apargon asks again.
+- **An approval = a path + the exact popup lines.** A downloaded page is also tied to the content of its `.papp` file. If that changes, Apargon asks again. The window renders the same bytes Apargon checked.
 - **No page can write Apargon's data** (`pages-saved/`, one file per page: its approval, links, picks, window and content hash). The page's file API can't read it either.
 - **A pick is kept** in the page's file in `pages-saved/`, and granted as if a tag named it: the sandbox, the checks and the page's menu follow the same rule. The trampoline shows the dialog, which says what the page gets, and refuses a link, Apargon's data, and for write a hidden file, a page or a launch folder. A pick then passes every check a tag does, when picked and again each time the sandbox is built: no `"` in a written path, no line break or invisible character, on Linux not `/tmp` or `/var/tmp` itself, a folder that holds one, or anything in `/run`, and no write over a program the page runs. A pick that widens the sandbox restarts the page. Taking back the approval forgets the picks.
 - **Secrets** (`papp.getSecret`, `papp.setSecret`, `papp.deleteSecret`) live in `apargon-secrets` beside Apargon's data, one file per page, each value sealed with the OS's store for this user (`safeStorage`). Every sandbox hides the folder, so no page's process, `papp-system` included, reads another page's secrets or its own file. The trampoline answers only the page that asked, by the pipe it asked on. Taking back the approval deletes them.
@@ -41,6 +43,7 @@ Keys and logins are files like any other. A tag that names one, the popup names:
 - Sandbox: Seatbelt (`sandbox-exec`). The profile starts from `(allow default)`, because the GUI needs it.
 - Offline check: binding a loopback port must fail with `EPERM`.
 - Writes: limited by pattern.
+- Reads: `/Users`, `/Volumes`, `/private/tmp`, `/private/var/tmp` and this user's temp and cache folders under `/private/var/folders` are denied. Then the page's paths are allowed back by pattern, the folders on the way to them by exact name and for metadata only (so `ls ~` fails), and the page gets a temp folder of its own. The keychain is not put back: the process runs without `safeStorage`.
 - The secrets folder is denied.
 - Blocked: `nsurlsessiond`, `trustd`, WebKit services. These fetch from outside the sandbox.
 - Blocked: opening apps, sending Apple Events, `defaults write`.
@@ -51,6 +54,7 @@ Keys and logins are files like any other. A tag that names one, the popup names:
 - Sandbox: `bwrap --unshare-net --unshare-pid --unshare-user --disable-userns --new-session --die-with-parent`.
 - Offline check: the network has only `lo` and is not the trampoline's.
 - Writes: limited by path. A named file or folder is granted itself, a wildcard's folder whole. A named file can be changed in place, not deleted or renamed.
+- Reads: `/home`, `/root`, `/media` and `/mnt` are emptied. Then the page's folder, or the page alone where it has none, each `papp-read` path (a wildcard's folder whole, as for writes), the app, fonts, the X11 cookie and the desktop's settings are bound back. Apargon's data gets an empty folder, with only the page's own storage in it.
 - `/run`, `/tmp` and `/var/tmp` are emptied. Their socket files bypass `--unshare-net`: D-Bus, DNS, sound, tmux, Docker. The secrets folder is emptied too.
 - Apargon puts back only the display, the page's folders and sockets, sound with `papp-use sound` or `microphone`, the print server's socket with `papp-use print`, and the udev database (`/run/udev`, read-only) and the device files of each declared kind with `papp-use usb`, `serial`, `hid` or `midi`. For `midi` that is the sequencer, the MIDI ports and each sound card's controls, not its recording and playback files.
 - A tag path, or the page's own folder, in or holding `/tmp`, `/var/tmp` or `/run` is refused: a socket file bound into the emptied folder would reach its program.
@@ -71,7 +75,7 @@ Keys and logins are files like any other. A tag that names one, the popup names:
 
 ### Every OS
 
-- The OS lets a page write only to: its `papp-write` paths, the temp folder, its own Electron data, and on macOS `/dev/null` and the like, plus serial ports with `papp-use serial`.
+- The OS lets a page write only to: its `papp-write` paths, its temp folder, its own Electron data, and on macOS `/dev/null` and the like, plus serial ports with `papp-use serial`.
 - Keys and logins: `SECRETS` in `src/permissions/paths.ts`, plus each OS's list, is a popup list only. A tag that names a path in one (`~/.ssh/config`) is yellow and says what it holds. `*` and `**` never match a hidden name, so `~/**` does not reach them; `~/` as a folder does, on the OSes that grant folders whole.
 - A `papp-read` or `papp-write` path that is a link is refused: the sandbox would grant what it leads to, which the page could change between opens.
 - A folder in a tag ends in `/`, anything else is a file. Apargon refuses a tag that does not match the disk.
@@ -98,17 +102,20 @@ Keys and logins are files like any other. A tag that names one, the popup names:
 ### Reading
 
 - A page that exploits Chromium can read:
-  - macOS: every file, keys and logins included.
-  - Linux: the same, except `/run`, `/tmp` and `/var/tmp`.
+  - macOS: every file outside `/Users`, `/Volumes`, `/tmp`, `/var/tmp` and this user's temp folders: the system, `/opt`, Homebrew.
+  - Linux: every file outside `/home`, `/root`, `/media` and `/mnt`, except `/run`, `/tmp` and `/var/tmp`. A wildcard's folder is bound back whole, hidden files included.
   - Windows: only the granted folders.
+- Inside the home folder it reads the page's folders, its own storage, fonts, on macOS the keyboard layouts and input methods the user added, and on Linux the X11 cookie and the desktop's settings: `HOME_READS` in `src/permissions/paths.ts`.
+- A home folder outside the usual ones is fenced by its real path. Another user's home there is not.
 - Listing a folder above a wildcard shows its names.
-- A `papp-system` page reads the same, without an exploit.
+- A `papp-system` page reads every file, without an exploit.
 
 ### Writing
 
 - Linux and Windows grant a wildcard's folder, or a named folder, whole. For `~/notes/*.md`, a program can change any file in `~/notes`, hidden files and pages included.
 - A writable folder can hold files other tools run later, like `package.json` scripts or `.git/hooks`. The popup doesn't show these as red.
 - A synced folder sends what the page writes off the machine.
+- Linux: trashing a directly granted file removes its outside pathname, but an existing bind mount can keep it readable and writable inside the running sandbox, including through the file API. Close the process to release that mount. A file inside a granted folder does not have this separate-file mount behavior.
 
 ### Saving (`papp.save`, `papp.saveAll`)
 
@@ -125,10 +132,13 @@ Keys and logins are files like any other. A tag that names one, the popup names:
 - Any page can open the dialog, with no tag, again and again. The dialog names the page and says what it gets.
 - A page with `papp-net` can send what you pick. The pick dialog does not say so; the popup did, when the page asked for the host.
 - A folder you pick with write is granted whole on Linux and Windows, as a `papp-write` folder is.
+- Unavailable picks stay remembered but grant nothing at startup, including missing paths, broken or looping links, and a file replaced by a directory. They become eligible again if the original kind and real path return; policy validation still applies.
+- Taking back a saved approval does not remove filesystem access from a process already running. Close every instance to remove its current grants. There is no per-pick removal or downgrade UI yet.
 
 ### Secrets (`papp.getSecret`, `papp.setSecret`, `papp.deleteSecret`)
 
 - The page, and the programs it runs, see a secret while it runs. A page with `papp-net` can send it.
+- On macOS the page's process cannot reach the keychain, so Chromium keeps that page's cookies unencrypted in its storage. The sandbox denies the keychain's files on purpose: with them an exploit could copy the keychain itself.
 - On Linux without a keyring, Electron seals them with a fixed key. They are then only obscured on disk.
 - A `papp-system` page cannot read the folder, but could ask the trampoline for its own secrets by writing the request line itself: those are its own.
 
@@ -142,9 +152,9 @@ Keys and logins are files like any other. A tag that names one, the popup names:
 ### Programs (`papp-run`)
 
 - A program the page ships (`./bin/tool`) is refused if a `papp-write` tag covers it, by its real path. The page's own folder is read-only otherwise, so the program is what the page came with.
-- They can read every file but keys and logins. Windows: the granted folders, each program's own folder, and what every sandbox may read, like `C:\Windows` and Program Files.
+- They read what the page's process reads, with an empty home folder of their own in the page's storage. `ssh` asks the OS for the home folder and finds no keys there. Windows: the granted folders, each program's own folder, and what every sandbox may read, like `C:\Windows` and Program Files.
 - They take any arguments, like `git -c core.sshCommand=…`.
-- They can read every page's storage in `pages/`. They change only their own page's. They can also read Apargon's other files, like the approvals and where each page's window was, which name the pages you opened.
+- They read and change only their own page's storage. Apargon's other files, like other pages' storage and the approvals, are hidden from them. A `papp-system` page's programs can read them all.
 - Windows: stopping a program (`kill`, a timeout, a reload) stops only that program. Programs it started keep running in the sandbox until they end. If they share its output, `papp.run` waits for them.
 - macOS: programs can't open terminal devices (`/dev/ttys…`). Tools that need a pseudo-terminal likely fail. Untested.
 - macOS: they can probably use the camera, microphone or screen once Apargon has that access. Untested.
@@ -152,7 +162,7 @@ Keys and logins are files like any other. A tag that names one, the popup names:
 
 ### Keys and logins
 
-- Nothing hides them. A `papp-system` page, or a program a page runs, reads them like any file on macOS and Linux. That is what `papp-system` is for.
+- A `papp-system` page reads them like any file on macOS and Linux. That is what `papp-system` is for. Any other page, or a program it runs, sees one only if a tag names it, which the popup shows in red.
 - The popup list is fixed. A key in `~/keys/` or a `.env` file gets no colour of its own.
 
 ### Network
@@ -164,7 +174,7 @@ Keys and logins are files like any other. A tag that names one, the popup names:
 - Deleting `egress.log` while it runs loses later entries silently.
 - A page with `papp-net` runs with Chromium's web security off, so it reads its declared hosts' answers without CORS. A frame from a declared host still cannot reach the page or `papp` (tested 2026-11-05 on macOS).
 - Ways out for a program, or a page that exploits Chromium:
-  - macOS: messages to system services (the GUI needs them).
+  - macOS: messages to system services (the GUI needs them). Untested whether one, like Spotlight (`mdfind`), answers with names or contents of files the fence hides.
   - Linux: a socket file elsewhere (`tmux -S ~/sock`), `vsock` in a VM, the X11 display to type into other windows.
 
 ### Windows
@@ -231,7 +241,7 @@ Keys and logins are files like any other. A tag that names one, the popup names:
 - `git clone`, `curl`, USB sticks, and Firefox on Linux leave no download mark.
 - Linux needs `getfattr` to read the mark. The `.deb` doesn't require it. Without it, every page counts as made here.
 - A page with no mark: no content check, and no popup if it has no tags.
-- A page with `papp-write` can change `.js` and `.css` that an approved page loads. Keep approved pages where only you write.
+- Only the `.papp` file is tied to its content. The files it loads, such as `.js`, `.css` and workers, are not: replacing one changes what an approved page runs, without asking. A page can run any file it reads, so no check on those could pin what it does. Keep approved pages where only you write.
 
 ### Full-Node pages
 
@@ -266,10 +276,12 @@ Apargon is not a VM. For a hard "nothing leaves" guarantee, use a VM with no net
 
 | Platform      | Last verified                                                                                                                                                                                                                                                                                               |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| macOS         | 2026-11-06, `pnpm test` on `8f57971` with the staged `@electron/remote` removal and the new window, tray and system calls: 162 app checks and 227 Node tests. `papp.trash` landed the file in `~/.Trash`                                                                                                    |
+| macOS         | 2026-11-06, `pnpm test` on `84d5576` with the staged home fence (reads in home and on disks denied, programs' fresh home, per-page temp folder): 168 app checks and 233 Node tests. The share menu needed the icon cache put back; `watch_folder` failed once on timing and passed on three reruns          |
 | Linux         | 2026-11-06, locally built `.deb` (`8f57971` plus the staged `@electron/remote` removal and the new window, tray and system calls) on the Ubuntu 24.04 VPS: 142 checks, the refusal test and its control, and the Node tests. `papp.trash` landed the file in `~/.local/share/Trash`                         |
 | Linux desktop | not yet                                                                                                                                                                                                                                                                                                     |
 | Windows       | 2026-11-06, Windows 11 on arm64 (GitHub `windows-11-arm`, run 42192703341 of the spike repo, `8f57971` plus the staged `@electron/remote` removal and the new window, tray and system calls): 125 checks from source with no leak in the packet capture, and 125 in the installed arm64 app. x64 not tested |
+
+2026-11-06 review fixes: regression checks were added for symlink entries, Save suggestions, stale picks, opening connections/listeners, missing dependencies and secret names. Tests have not been run for these fixes, at the user's request; the results above describe the earlier code, not these changes. Windows stream draining and executable put-backs also need platform runtime verification.
 
 Not tested: the NAT64 refusal, the proxy refusing this Mac's own LAN address, and two pages reaching each other's `localhost` ports.
 

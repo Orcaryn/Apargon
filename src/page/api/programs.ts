@@ -1,6 +1,8 @@
-import type { BrowserWindow } from 'electron';
+import { app, type BrowserWindow } from 'electron';
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import { once } from 'events';
+import fs from 'fs';
+import path from 'path';
 import { PROGRAM_ENV } from '../../permissions/env.ts';
 import type { Permissions } from '../../permissions/tags.ts';
 import { REPLY_FD, REQUEST_FD, TRAMPOLINE_NETWORK_FD } from '../../shared/channel.ts';
@@ -12,6 +14,12 @@ export function programApi(permissions: Permissions, { where, canList, need }: S
   const runs = new Set<ChildProcessWithoutNullStreams>();
   // By name, as Windows finds Path for PATH.
   const env = Object.fromEntries([...PROGRAM_ENV, ...permissions.env].filter(name => name in process.env).map(name => [name, process.env[name]]));
+
+  // In the .papp file's storage, which it may write: a tool's settings or cache lands there, not in the user's home, which the OS keeps the program out of.
+  if (PAGE_PLATFORM.freshProgramHome && !permissions.system) {
+    env.HOME = path.join(app.getPath('userData'), 'home');
+    fs.mkdirSync(env.HOME, { recursive: true });
+  }
 
   const startProgram = (name: string, args: string[], cwd = '.') => {
     if (!Object.hasOwn(permissions.run, name)) {

@@ -1,7 +1,7 @@
 import { app, dialog, shell } from 'electron';
 import fs from 'fs';
 import { pageAccess } from '../../page/api/access.ts';
-import { realPath } from '../../permissions/paths.ts';
+import { realEntry } from '../../permissions/paths.ts';
 import type { Permissions } from '../../permissions/tags.ts';
 import type { PageTray } from '../../shared/channel.ts';
 import { EGRESS_LOG } from '../../shared/data.ts';
@@ -87,25 +87,16 @@ export function pageHandlers({ page, permissions, listeners, tell, setTray, open
     openFile,
     installSkill: () => offerSkill('The papp skill for coding agents', null),
     respond: ({ id, status, headers, body }) => listeners.respond(id, status, headers, body),
-    unlisten: listeners.unlisten,
   };
   const calls: CallHandlers = {
     saveAll: ({ files }) => saveFiles(files),
     save: ({ file, data }) => saveFile(file, data),
-    pick: async ({ folder, multiple, write }) => {
-      const { paths, rebuild } = await pickFiles(page, permissions, { folder, multiple, write });
-
-      // After the answer, which goes out once this returns: the page takes the paths, then quits.
-      if (rebuild) {
-        setImmediate(restart);
-      }
-
-      return paths;
-    },
+    pick: options => pickFiles(page, permissions, options, restart),
     given: () => records.get(page).given ?? [],
     getSecret: ({ name }) => readSecret(page, name),
     setSecret: ({ name, value }) => writeSecret(page, name, value).then(() => null),
     listen: ({ server, port }) => listeners.listen(server, port),
+    unlisten: ({ server }) => listeners.unlisten(server),
     notify: ({ title, body, buttons, icon }) => {
       if (!permissions.use.includes('notifications')) {
         throw new Error('Apargon: this page may not show notifications. Ask for it with <meta name="papp-use" content="notifications">.');
@@ -116,7 +107,7 @@ export function pageHandlers({ page, permissions, listeners, tell, setTray, open
     },
     // Checked again here, as the page's process did: a papp-system page could name a file it may not change.
     trash: async ({ file }) => {
-      const target = realPath(file);
+      const target = realEntry(file);
 
       if (!access.canChangeAll(target)) {
         throw new Error('Apargon: this page may not change that. Ask for it with <meta name="papp-write" content="...">.');

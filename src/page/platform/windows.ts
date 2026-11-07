@@ -29,6 +29,8 @@ export const windows: PagePlatform = {
   processGroups: false,
   // A child gets only the handles libuv hands it: its stdio.
   programsInheritFds: false,
+  // A program's home is USERPROFILE, where MXC grants nothing.
+  freshProgramHome: false,
 };
 
 // TEST-NET-1: no network routes it, so outside the sandbox the connection hangs or is unreachable, never refused by the firewall.

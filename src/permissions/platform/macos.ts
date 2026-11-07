@@ -13,7 +13,10 @@ export const macos: PermissionsPlatform = {
   launchFolder: 'Library',
   writesWholeFolders: false,
   programsSendOut: false,
-  readsAll: true,
+  homeFolders: ['/Users', '/Volumes'],
+  // Fonts, and the keyboard layouts and input methods the user added: typing goes wrong without them.
+  homeReads: ['Library/Fonts', 'Library/Keyboard Layouts', 'Library/Input Methods'],
+  systemReadsAll: true,
   soundServerRecords: false,
   programFolders: ['/opt/homebrew/bin', '/usr/local/bin'],
   programExtensions: [''],

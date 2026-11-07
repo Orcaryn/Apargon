@@ -1,5 +1,6 @@
 import { app, nativeImage, powerMonitor, screen, type BrowserWindow, type NativeImage } from 'electron';
 import { linkHost, viewable } from '../../permissions/open.ts';
+import { absolutePath } from '../../permissions/paths.ts';
 import type { Permissions } from '../../permissions/tags.ts';
 import { callTrampoline, tellTrampoline, type Notice, type PageTray, type TrayIcon } from '../../shared/channel.ts';
 import { cleanTrayItems } from '../../shared/menuItems.ts';
@@ -7,7 +8,7 @@ import { showNotice } from '../../shared/notice.ts';
 import { PAGE_PLATFORM } from '../platform.ts';
 import type { Scope } from './scope.ts';
 
-export function systemApi(permissions: Permissions, { where, canSee, need }: Scope, toFront: () => void, pageIcon: () => NativeImage | null, win: BrowserWindow) {
+export function systemApi(dir: string, permissions: Permissions, { where, canSee, need }: Scope, toFront: () => void, pageIcon: () => NativeImage | null, win: BrowserWindow) {
   // What this window hears, by the id its page gave, each with what stops it: a reload stops them all.
   const hearing = new Map<string, () => void>();
 
@@ -22,9 +23,9 @@ export function systemApi(permissions: Permissions, { where, canSee, need }: Sco
     saveAll(files: Record<string, string | Uint8Array>) {
       return callTrampoline('saveAll', { files: Object.entries(files).map(([name, data]) => ({ name, data: Buffer.from(data).toString('base64') })) });
     },
-    // The path saved to, or null when the user cancels.
+    // A suggestion is only a name: no filesystem lookup before the Save dialog opens.
     save(file: string, data: string | Uint8Array) {
-      return callTrampoline('save', { file: where(file), data: Buffer.from(data).toString('base64') });
+      return callTrampoline('save', { file: absolutePath(file, dir), data: Buffer.from(data).toString('base64') });
     },
     open(target: string) {
       if (linkHost(target)) {

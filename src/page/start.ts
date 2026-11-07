@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { pathToFileURL } from 'url';
 import { describe } from '../permissions/describe.ts';
+import { isInside } from '../permissions/patterns.ts';
 import { shortcut, windowSettings, type WindowSettings } from '../permissions/tags.ts';
 import { onTrampolineEvent, relay, tellTrampoline, type PageConfig } from '../shared/channel.ts';
 import { APP_ROOT, pageStorage } from '../shared/data.ts';
@@ -247,7 +248,12 @@ function liveReload(page: string, access: ReturnType<typeof pageAccess>, reload:
     }
 
     loaded.add(file);
-    const folder = path.dirname(file);
+    let folder = path.dirname(file);
+
+    // A dependency may be missing with its parent: watch the nearest existing ancestor.
+    while (!fs.existsSync(folder) && path.dirname(folder) !== folder) {
+      folder = path.dirname(folder);
+    }
 
     if (watched.has(folder)) {
       return;
@@ -257,7 +263,7 @@ function liveReload(page: string, access: ReturnType<typeof pageAccess>, reload:
 
     try {
       fs.watch(folder, (_event, name) => {
-        if (name && loaded.has(path.join(folder, name))) {
+        if (name && [...loaded].some(dependency => isInside(dependency, path.join(folder, name)))) {
           clearTimeout(pendingReload);
           pendingReload = setTimeout(reload, 100);
         }

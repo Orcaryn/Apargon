@@ -18,8 +18,12 @@ export type PermissionsPlatform = {
   writesWholeFolders: boolean;
   // A program can send what it sees past the sandbox.
   programsSendOut: boolean;
-  // The sandbox lets the page's process read every file, not only what its tags name: a papp-system page sees it all, and a picked file can be read before the sandbox is rebuilt.
-  readsAll: boolean;
+  // Every user's home and the disks the user plugs in: the OS keeps a .papp file's process out of them, but for what its tags name.
+  homeFolders: string[];
+  // What every .papp file reads in the home folder, as the system does: fonts and the desktop's settings. None holds a secret.
+  homeReads: string[];
+  // The sandbox lets a papp-system .papp file's process read every file. Any other, and on Windows that one too, reads only what is granted: a new pick needs the sandbox built again.
+  systemReadsAll: boolean;
   soundServerRecords: boolean;
   programFolders: string[];
   // The endings of a file the OS runs as a program, tried in turn after a name; '' where any file can be one.

@@ -3,14 +3,13 @@ import path from 'path';
 import { withGiven } from '../../permissions/given.ts';
 import { realPath, runsOutsideSandbox } from '../../permissions/paths.ts';
 import { isInside, PAGE_FILE } from '../../permissions/patterns.ts';
-import { PERMISSIONS_PLATFORM } from '../../permissions/platform.ts';
 import type { Permissions } from '../../permissions/tags.ts';
 import type { PickOptions } from '../../shared/channel.ts';
 import { APARGON_FOLDERS } from '../../shared/data.ts';
 import { records } from '../store.ts';
 
-// The user picks in this process's dialog, which says what the page gets, and the pick is kept beside the approvals: a page that breaks out of its sandbox can plant neither. Resolves with the paths, and whether the sandbox must be built again to grant them.
-export async function pickFiles(page: string, permissions: Permissions, { folder, multiple, write }: PickOptions) {
+// The user picks in this process's dialog, which says what the page gets, and the pick is kept beside the approvals: a page that breaks out of its sandbox can plant neither. A new path, or a new write, restarts the .papp file: its sandbox and Apargon's checks are built when it starts.
+export async function pickFiles(page: string, permissions: Permissions, { folder, multiple, write }: PickOptions, restart: () => void) {
   // This process has no window of its own: without this, its dialog opens behind the page.
   app.focus({ steal: true });
   const { canceled, filePaths } = await dialog.showOpenDialog({
@@ -20,25 +19,25 @@ export async function pickFiles(page: string, permissions: Permissions, { folder
   });
 
   if (canceled) {
-    return { paths: [], rebuild: false };
+    return [];
   }
 
   filePaths.forEach(file => checkPick(file, write));
   // Kept as a tag names it: a folder ends in the separator.
   const picked = filePaths.map(file => (folder ? file + path.sep : file));
   const before = records.get(page).given ?? [];
-  // A pick keeps the write it had. The sandbox is built when the page starts: a new write, or on an OS that limits reads by folder a new path, needs it built again.
+  // A pick keeps the write it had.
   const picks = picked.map(file => ({ path: file, write: write || before.some(old => old.path === file && old.write) }));
-  const rebuild = picks.some(pick => {
-    const old = before.find(each => each.path === pick.path);
-
-    return old ? pick.write && !old.write : pick.write || !PERMISSIONS_PLATFORM.readsAll;
-  });
   // Refused now, as the next start would refuse it: kept, it would stop the page from opening.
   withGiven(permissions, picks, page);
   records.change(page, { given: [...before.filter(old => !picked.includes(old.path)), ...picks] });
 
-  return { paths: filePaths, rebuild };
+  // After the answer, which goes out once this returns: the page takes the paths, then quits.
+  if (picked.some(file => !before.some(old => old.path === file && (old.write || !write)))) {
+    setImmediate(restart);
+  }
+
+  return filePaths;
 }
 
 // A link the page planted could lead the user to a file they did not mean. Hidden files, launch folders and pages run on their own, so a page may not change them.

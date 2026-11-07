@@ -32,7 +32,10 @@ export const windows: PermissionsPlatform = {
   writesWholeFolders: true,
   // Windows looks up the server of \\<data>.example.com\x outside the sandbox.
   programsSendOut: true,
-  readsAll: false,
+  // MXC grants nothing outside the granted folders and the system's own.
+  homeFolders: [],
+  homeReads: [],
+  systemReadsAll: false,
   soundServerRecords: false,
   programFolders: [],
   // In Windows' own order. Node runs a batch file only through cmd.exe, which would read its arguments as commands.

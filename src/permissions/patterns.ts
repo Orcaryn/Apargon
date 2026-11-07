@@ -33,6 +33,17 @@ export function isInside(file: string, folder: string) {
   return fromFolder !== '..' && !fromFolder.startsWith('..' + path.sep) && !path.isAbsolute(fromFolder);
 }
 
+// The folders above each wildcard, from its first fixed folder down: the .papp file lists them to find what matches, and so sees their names. Each source matches the folder itself.
+export function listableSources({ read, write }: Permissions) {
+  return [...write, ...read].flatMap(pattern => {
+    const { root } = path.parse(pattern);
+    const names = pattern.slice(root.length).split(path.sep).filter(Boolean);
+    const firstWild = names.findIndex(name => name.includes('*'));
+
+    return firstWild === -1 ? [] : names.slice(firstWild).map((_, i) => patternSource(path.join(root, ...names.slice(0, firstWild + i)), false));
+  });
+}
+
 export const PAGE_SOURCE = `\\.[pP][aA][pP][pP]${SEPARATOR}?$`;
 export const PAGE_FILE = new RegExp(PAGE_SOURCE);
 

@@ -135,6 +135,9 @@ function macTests() {
     fs.mkdirSync(folder)
   );
   fs.writeFileSync(path.join(dir, 'data', 'tool'), '#!/bin/sh\n', { mode: 0o755 });
+  fs.writeFileSync(path.join(dir, 'data', 'not-program'), 'not executable', { mode: 0o600 });
+  fs.mkdirSync(path.join(dir, 'aliases'));
+  fs.symlinkSync(path.join(realDir, 'data', 'tool'), path.join(dir, 'aliases', 'tool'));
   // A named link would grant what it leads to.
   fs.symlinkSync(page, path.join(dir, 'link.txt'));
   // A kept pick that became a link since is not granted: the sandbox would grant what it leads to.
@@ -215,6 +218,8 @@ function macTests() {
     { tag: '<meta name="papp-run" content="/usr/bin">', reason: 'or is a folder' },
     { tag: '<meta name="papp-run" content="/nonexistent/prog">', reason: 'was not found' },
     { tag: '<meta name="papp-run" content="./data/missing">', reason: 'was not found' },
+    { tag: '<meta name="papp-run" content="./data/not-program">', reason: 'cannot run' },
+    { tag: '<meta name="papp-run" content="./aliases/tool">\n<meta name="papp-write" content="./aliases/">', reason: 'could change' },
     { tag: '<meta name="papp-run" content="./data/../data/tool">', reason: 'without ..' },
     { tag: '<meta name="papp-run" content="./data//tool">', reason: 'without ..' },
     { tag: '<meta name="papp-run" content="data/tool">', reason: 'Name one program' },
@@ -247,6 +252,7 @@ function macTests() {
 
   for (const { pick, reason } of [
     { pick: { path: quoted, write: true }, reason: 'has a "' },
+    { pick: { path: quoted, write: false }, reason: 'has a "' },
     { pick: { path: path.join(realDir, 'data'), write: true }, reason: 'could change' },
     { pick: { path: realDir, write: true }, reason: 'could change' },
     { pick: { path: path.join(realDir, 'line\nbreak'), write: false }, reason: 'invisible character' },
@@ -254,14 +260,16 @@ function macTests() {
     test(`refuses the pick ${JSON.stringify(pick)}`, () => refuses(() => withGiven(read(runsTool), [pick], page), reason));
   }
 
+  // The .papp file's own path and folder go into the profile too.
+  test('refuses a .papp file whose path has a "', () => refuses(() => declare(path.join(quoted, 'case.papp'), ''), 'has a "'));
+
   // The control: a plain pick passes, and is granted. A folder too, kept with its separator.
   test('grants a plain pick', () => {
     const picks = [
-      { path: path.join(realDir, '.tool'), write: false },
-      { path: quoted, write: false },
+      { path: path.join(realDir, '.tool') + path.sep, write: false },
       { path: path.join(realDir, 'picked') + path.sep, write: false },
     ];
-    assert.equal(withGiven(read(runsTool), picks, page).read.length, 3);
+    assert.equal(withGiven(read(runsTool), picks, page).read.length, 2);
   });
 
   test('drops a kept pick that became a link', () => {
@@ -366,7 +374,7 @@ function macTests() {
       shows: ['', path.join('data', '.tool')],
     },
     { tags: '<meta name="papp-read" content="./data/*.txt">\n<meta name="papp-read" content="./data/a.txt">', all: false, shows: [''] },
-    { tags: '<meta name="papp-system" content="full">\n<meta name="papp-write" content="./data/">', all: PERMISSIONS_PLATFORM.readsAll, shows: [] },
+    { tags: '<meta name="papp-system" content="full">\n<meta name="papp-write" content="./data/">', all: PERMISSIONS_PLATFORM.systemReadsAll, shows: [] },
   ]) {
     test(`sees ${JSON.stringify(tags)}`, () => {
       fs.writeFileSync(page, tags);
@@ -378,6 +386,10 @@ function macTests() {
   }
 
   test('papp-run ./data/tool names the program beside the page', () => assert.equal(read(runsTool).run.tool, path.join(dir, 'data', 'tool')));
+
+  test('a symlinked program keeps its launch name for argv[0] dispatch', () => {
+    assert.equal(read('<meta name="papp-run" content="./aliases/tool">').run.tool, path.join(dir, 'aliases', 'tool'));
+  });
 
   test('shows the tags as written', () => {
     assert.deepEqual(read('<meta\n  name="papp-read"\n  content="./data/">\n<meta charset="utf-8">').tags, ['<meta name="papp-read" content="./data/">']);

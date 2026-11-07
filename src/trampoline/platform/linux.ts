@@ -4,11 +4,12 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { localPorts } from '../../permissions/network.ts';
+import { HOME_FOLDERS, HOME_READS, realEntry, realPath } from '../../permissions/paths.ts';
 import { isInside, literalBase } from '../../permissions/patterns.ts';
 import { PRIVATE } from '../../permissions/platform/linux.ts';
 import type { Permissions, Use } from '../../permissions/tags.ts';
 import { relay, REPLY_FD, REQUEST_FD, type Bridge } from '../../shared/channel.ts';
-import { APP_ROOT, DATA, NET_DATA, pageAppId, pageStorage, SECRETS_DATA } from '../../shared/data.ts';
+import { APP_FILES, APP_ROOT, DATA, NET_DATA, pageAppId, pageStorage, SECRETS_DATA } from '../../shared/data.ts';
 import type { TrampolinePlatform } from '../platform.ts';
 import { startProxy } from '../network/proxy.ts';
 import { startPiped } from './pipes.ts';
@@ -144,12 +145,13 @@ function unusedPort(declared: Bridge[]) {
 function bwrapArgs(page: string, permissions: Permissions, socketFolder: string | null) {
   const temp = fs.realpathSync(app.getPath('temp'));
   const written = permissions.write.map(literalBase);
+  const programFiles = [...new Set(Object.values(permissions.run).flatMap(file => [file, realEntry(file), realPath(file)]))];
   const writable = [...(PRIVATE.some(folder => isInside(temp, folder)) ? [] : [temp]), ...written];
   const sound = permissions.use.includes('sound') || permissions.use.includes('microphone');
-  const soundSockets = sound ? ['pipewire-0', 'pulse'].map(name => path.join(RUNTIME, name)).filter(file => fs.existsSync(file)) : [];
-  const printSocket = permissions.use.includes('print') && fs.existsSync('/run/cups/cups.sock') ? ['/run/cups/cups.sock'] : [];
+  const soundSockets = sound ? ['pipewire-0', 'pulse'].map(name => path.join(RUNTIME, name)) : [];
+  const printSocket = permissions.use.includes('print') ? ['/run/cups/cups.sock'] : [];
   // The udev database lists devices; its control socket takes only root.
-  const udev = permissions.use.some(name => ['usb', 'serial', 'hid', 'midi'].includes(name)) && fs.existsSync('/run/udev') ? ['/run/udev'] : [];
+  const udev = permissions.use.some(name => ['usb', 'serial', 'hid', 'midi'].includes(name)) ? ['/run/udev'] : [];
   const devicePatterns = Object.entries(DEVICE_FILES).filter(([use]) => permissions.use.includes(use as Use)).map(([, pattern]) => pattern);
   const devices = [
     '/dev/dri',
@@ -158,20 +160,24 @@ function bwrapArgs(page: string, permissions: Permissions, socketFolder: string 
     ...(permissions.use.includes('usb') ? ['/dev/bus/usb'] : []),
     ...fs.readdirSync('/dev').filter(name => devicePatterns.some(pattern => pattern.test(name))).map(name => `/dev/${name}`),
   ].filter(file => fs.existsSync(file));
-  // bwrap binds only what is there. The trampoline made the written paths.
-  const seen = [...permissions.read, ...permissions.sockets].map(literalBase).filter(file => fs.existsSync(file));
-  const named = [path.dirname(page), ...seen, ...displaySockets(), ...soundSockets, ...printSocket, ...udev];
+  // Every home folder and the plugged-in disks are emptied: the .papp file's process sees in them only what is bound back below. A papp-system .papp file sees all.
+  const fenced = permissions.system ? [] : HOME_FOLDERS.filter(folder => fs.existsSync(folder));
+  // The .papp file's folder, or the .papp file alone where it has none; what its tags name; the app; and what every .papp file reads. bwrap binds only what is there: the trampoline made the written paths.
+  const named = [permissions.own ? path.dirname(page) : page, ...[...permissions.read, ...permissions.sockets].map(literalBase), ...programFiles, ...APP_FILES, ...HOME_READS, ...displaySockets(), ...soundSockets, ...printSocket, ...udev].filter(file => fs.existsSync(file));
   const storage = pageStorage(page);
   fs.mkdirSync(storage, { recursive: true });
 
-  // Later mounts cover earlier ones: Apargon's own data must stay last.
+  // Later mounts cover earlier ones: the put-backs follow the emptied folders, and Apargon's own data stays last.
   return [
     ...['--unshare-net', '--unshare-pid', '--unshare-user', '--disable-userns', '--new-session', '--die-with-parent', '--ro-bind', '/', '/', '--dev', '/dev', '--proc', '/proc'],
     ...devices.flatMap(file => ['--dev-bind', file, file]),
-    ...PRIVATE.flatMap(folder => ['--tmpfs', folder]),
+    ...[...fenced, ...PRIVATE].flatMap(folder => ['--tmpfs', folder]),
     ...named.flatMap(file => ['--ro-bind', file, file]),
     ...writable.flatMap(folder => ['--bind', folder, folder]),
-    ...['--ro-bind', DATA, DATA, '--tmpfs', NET_DATA, ...(socketFolder ? ['--ro-bind', socketFolder, socketFolder] : []), '--bind', storage, storage, '--tmpfs', SECRETS_DATA],
+    // Apargon's data holds every .papp file's storage, the approvals and the picks: a fenced .papp file gets an empty folder over it, a papp-system .papp file reads it all. Either writes only its own storage.
+    ...(permissions.system ? ['--ro-bind', DATA, DATA, '--tmpfs', NET_DATA] : ['--tmpfs', DATA]),
+    ...(socketFolder ? ['--ro-bind', socketFolder, socketFolder] : []),
+    ...['--bind', storage, storage, '--tmpfs', SECRETS_DATA],
   ];
 }
 

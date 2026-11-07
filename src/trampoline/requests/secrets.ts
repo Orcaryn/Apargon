@@ -7,12 +7,13 @@ import { readJson, writeJson } from '../../shared/json.ts';
 
 // One file per page, each value sealed on its own with the OS's store for this user, in a folder every page's sandbox hides.
 export async function readSecret(page: string, name: string) {
-  const sealed = readJson<Record<string, string>>(fileOf(page))[name];
+  const secrets = readJson<Record<string, string>>(fileOf(page));
 
-  if (sealed === undefined) {
+  if (!Object.hasOwn(secrets, name)) {
     return null;
   }
 
+  const sealed = secrets[name];
   // Electron sealed it with an older key: sealed again with the current one.
   const { result, shouldReEncrypt } = await safeStorage.decryptStringAsync(Buffer.from(sealed, 'base64'));
 

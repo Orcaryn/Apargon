@@ -75,6 +75,14 @@
     result.program_bundled_runs = (await papp.run('greet', ['x'])).stdout === 'bundled x\n';
     // Not the page's pipes to the trampoline (fds 3 and 5): with them, a program could ask it anything as this page.
     result.program_no_trampoline_fds = (await papp.run('sh', ['-c', '{ echo >&3 || echo >&5; } 2>/dev/null && echo open || echo closed'])).stdout === 'closed\n';
+    // An empty home of the page's own, and the OS keeps the program out of the user's: ~/.ssh is there (test/run.ts makes it), and ~user asks the OS where that home is.
+    result.program_home_fresh = (await papp.run('sh', ['-c', 'test -d "$HOME" && test -w "$HOME" && ! test -e "$HOME/.ssh" && echo fresh'])).stdout === 'fresh\n';
+    result.program_home_hidden = (await papp.run('sh', ['-c', 'eval "ls ~$(id -un)/.ssh"'])).status !== 0;
+    if (mac) {
+      // The data volume's own path to the same folder; and the temp folder every app shares, of which the page sees only its own.
+      result.program_home_alias_hidden = (await papp.run('sh', ['-c', 'eval "home=~$(id -un)"; ls "/System/Volumes/Data$home/.ssh"'])).status !== 0;
+      result.program_shared_temp_hidden = (await papp.run('sh', ['-c', 'case "$TMPDIR" in */T/apargon-page-*) test -w "$TMPDIR" && ! ls "${TMPDIR%/*}" >/dev/null 2>&1 && echo hidden;; *) echo "$TMPDIR";; esac'])).stdout === 'hidden\n';
+    }
     result.program_input = (await papp.run('cat', [], { input: 'piped' })).stdout === 'piped';
     const bytes = (await papp.run('cat', [], { input: new Uint8Array([0, 255, 10, 1]), encoding: null })).stdout;
     result.program_bytes = bytes instanceof Uint8Array && bytes.join() === '0,255,10,1';
@@ -103,7 +111,7 @@
     result.undeclared_program_refused = await refused(() => papp.run('ls'));
 
     if (!mac) {
-      const folders = (await papp.run('sh', ['-c', 'ls -A "$HOME/.config/apargon/net"'])).stdout.trim().split('\n');
+      const folders = (await papp.run('sh', ['-c', 'eval "ls -A ~$(id -un)/.config/apargon/net"'])).stdout.trim().split('\n');
       result.own_sockets_only = folders.length === 1 && folders[0].startsWith('page-');
       result.page_process_env_unnamed_left_out = (await papp.run('sh', ['-c', 'tr "\\0" "\\n" < /proc/$PPID/environ 2>/dev/null | grep -c "^APARGON_TEST_ALLOW="'])).stdout.trim() === '0';
     }

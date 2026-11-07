@@ -4,7 +4,7 @@ import os from 'os';
 import path from 'path';
 import { PROGRAM_ENV } from './env.ts';
 import { LOCAL_HOSTS, privateNetwork } from './network.ts';
-import { absolutePath, BIG_FOLDERS, HOME, realPath } from './paths.ts';
+import { absolutePath, BIG_FOLDERS, HOME, realEntry, realPath } from './paths.ts';
 import { changeableSources, isInside, literalBase } from './patterns.ts';
 import { PERMISSIONS_PLATFORM } from './platform.ts';
 
@@ -128,18 +128,24 @@ export function declaredPermissions(page: string, html = fs.readFileSync(page, '
 export function checkPermissions(permissions: Permissions, page: string) {
   const { read, write, run, sockets, system } = permissions;
   const dir = path.dirname(page);
-  const quoted = [...write, ...sockets].find(folder => folder.includes('"'));
+  // Protect both the launch name and its target: an executable alias must not be writable either.
+  const programFiles = [...new Set(Object.values(run).flatMap(file => [file, realEntry(file), realPath(file)]))];
+  // Seatbelt takes each in a quoted string: a " would end it, and the rest would be rules.
+  const quoted = [page, ...read, ...write, ...programFiles, ...sockets].find(file => file.includes('"'));
   const refusal = PERMISSIONS_PLATFORM.refuse(permissions, dir);
-  const invisible = [page, ...read, ...write, ...Object.values(run), ...sockets].find(text => INVISIBLE.test(text));
+  const invisible = [page, ...read, ...write, ...programFiles, ...sockets].find(text => INVISIBLE.test(text));
+  const wildcardProgram = programFiles.find(program => program.includes('*'));
   // A program the page can change is any program: "Run tool" would say nothing. As on disk, like the patterns, so a link cannot hide it. Where the sandbox grants folders whole, a program in one counts too.
   const changeable = changeableSources(permissions).files.map(source => new RegExp(source));
   const granted = write.map(literalBase);
-  const rewritable = Object.values(run).find(program => changeable.some(pattern => pattern.test(realPath(program))) || (PERMISSIONS_PLATFORM.writesWholeFolders && granted.some(folder => isInside(realPath(program), folder))));
+  const rewritable = programFiles.find(program => changeable.some(pattern => pattern.test(program)) || (PERMISSIONS_PLATFORM.writesWholeFolders && granted.some(folder => isInside(program, folder))));
   // There a program could rewrite the page too: ./out* grants the page's own folder.
   const holdsPage = PERMISSIONS_PLATFORM.writesWholeFolders && (system || Object.keys(run).length > 0) && granted.find(folder => isInside(page, folder));
 
   if (quoted) {
     throw new Error(`${quoted} has a " in its path, which the sandbox cannot take. Rename it.`);
+  } else if (wildcardProgram) {
+    throw new Error(`Program ${wildcardProgram} has * in its path. The sandbox must grant one executable, not a pattern.`);
   } else if (refusal) {
     throw new Error(refusal);
   } else if (invisible) {
@@ -243,7 +249,22 @@ function hostName(name: string, tag: string, value: string) {
 // A name on PATH, a full path, or a path from the page's folder (./bin/tool) for a program the page ships.
 function findProgram(value: string, dir: string) {
   const { programExtensions, programFolders } = PERMISSIONS_PLATFORM;
-  const runnable = (file: string) => programExtensions.some(extension => file.toLowerCase().endsWith(extension)) && fs.statSync(file, { throwIfNoEntry: false })?.isFile();
+
+  const runnable = (file: string) => {
+    if (!programExtensions.some(extension => file.toLowerCase().endsWith(extension)) || !fs.statSync(file, { throwIfNoEntry: false })?.isFile()) {
+      return false;
+    }
+
+    try {
+      // X_OK checks execute permission on POSIX; Windows relies on the executable extensions above.
+      fs.accessSync(file, fs.constants.X_OK);
+
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   // Before the file is looked for: Windows would ask the server of a network path, before the popup.
   const refusal = PERMISSIONS_PLATFORM.refusePath(value);
   const bundled = /^\.[\\/]/.test(value);

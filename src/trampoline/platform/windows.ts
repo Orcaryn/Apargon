@@ -3,6 +3,7 @@ import { EventEmitter } from 'events';
 import fs from 'fs';
 import type { AddressInfo } from 'net';
 import path from 'path';
+import { finished } from 'stream/promises';
 import type { ContainerRequest } from '@microsoft/mxc-sdk/v1';
 import { isInside, literalBase } from '../../permissions/patterns.ts';
 import type { Use } from '../../permissions/tags.ts';
@@ -109,13 +110,21 @@ async function startContained(request: ContainerRequest): Promise<PageProcess> {
   const contained = await spawn(request, { telemetry: { enabled: false } });
   const output = contained.standardOutput!;
   const page = Object.assign(new EventEmitter(), { requests: output, output, errors: contained.standardError!, replies: contained.standardInput! });
-  contained
-    .wait()
-    .finally(() => {
+  // wait() settles on process exit, not on consumption of the transferred streams.
+  // Attach immediately, but let the caller's readers drain them before disposing the SDK handles.
+  void Promise.allSettled([contained.wait(), finished(output, { readable: true, writable: false, cleanup: true }), finished(page.errors, { readable: true, writable: false, cleanup: true })]).then(results => {
+    try {
       contained.dispose();
+    } finally {
       page.emit('close');
-    })
-    .catch((err: Error) => console.error(`Apargon: ${err.message}`));
+    }
+
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        console.error(`Apargon: ${(result.reason as Error).message}`);
+      }
+    }
+  }).catch((err: Error) => console.error(`Apargon: ${err.message}`));
 
   return page;
 }

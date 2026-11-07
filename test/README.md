@@ -49,4 +49,5 @@ The pages Apargon opens, one per kind of access. Each writes its results to `res
 - `windows/tokencaps.cs` is the source of `tokencaps`. Build it once, as administrator, onto PATH: `Add-Type -TypeDefinition (Get-Content -Raw test\selftest\windows\tokencaps.cs) -OutputAssembly "$env:SystemRoot\tokencaps.exe" -OutputType ConsoleApplication`.
 - A refusal check passes only on Apargon's own error (`Apargon: …`), or on the one named beside it. Any other error, or none, is written to `refused_wrongly`, which `check.ts` shows.
 - `listen_localhost_only` needs a network address on this computer: offline, `selftest-net` fails.
+- Before running the installed app's pages manually, run `node test/selftest/fixtures.ts`. It prepares the existing SSH-directory URL in `results/home-probe.json`; the worker probe must not infer HOME from the checkout path. `run.ts` prepares this automatically.
 - A new check goes in its page and in `check.ts`'s list for its platform.

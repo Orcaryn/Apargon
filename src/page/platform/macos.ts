@@ -8,6 +8,7 @@ export const macos: PagePlatform = {
   notifiesHere: true,
   processGroups: true,
   programsInheritFds: true,
+  freshProgramHome: true,
   appMenu: true,
   hear(name, heard) {
     const subscribed = systemPreferences.subscribeNotification(name, (_name, info, sender) => heard(info, sender));

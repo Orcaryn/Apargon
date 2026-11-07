@@ -86,7 +86,7 @@ export function needsTrust({ run, net, open, own, read, write, use }: Permission
 // What the page sees, each path once: one inside another listed path is left out. A papp-system page sees all, so nothing adds to it.
 export function seenFiles({ own, read, write, system }: Permissions) {
   const named = [...new Set([own ?? [], read, write].flat())];
-  const all = system && PERMISSIONS_PLATFORM.readsAll;
+  const all = system && PERMISSIONS_PLATFORM.systemReadsAll;
   const listed = all ? [] : named.filter(pattern => !named.some(other => other !== pattern && new RegExp(patternSource(other)).test(literalBase(pattern))));
 
   return { all, lines: listed.map(pattern => folderLine('read', pattern)) };

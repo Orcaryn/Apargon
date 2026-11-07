@@ -159,7 +159,7 @@ async function startPageProcess({ page, permissions: declared, pageHash }: Pick<
     running.splice(running.indexOf(entry), 1);
     noteContent(page, pageStorage, records);
     showTray(null, [], null, false);
-    listeners.closeAll();
+    void listeners.closeAll();
     sandbox.close();
 
     // Before openPage counts this one closed, so the app does not quit in between.

@@ -19,9 +19,9 @@ export function pageApi(dir: string, permissions: Permissions, access: ReturnTyp
   const files = fileApi(dir, scope, win);
   const programs = programApi(permissions, scope, win);
   const pageWindow = windowApi(permissions, scope, win, menus, options);
-  const listeners = listenApi(scope, win);
-  const connections = connectionApi(scope, win, proxy);
-  const system = systemApi(permissions, scope, toFront, pageIcon, win);
+  const listeners = listenApi(win.webContents);
+  const connections = connectionApi(win.webContents, proxy);
+  const system = systemApi(dir, permissions, scope, toFront, pageIcon, win);
 
   return {
     ...files,
@@ -32,14 +32,14 @@ export function pageApi(dir: string, permissions: Permissions, access: ReturnTyp
     ...system,
     shortcuts: pickShortcuts,
     // On each load of the page, and when its window closes: nothing the page before it started outlives it.
-    reset() {
+    async reset() {
       files.reset();
       programs.reset();
       pageWindow.reset();
-      listeners.reset();
+      const listenersClosed = listeners.reset();
       connections.reset();
       system.reset();
-      scope.reset();
+      await listenersClosed;
     },
   };
 }

@@ -16,6 +16,8 @@ export type Calls = {
   setSecret: { args: { name: string; value: string | null }; result: null };
   // The listener's address.
   listen: { args: { server: string; port: number | null }; result: string };
+  // Acknowledged only after the listener and its connections have closed.
+  unlisten: { args: { server: string }; result: null };
   // The button the user picked, or null.
   notify: { args: Notice; result: number | null };
   trash: { args: { file: string }; result: null };
@@ -33,7 +35,6 @@ export type PageEvents = {
   tray: PageTray;
   // The page's answer to a request its listener got.
   respond: { id: string; status: number; headers: Record<string, string>; body: string };
-  unlisten: string;
   installSkill: undefined;
   openLink: string;
   openFile: string;

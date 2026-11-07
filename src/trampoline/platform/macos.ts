@@ -6,21 +6,45 @@ import type { AddressInfo } from 'net';
 import os from 'os';
 import path from 'path';
 import { localPorts } from '../../permissions/network.ts';
-import { changeableSources, literalBase, PAGE_SOURCE } from '../../permissions/patterns.ts';
+import { HOME_FOLDERS, HOME_READS, realEntry, realPath } from '../../permissions/paths.ts';
+import { changeableSources, isInside, listableSources, literalBase, PAGE_SOURCE, patternSource } from '../../permissions/patterns.ts';
 import type { Permissions } from '../../permissions/tags.ts';
 import { REPLY_FD, REQUEST_FD } from '../../shared/channel.ts';
-import { APP_ROOT, DATA, INSTALL_FOLDER, pageAppId, pageStorage, SECRETS_DATA } from '../../shared/data.ts';
+import { APP_FILES, APP_ROOT, DATA, INSTALL_FOLDER, pageAppId, pageStorage, SECRETS_DATA } from '../../shared/data.ts';
 import type { TrampolinePlatform } from '../platform.ts';
 import { startProxy } from '../network/proxy.ts';
 import { startPiped } from './pipes.ts';
+
+// This user's temp and cache folders, under /private/var/folders: every app keeps files there. The icon cache is put back: the share menu draws its icons from it, and crashes without.
+const USER_TEMP = fs.realpathSync(app.getPath('temp'));
+const USER_FOLDER = path.dirname(USER_TEMP);
+const ICON_CACHE = path.join(USER_FOLDER, 'C', 'com.apple.iconservices');
 
 export const macos: TrampolinePlatform = {
   async prepare(page, permissions) {
     const proxy = permissions.net.length ? await startProxy(permissions.net, null) : null;
     const proxyPort = proxy && (proxy.address() as AddressInfo).port;
-    const profile = seatbeltProfile(page, permissions, proxyPort);
+    // A temp folder of the .papp file's own: the shared one holds other apps' files. Chromium takes its own variable for it, Node TMPDIR.
+    const temp = fs.mkdtempSync(path.join(USER_TEMP, 'apargon-page-'));
+    const profile = seatbeltProfile(page, permissions, proxyPort, temp);
 
-    return { start: (apargon, env) => startPiped(['sandbox-exec', '-p', profile, ...apargon], ['ignore', 'pipe', 'pipe', 'pipe', 'ignore', 'pipe'], env), requestFd: REQUEST_FD, replyFd: REPLY_FD, proxyPort, bridges: [], close: () => proxy?.close() };
+    return {
+      start: (apargon, env) => startPiped(['sandbox-exec', '-p', profile, ...apargon], ['ignore', 'pipe', 'pipe', 'pipe', 'ignore', 'pipe'], { ...env, TMPDIR: temp, MAC_CHROMIUM_TMPDIR: temp }),
+      requestFd: REQUEST_FD,
+      replyFd: REPLY_FD,
+      proxyPort,
+      bridges: [],
+      close() {
+        proxy?.close();
+
+        // A folder the process left read-only, or a program still writing there, makes this fail. Logged, not thrown: a throw here would skip the reopen.
+        try {
+          fs.rmSync(temp, { recursive: true });
+        } catch (err) {
+          console.error(`Apargon: could not remove ${temp}: ${(err as Error).message}`);
+        }
+      },
+    };
   },
   installHint: '',
   // The quarantine mark says the file was downloaded; Spotlight keeps where from, the page last.
@@ -74,22 +98,49 @@ export const macos: TrampolinePlatform = {
   trayClicks: true,
 };
 
-function seatbeltProfile(page: string, permissions: Permissions, proxyPort: number | null) {
+function seatbeltProfile(page: string, permissions: Permissions, proxyPort: number | null, temp: string) {
   const ports = [proxyPort ?? [], localPorts(permissions)].flat();
   const { files, pages } = changeableSources(permissions);
+  // Every home folder, the plugged-in disks, this user's temp and cache folders, and the temp folders every app shares: the .papp file's process sees in them only what is put back. Seatbelt takes the last rule that matches, so each put-back follows what it undoes.
+  const fenced = [...HOME_FOLDERS, USER_FOLDER, '/private/tmp', '/private/var/tmp'];
+  // Put back: the .papp file and its folders by their patterns, with the folders above each wildcard, so it can list them; the app; the .papp file's temp folder; and what every .papp file reads. Not the keychain: the process goes without encryption rather than see its files.
+  const seenPatterns = [permissions.own ?? [], permissions.read, permissions.write].flat();
+  // Approving a program grants the executable itself, not its surrounding home folder.
+  const programFiles = [...new Set(Object.values(permissions.run).flatMap(file => [file, realEntry(file), realPath(file)]))];
+  const seenFolders = [...APP_FILES, temp, ICON_CACHE, ...HOME_READS];
+  const putBack = [
+    ...(permissions.own ? [] : [`(literal "${page}")`]),
+    ...[...seenPatterns.map(pattern => patternSource(pattern)), ...listableSources(permissions)].map(source => `(regex #"${source}")`),
+    ...programFiles.map(program => `(regex #"${patternSource(program, false)}")`),
+    ...seenFolders.map(folder => `(subpath "${folder}")`),
+  ];
+  const storage = pageStorage(page);
+  const onTheWay = foldersOnTheWay([page, ...seenPatterns.map(literalBase), ...programFiles, ...seenFolders, storage], fenced);
   const rules = [
     fs.readFileSync(path.join(import.meta.dirname, 'profiles', 'macos.sb'), 'utf8'),
     ...ports.map(port => `(allow network-outbound (remote ip "localhost:${port}"))`),
     ...permissions.sockets.map(socket => `(allow network-outbound (${socket.endsWith(path.sep) ? 'subpath' : 'literal'} "${literalBase(socket)}"))`),
     // The print server, which sends jobs on to the printers it knows.
     ...(permissions.use.includes('print') ? ['(allow network-outbound (literal "/private/var/run/cupsd"))'] : []),
+    // A papp-system .papp file sees all.
+    ...(permissions.system ?
+      []
+    : [
+        `(deny file-read* ${fenced.map(folder => `(subpath "${folder}")`).join(' ')})`,
+        `(allow file-read* ${putBack.join(' ')})`,
+        // Apargon's data holds every .papp file's storage, the approvals and the picks: of it, the .papp file sees only its own storage, even under a tag that names a folder holding it.
+        `(deny file-read* (subpath "${DATA}"))`,
+        `(allow file-read* (subpath "${storage}"))`,
+        // Last, so no deny above hides a folder on the way.
+        `(allow file-read-metadata ${onTheWay.map(folder => `(literal "${folder}")`).join(' ')})`,
+      ]),
     // Another app, or an Apple Event to one, would run outside the sandbox.
     '(deny lsopen)',
     // Sending only. The page's process must still receive Apple Events: Dock > Quit, logout, and a page opened while it runs.
     '(deny appleevent-send)',
     '(deny user-preference-write)',
     '(deny file-write*)',
-    `(allow file-write* (literal "/dev/null") (literal "/dev/zero") (literal "/dev/dtracehelper") (subpath "/dev/fd") (subpath "${fs.realpathSync(app.getPath('temp'))}"))`,
+    `(allow file-write* (literal "/dev/null") (literal "/dev/zero") (literal "/dev/dtracehelper") (subpath "/dev/fd") (subpath "${temp}"))`,
     // Web Serial opens the port from this process. Any other device, like BPF, would reach past the network deny.
     ...(permissions.use.includes('serial') ? ['(allow file-write* (regex #"^/dev/(cu|tty)\\."))'] : []),
     ...files.map(source => `(allow file-write* (regex #"${source}"))`),
@@ -97,7 +148,7 @@ function seatbeltProfile(page: string, permissions: Permissions, proxyPort: numb
     ...pages.map(source => `(allow file-write* (regex #"${source}"))`),
     `(deny file-read* file-write* (subpath "${SECRETS_DATA}"))`,
     `(deny file-write* (subpath "${DATA}"))`,
-    `(allow file-write* (subpath "${pageStorage(page)}"))`,
+    `(allow file-write* (subpath "${storage}"))`,
   ];
 
   if (INSTALL_FOLDER) {
@@ -108,4 +159,17 @@ function seatbeltProfile(page: string, permissions: Permissions, proxyPort: numb
   rules.push('(deny file-read* file-write* file-ioctl (literal "/dev/tty") (regex #"^/dev/ttys[0-9]+$"))');
 
   return rules.join('\n') + '\n';
+}
+
+// The folders between a fenced root and each put-back, the root included: the process looks a path up through them by name, or nothing under them opens. Each by its exact name, so what else they hold stays hidden.
+function foldersOnTheWay(files: string[], fenced: string[]) {
+  const folders = new Set<string>();
+
+  for (const file of files) {
+    for (let folder = path.dirname(file); fenced.some(root => isInside(folder, root)); folder = path.dirname(folder)) {
+      folders.add(folder);
+    }
+  }
+
+  return [...folders];
 }

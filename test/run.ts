@@ -3,6 +3,7 @@ import fs from 'fs';
 import { createRequire } from 'module';
 import os from 'os';
 import path from 'path';
+import './selftest/fixtures.ts';
 
 // pnpm test, on macOS, Linux and Windows: each step in turn, from the repo's root. The first that fails, or still runs after 5 minutes, stops the run.
 // listen.ts serves the ports and socket files a page declares, and ones it does not, while the page runs.
@@ -34,8 +35,7 @@ const root = path.join(import.meta.dirname, '..');
 fs.readdirSync(path.join(root, pages, 'results'))
   .filter(name => /^result.*\.json$/.test(name))
   .forEach(name => fs.rmSync(path.join(root, pages, 'results', name)));
-// The pages check that the sandbox hides ~/.ssh, and on Windows that it keeps a Node page out of Documents: what they check must exist.
-fs.mkdirSync(path.join(os.homedir(), '.ssh'), { recursive: true, mode: 0o700 });
+// fixtures.ts makes the SSH directory and records its real URL; the Windows Documents check needs a real directory too.
 
 if (process.platform === 'win32') {
   fs.mkdirSync(path.join(os.homedir(), 'Documents'), { recursive: true });

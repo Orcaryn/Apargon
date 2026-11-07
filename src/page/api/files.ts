@@ -2,11 +2,10 @@ import type { BrowserWindow } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import { pipeline } from 'stream/promises';
-import { patternSource } from '../../permissions/patterns.ts';
 import { callTrampoline } from '../../shared/channel.ts';
 import type { Scope } from './scope.ts';
 
-export function fileApi(dir: string, { where, canSee, canList, canChange, canChangeAll, need, picked, loaded }: Scope, win: BrowserWindow) {
+export function fileApi(dir: string, { where, entry, canSee, canList, canChange, canChangeAll, need }: Scope, win: BrowserWindow) {
   const watchers = new Map<string, fs.FSWatcher>();
 
   const visibleStats = (file: string, stats: fs.Stats) => {
@@ -62,6 +61,13 @@ export function fileApi(dir: string, { where, canSee, canList, canChange, canCha
       need(canSee(source), 'see');
       need(canChange(destination), 'change');
 
+      // As Node's copyFile: onto itself, under any name or a hard link, nothing to do. Opening it to write would empty it before the read.
+      const [sourceStats, destinationStats] = [fs.statSync(source, { bigint: true }), fs.statSync(destination, { bigint: true, throwIfNoEntry: false })];
+
+      if (sourceStats.ino === destinationStats?.ino && sourceStats.dev === destinationStats.dev) {
+        return;
+      }
+
       // Only the bytes: a copied mode could make the page a program to run.
       await pipeline(fs.createReadStream(source), fs.createWriteStream(destination));
     },
@@ -79,8 +85,9 @@ export function fileApi(dir: string, { where, canSee, canList, canChange, canCha
 
       return visibleStats(target, fs.statSync(target));
     },
+    // A link that leads nowhere is not there, as in Node.
     exists(file: string) {
-      const target = where(file);
+      const target = entry(file);
       need(canList(target), 'see');
 
       return fs.existsSync(target);
@@ -98,20 +105,20 @@ export function fileApi(dir: string, { where, canSee, canList, canChange, canCha
     },
     // A folder only with recursive, as in Node, which refuses one without it.
     rm(file: string, { recursive = false }: { recursive?: boolean } = {}) {
-      const target = where(file);
+      const target = entry(file);
 
       need(recursive ? canChangeAll(target) : canChange(target), 'change');
       fs.rmSync(target, { recursive });
     },
     // To the user's Trash, where they can bring it back. The trampoline moves it: this process may not write there.
     trash(file: string) {
-      const target = where(file);
+      const target = entry(file);
       need(canChangeAll(target), 'change');
 
       return callTrampoline('trash', { file: target });
     },
     rename(from: string, to: string) {
-      const [source, destination] = [where(from), where(to)];
+      const [source, destination] = [entry(from), entry(to)];
       need(canChangeAll(source), 'change');
       need(canChange(destination), 'change');
 
@@ -141,17 +148,9 @@ export function fileApi(dir: string, { where, canSee, canList, canChange, canCha
       watchers.get(id)?.close();
       watchers.delete(id);
     },
-    // The trampoline shows the dialog and keeps the pick: this process may not write beside the approvals. A pick with write comes back once the sandbox is built again.
-    async pick({ folder = false, multiple = false, write = false }: { folder?: boolean; multiple?: boolean; write?: boolean } = {}) {
-      const stillLoaded = loaded();
-      const paths = await callTrampoline('pick', { folder: Boolean(folder), multiple: Boolean(multiple), write: Boolean(write) });
-
-      // A reload while the dialog was open: the page that asked is gone.
-      if (stillLoaded()) {
-        picked.push(...paths.map(file => new RegExp(patternSource(file, folder))));
-      }
-
-      return paths;
+    // The trampoline shows the dialog and keeps the pick: this process may not write beside the approvals. A new path, or a new write, comes back once the .papp file has restarted with it.
+    pick({ folder = false, multiple = false, write = false }: { folder?: boolean; multiple?: boolean; write?: boolean } = {}) {
+      return callTrampoline('pick', { folder: Boolean(folder), multiple: Boolean(multiple), write: Boolean(write) });
     },
     // The trampoline keeps the picks, beside the approvals.
     given() {

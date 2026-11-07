@@ -29,7 +29,11 @@ export const linux: PermissionsPlatform = {
   // bwrap binds each folder whole.
   writesWholeFolders: true,
   programsSendOut: false,
-  readsAll: true,
+  // /run/media, where desktops mount drives, is emptied with /run.
+  homeFolders: ['/home', '/root', '/media', '/mnt'],
+  // The X11 cookie, where XAUTHORITY does not name it, fonts and their cache, and the desktop's look: GTK's settings, the icons and the cursor.
+  homeReads: ['.Xauthority', '.fonts', '.local/share/fonts', '.config/fontconfig', '.cache/fontconfig', '.config/gtk-3.0', '.config/gtk-4.0', '.icons', '.local/share/icons'],
+  systemReadsAll: true,
   soundServerRecords: true,
   programFolders: ['/usr/local/bin'],
   programExtensions: [''],

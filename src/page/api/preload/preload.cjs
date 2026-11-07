@@ -111,8 +111,11 @@ const papp = {
   watch: async (file, callback, options) => {
     const id = crypto.randomUUID();
     const { promise: closed, resolve } = Promise.withResolvers();
-    await call('watch', id, file, options);
     watchCallbacks.set(id, { callback, resolve });
+    await call('watch', id, file, options).catch(err => {
+      watchCallbacks.delete(id);
+      throw err;
+    });
 
     return {
       closed,

@@ -1,42 +1,11 @@
 import { desktopCapturer, dialog, net, session } from 'electron';
-import { createHash } from 'crypto';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
-import { realPath } from '../permissions/paths.ts';
-import { PAGE_FILE } from '../permissions/patterns.ts';
 import type { Permissions, Use } from '../permissions/tags.ts';
+import { fileServer } from './serve.ts';
 
 export function createPageSession(page: string, { use }: Permissions, pageHash: string | null, canSee: (file: string) => boolean, served: (file: string) => void) {
   const pageSession = session.defaultSession;
 
-  pageSession.protocol.handle('file', request => {
-    const url = new URL(request.url);
-
-    // A file URL with a host is a network path on Windows, and no file elsewhere.
-    if (url.host) {
-      return new Response(`Apargon: this page may not load files from ${url.host}\n`, { status: 403 });
-    }
-
-    const file = realPath(fileURLToPath(url));
-
-    if (!canSee(file)) {
-      return new Response(`Apargon: this page may not see ${file}\n`, { status: 403 });
-    }
-
-    served(file);
-
-    if (PAGE_FILE.test(file)) {
-      const html = fs.readFileSync(file);
-
-      if (file === page && pageHash && createHash('sha256').update(html).digest('hex') !== pageHash) {
-        return new Response('Apargon: this page changed since you allowed it. Reopen it to be asked again.\n', { status: 409 });
-      }
-
-      return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } });
-    }
-
-    return net.fetch(request, { bypassCustomProtocolHandlers: true });
-  });
+  pageSession.protocol.handle('file', fileServer(page, pageHash, canSee, served, request => net.fetch(request, { bypassCustomProtocolHandlers: true })));
 
   // Chromium asks for system-exclusive MIDI, which can also change an instrument's settings, for any MIDI access.
   const webPermissions: Partial<Record<Use, string[]>> = { clipboard: ['clipboard-read'], location: ['geolocation'], camera: ['media:video'], microphone: ['media:audio'], screen: ['display-capture'], usb: ['usb'], serial: ['serial'], hid: ['hid'], midi: ['midi', 'midiSysex'] };

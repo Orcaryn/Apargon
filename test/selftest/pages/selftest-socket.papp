@@ -1,0 +1,28 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="papp-id" content="e08589e7-19d3-46eb-9e0d-60f786406c82">
+<meta name="papp-socket" content="./results/declared.sock">
+<meta name="papp-run" content="curl">
+<title>Apargon selftest (one socket)</title>
+<script src="lib.js"></script>
+<body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
+
+<script type="module">
+  // macOS and Linux. papp-socket: that one socket. On Linux the socket block can't allow one path, so the tag turns it off: SECURITY.md says so.
+  const curl = async (socket) => (await ran('curl', ['-s', '-o', '/dev/null', '-m', '5', '-w', '%{http_code}', '--unix-socket', socket, 'http://listener/'])).out;
+  const mac = navigator.userAgent.includes('Macintosh');
+
+  try {
+    result.socket_declared = await curl('results/declared.sock') === '200';
+
+    if (mac) {
+      result.socket_undeclared_blocked = await curl('results/other.sock') !== '200';
+    }
+
+    await finish('socket');
+  } catch (err) {
+    await finish('socket', err);
+  }
+
+  setTimeout(() => papp.quit(), 200);
+</script>

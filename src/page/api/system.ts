@@ -1,57 +1,81 @@
 import { app, nativeImage, powerMonitor, screen, type BrowserWindow, type NativeImage } from 'electron';
-import { linkHost, viewable } from '../../permissions/open.ts';
-import { absolutePath } from '../../permissions/paths.ts';
+import { Readable } from 'stream';
 import type { Permissions } from '../../permissions/tags.ts';
-import { callTrampoline, tellTrampoline, type Notice, type PageTray, type TrayIcon } from '../../shared/channel.ts';
+import { callTrampoline, tellTrampoline, trampolineBytes, type PageTray, type TrayIcon } from '../../shared/channel.ts';
 import { cleanTrayItems } from '../../shared/menuItems.ts';
-import { showNotice } from '../../shared/notice.ts';
+import { NOTICE_ICON_SIDE, showNotice } from '../../shared/notice.ts';
 import { PAGE_PLATFORM } from '../platform.ts';
 import type { Scope } from './scope.ts';
 
-export function systemApi(dir: string, permissions: Permissions, { where, canSee, need }: Scope, toFront: () => void, pageIcon: () => NativeImage | null, win: BrowserWindow) {
+export function systemApi(permissions: Permissions, { where }: Scope, toFront: () => void, pageIcon: () => NativeImage | null, win: BrowserWindow) {
   // What this window hears, by the id its page gave, each with what stops it: a reload stops them all.
   const hearing = new Map<string, () => void>();
 
   const needUse = (name: Permissions['use'][number], what: string) => {
     if (!permissions.use.includes(name)) {
-      throw new Error(`Apargon: this page may not ${what}. Ask for it with <meta name="papp-use" content="${name}">.`);
+      throw new Error(`Apargon: this .papp file may not ${what}. Ask for it with <meta name="papp-use" content="${name}">.`);
     }
   };
 
   return {
-    // The trampoline shows the dialog and writes: this process may not write where the user picks.
-    saveAll(files: Record<string, string | Uint8Array>) {
-      return callTrampoline('saveAll', { files: Object.entries(files).map(([name, data]) => ({ name, data: Buffer.from(data).toString('base64') })) });
-    },
-    // A suggestion is only a name: no filesystem lookup before the Save dialog opens.
-    save(file: string, data: string | Uint8Array) {
-      return callTrampoline('save', { file: absolutePath(file, dir), data: Buffer.from(data).toString('base64') });
-    },
-    open(target: string) {
-      if (linkHost(target)) {
-        tellTrampoline('openLink', target);
-      } else {
-        const file = where(target);
-        need(canSee(file), 'see');
+    // The trampoline shows the dialog and writes: the sandbox may not write where the user picks.
+    // body: every file's bytes, one after another. Each file takes its size of them as the trampoline writes it, and it writes them in this order.
+    saveAll(body: Readable, files: { name: string; size: number }[]) {
+      const chunks = (body as AsyncIterable<Buffer>)[Symbol.asyncIterator]();
+      let chunk: Buffer = Buffer.alloc(0);
+      const parts = files.map(({ size }) =>
+        Readable.from(
+          (async function* () {
+            for (let left = size; left > 0; ) {
+              if (!chunk.length) {
+                chunk = (await chunks.next()).value as Buffer;
+              }
 
-        if (!viewable(file)) {
-          throw new Error(`Apargon: open takes an http(s) link, a folder without an extension, or a file a viewer shows (images, video, audio, PDF, text), not ${file}.`);
-        }
+              const piece = chunk.subarray(0, left);
+              chunk = chunk.subarray(piece.length);
+              left -= piece.length;
+              yield piece;
+            }
+          })(),
+          { objectMode: false }
+        )
+      );
 
-        tellTrampoline('openFile', file);
+      return callTrampoline('saveAll', { files: files.map(({ name }, index) => ({ name, data: trampolineBytes.send(parts[index]) })) }).finally(() => parts.forEach(part => part.destroy()));
+    },
+    // A suggestion is only a name. The file the user picks is kept as a pick to write.
+    save(body: Readable, file: string) {
+      return callTrampoline('save', { file, data: trampolineBytes.send(body) });
+    },
+    // A link opens in the user's browser only to a site in papp-net. The trampoline checks.
+    open(link: string) {
+      if (!/^https?:\/\//i.test(link)) {
+        throw new Error('Apargon: open takes an http(s) link to a site in papp-net.');
       }
+
+      tellTrampoline('openLink', link);
     },
     // The button the user picked, or null when they click the notification itself or close it.
     notify(title: string, body = '', { buttons = [] }: { buttons?: string[] } = {}) {
       needUse('notifications', 'show notifications');
 
-      const notice: Notice = { title: String(title), body: String(body), buttons: buttons.slice(0, 3).map(String), icon: pageIcon()?.toPNG().toString('base64') ?? null };
+      const notice = { title, body, buttons: buttons.slice(0, 3) };
+      const icon = pageIcon();
 
-      return PAGE_PLATFORM.notifiesHere ? showNotice(notice, toFront) : callTrampoline('notify', notice);
+      if (PAGE_PLATFORM.notifiesHere) {
+        return showNotice(notice, icon ?? undefined, toFront);
+      } else if (!icon) {
+        return callTrampoline('notify', { ...notice, icon: null });
+      }
+
+      // Sized here, in the sandbox, and sent as pixels: the trampoline, which has network, decodes no image a .papp file sends.
+      const pixels = Readable.from(icon.resize({ width: NOTICE_ICON_SIDE, height: NOTICE_ICON_SIDE, quality: 'best' }).toBitmap(), { objectMode: false });
+
+      return callTrampoline('notify', { ...notice, icon: trampolineBytes.send(pixels) }).finally(() => pixels.destroy());
     },
     // icon: PNG or JPEG bytes, or a data: URL of one; null is Apargon's. click: a click on the icon goes to papp.onTrayClick, and a right-click opens the menu.
     tray(title: PageTray['title'], items: unknown = [], { icon = null, click = false }: { icon?: string | Uint8Array | null; click?: boolean } = {}) {
-      tellTrampoline('tray', { title: title === null ? null : String(title).slice(0, 24), items: cleanTrayItems(items), icon: icon === null ? null : trayIcon(icon), click });
+      tellTrampoline('tray', { title: title === null ? null : title.slice(0, 24), items: cleanTrayItems(items), icon: icon === null ? null : trayIcon(icon), click });
     },
     // The whole page, every window: as Quit in its tray menu.
     quit() {
@@ -73,14 +97,9 @@ export function systemApi(dir: string, permissions: Permissions, { where, canSee
         throw new Error('Apargon: share takes an http(s) link as url.');
       }
 
-      const filePaths = files.map(file => {
-        const target = where(file);
-        need(canSee(target), 'see');
+      const filePaths = files.map(file => where(file));
 
-        return target;
-      });
-
-      PAGE_PLATFORM.share(win, { texts: text === undefined ? [] : [String(text)], urls: url === undefined ? [] : [url], filePaths });
+      PAGE_PLATFORM.share(win, { texts: text === undefined ? [] : [text], urls: url === undefined ? [] : [url], filePaths });
     },
     // A name another app announces, such as com.spotify.client.PlaybackStateChanged: each one heard goes to the page with what came along.
     hear(id: string, name: string) {
@@ -88,8 +107,8 @@ export function systemApi(dir: string, permissions: Permissions, { where, canSee
 
       if (!PAGE_PLATFORM.hear) {
         throw new Error('Apargon: hearing other apps is on macOS only.');
-      } else if (typeof name !== 'string' || !name) {
-        // macOS takes null as every name.
+      } else if (!name) {
+        // macOS takes an empty name as every name.
         throw new Error('Apargon: hear takes the name of one notification, such as com.spotify.client.PlaybackStateChanged.');
       }
 
@@ -147,7 +166,7 @@ function trayIcon(icon: string | Uint8Array): TrayIcon {
 }
 
 function checkSecretName(name: string) {
-  if (typeof name !== 'string' || !name || name.length > 256) {
+  if (!name || name.length > 256) {
     throw new Error('Apargon: a secret takes a name of 1 to 256 characters.');
   }
 }

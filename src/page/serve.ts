@@ -3,23 +3,20 @@ import fs from 'fs';
 import { Readable } from 'stream';
 import { fileURLToPath } from 'url';
 import { realPath } from '../permissions/paths.ts';
-import { PAGE_FILE } from '../permissions/patterns.ts';
+
+const PAGE_FILE = /\.papp$/i;
 
 // fetchFile is Chromium's own file loader. It names each file's type, but ignores Range, which media seeks by.
-export function fileServer(page: string, pageHash: string | null, canSee: (file: string) => boolean, served: (file: string) => void, fetchFile: (request: Request) => Promise<Response>) {
+export function fileServer(page: string, pageHash: string | null, served: (file: string) => void, fetchFile: (request: Request) => Promise<Response>) {
   return async (request: Request) => {
     const url = new URL(request.url);
 
     // A file URL with a host is a network path on Windows, and no file elsewhere.
     if (url.host) {
-      return new Response(`Apargon: this page may not load files from ${url.host}\n`, { status: 403 });
+      return new Response(`Apargon: a .papp file may not load files from ${url.host}\n`, { status: 403 });
     }
 
     const file = realPath(fileURLToPath(url));
-
-    if (!canSee(file)) {
-      return new Response(`Apargon: this page may not see ${file}\n`, { status: 403 });
-    }
 
     // A missing dependency is still a dependency: creating it must trigger live reload.
     served(file);
@@ -31,7 +28,7 @@ export function fileServer(page: string, pageHash: string | null, canSee: (file:
       const html = await fs.promises.readFile(file);
 
       if (file === page && pageHash && createHash('sha256').update(html).digest('hex') !== pageHash) {
-        return new Response('Apargon: this page changed since you allowed it. Reopen it to be asked again.\n', { status: 409 });
+        return new Response('Apargon: this .papp file changed since you said yes. Open it again to be asked again.\n', { status: 409 });
       }
 
       return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } });

@@ -1,5 +1,7 @@
 import type { WebContents } from 'electron';
-import { callTrampoline, tellTrampoline, type IncomingRequest } from '../../shared/channel.ts';
+import type { Readable } from 'stream';
+import { buffer } from 'stream/consumers';
+import { callTrampoline, tellTrampoline, trampolineBytes, type IncomingRequest } from '../../shared/channel.ts';
 
 // Each start promise identifies its listener across reloads, including while the trampoline is still opening it.
 export function listenApi(contents: Pick<WebContents, 'send'>) {
@@ -20,7 +22,7 @@ export function listenApi(contents: Pick<WebContents, 'send'>) {
         if (listeners.get(server) !== started) {
           await callTrampoline('unlisten', { server });
 
-          throw new Error('Apargon: the page reloaded or the listener closed while it opened.');
+          throw new Error('Apargon: the .papp file reloaded or the listener closed while it opened.');
         }
 
         return url;
@@ -32,16 +34,16 @@ export function listenApi(contents: Pick<WebContents, 'send'>) {
         throw err;
       }
     },
-    respond(id: string, status: number, headers: Record<string, string>, body: string | Uint8Array) {
+    // body: the answer's bytes, sent as whoever asked takes them. Done once they are all sent, or whoever asked has gone.
+    async respond(body: Readable, id: string, status: number, headers: Record<string, string>) {
       if (!Number.isInteger(status) || status < 200 || status > 599) {
         throw new Error('Apargon: a final answer\'s status is a number from 200 to 599.');
       } else if (typeof headers !== 'object' || headers === null || Array.isArray(headers) || !Object.values(headers).every(value => typeof value === 'string')) {
         throw new Error('Apargon: an answer\'s headers are an object of strings, such as { "content-type": "text/plain" }.');
-      } else if (typeof body !== 'string' && !(body instanceof Uint8Array)) {
-        throw new Error('Apargon: an answer\'s body is a string or bytes.');
       }
 
-      tellTrampoline('respond', { id: String(id), status, headers, body: Buffer.from(body).toString('base64') });
+      tellTrampoline('respond', { id, status, headers, body: trampolineBytes.send(body) });
+      await new Promise(resolve => body.on('close', resolve));
     },
     unlisten(server: string) {
       listeners.delete(server);
@@ -50,7 +52,11 @@ export function listenApi(contents: Pick<WebContents, 'send'>) {
     },
     request({ server, ...request }: IncomingRequest) {
       if (listeners.has(server)) {
-        contents.send('apargon-request', server, { ...request, body: Buffer.from(request.body, 'base64') });
+        // Whoever asked may leave while the body comes: then there is no request to hand over.
+        buffer(trampolineBytes.receive(request.body)).then(
+          body => contents.send('apargon-request', server, { ...request, body }),
+          () => undefined
+        );
       }
     },
     reset() {

@@ -1,5 +1,7 @@
 import { app, Menu, powerSaveBlocker, screen, type BrowserWindow, type BrowserWindowConstructorOptions, type Rectangle } from 'electron';
+import { Readable } from 'stream';
 import type { Permissions } from '../../permissions/tags.ts';
+import { callTrampoline, trampolineBytes } from '../../shared/channel.ts';
 import type { PageMenus } from '../menu.ts';
 import { pageMenuItems, type PageMenuItem } from '../../shared/menuItems.ts';
 import type { Scope } from './scope.ts';
@@ -11,7 +13,7 @@ type WindowChange = { onTop?: boolean; allSpaces?: boolean; clickThrough?: boole
 // Below this a window on top would be a pane no one sees, catching the clicks meant for the app under it.
 const LEAST_OPACITY = 0.3;
 
-export function windowApi(permissions: Permissions, { where, canSee, need }: Scope, win: BrowserWindow, menus: PageMenus, { resizable = true, frame = true }: BrowserWindowConstructorOptions) {
+export function windowApi(permissions: Permissions, { where }: Scope, win: BrowserWindow, menus: PageMenus, { resizable = true, frame = true }: BrowserWindowConstructorOptions) {
   // What may be turned on is the tag's; resizable and frame are this window's own, as Electron has no getter for frame.
   const { onTop = false, allSpaces = false, clickThrough: mayClickThrough = false, private: privateWindow = false } = permissions.window ?? {};
   // As the window opened, from the tag or window.open's features: what a reload goes back to.
@@ -29,38 +31,33 @@ export function windowApi(permissions: Permissions, { where, canSee, need }: Sco
     // Changes what it is given, then answers how the window is. What the tags did not turn on stays off: the popup said so.
     window(change: WindowChange = {}) {
       if (change.onTop && !onTop) {
-        throw new Error('Apargon: this window may not stay on top. Ask for it with <meta name="papp-window" content="on-top=yes">.');
+        throw new Error('Apargon: this window may not stay on top. Ask for it with <meta name="papp-window" on-top>.');
       } else if (change.allSpaces && !allSpaces) {
-        throw new Error('Apargon: this window may not show on every desktop. Ask for it with <meta name="papp-window" content="all-spaces=yes">.');
+        throw new Error('Apargon: this window may not show on every desktop. Ask for it with <meta name="papp-window" all-spaces>.');
       } else if (change.clickThrough && !mayClickThrough) {
-        throw new Error('Apargon: this window may not let clicks pass through. Ask for it with <meta name="papp-window" content="click-through=yes">.');
+        throw new Error('Apargon: this window may not let clicks pass through. Ask for it with <meta name="papp-window" click-through>.');
       } else if (change.private && !privateWindow) {
-        throw new Error('Apargon: this window may not hide from screen sharing. Ask for it with <meta name="papp-window" content="private=yes">.');
+        throw new Error('Apargon: this window may not hide from screen sharing. Ask for it with <meta name="papp-window" private>.');
       } else if (change.visible === false && !permissions.use.includes('background')) {
-        throw new Error('Apargon: this page may not hide its window: it would run with nothing to show it. Ask for it with <meta name="papp-use" content="background">, which gives it a tray icon.');
+        throw new Error('Apargon: this .papp file may not hide its window: it would run with nothing to show it. Ask for it with <meta name="papp-use" content="background">, which gives it a tray icon.');
       } else if (change.opacity !== undefined && !(change.opacity >= LEAST_OPACITY && change.opacity <= 1)) {
         throw new Error(`Apargon: opacity takes a number from ${LEAST_OPACITY} to 1.`);
       } else if (!resizable && (change.resizable || change.bounds?.width !== undefined || change.bounds?.height !== undefined || change.state === 'maximized')) {
-        throw new Error('Apargon: this window has a fixed size: papp-window says resizable=no.');
+        throw new Error('Apargon: this window has a fixed size: papp-window says resizable="no".');
       } else if (change.state !== undefined && !['normal', 'minimized', 'maximized'].includes(change.state)) {
-        throw new Error("Apargon: state takes normal, minimized or maximized. For fullscreen, use the page's own requestFullscreen().");
+        throw new Error("Apargon: state takes normal, minimized or maximized. For fullscreen, use the .papp file's own requestFullscreen().");
       } else if ([change.minSize, change.maxSize].some(size => size && ![size.width, size.height].every(side => Number.isInteger(side) && side >= 0))) {
         throw new Error('Apargon: minSize and maxSize take { width, height } in whole pixels; 0 on a side is no limit.');
       } else if (change.aspectRatio !== undefined && !(change.aspectRatio >= 0)) {
         throw new Error('Apargon: aspectRatio takes width over height, such as 16 / 9, or 0 for none.');
       } else if (change.shape?.length && frame) {
-        throw new Error('Apargon: a window with a frame keeps its shape. Ask for it with <meta name="papp-window" content="frame=no">.');
+        throw new Error('Apargon: a window with a frame keeps its shape. Ask for it with <meta name="papp-window" frame="no">.');
       } else if (change.shape?.some(rect => ![rect.x, rect.y, rect.width, rect.height].every(Number.isInteger))) {
         throw new Error('Apargon: shape takes a list of { x, y, width, height } in whole pixels, or [] for the whole window.');
       }
 
-      // Only a file the page may see: its name and icon go in the title bar, and the icon drags the file to other apps. Null clears it.
+      // Its name and icon go in the title bar. Null clears it.
       const file = change.file ? where(change.file) : '';
-
-      if (change.file) {
-        need(canSee(file), 'see');
-      }
-
       // Whole, on one screen's work area: a window off every screen, or under the menu bar or taskbar, is one the user cannot reach.
       const bounds = { ...win.getBounds(), ...change.bounds };
       const { workArea: area } = screen.getDisplayMatching(bounds);
@@ -110,7 +107,10 @@ export function windowApi(permissions: Permissions, { where, canSee, need }: Sco
 
       // On macOS each call hides the window and the dock icon a moment: only a change makes one.
       if (change.allSpaces !== undefined && change.allSpaces !== win.isVisibleOnAllWorkspaces()) {
+        const wasOnTop = win.isAlwaysOnTop();
         win.setVisibleOnAllWorkspaces(change.allSpaces);
+        // On macOS this drops the window's level.
+        win.setAlwaysOnTop(wasOnTop);
       }
 
       if (change.clickThrough !== undefined) {
@@ -194,13 +194,11 @@ export function windowApi(permissions: Permissions, { where, canSee, need }: Sco
     pdf() {
       return win.webContents.printToPDF({});
     },
-    // The system's print dialog; true once the job is sent.
-    print() {
-      if (!permissions.use.includes('print')) {
-        throw new Error('Apargon: this page may not print. Ask for it with <meta name="papp-use" content="print">, or save papp.pdf() with papp.save().');
-      }
+    // Makes a PDF and hands it to the trampoline, which shows the system print panel: the sandbox never reaches the print server. True once the user prints it.
+    async print() {
+      const pdf = Readable.from(await win.webContents.printToPDF({}), { objectMode: false });
 
-      return new Promise<boolean>(resolve => win.webContents.print({}, resolve));
+      return callTrampoline('print', { data: trampolineBytes.send(pdf) }).finally(() => pdf.destroy());
     },
     menu(items: PageMenuItem[]) {
       menus.setPageMenus(pageMenuItems(items, id => win.webContents.send('apargon-menu', id)), win);

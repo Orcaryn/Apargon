@@ -1,4 +1,5 @@
 <!doctype html>
 <meta charset="utf-8">
+<meta name="papp-id" content="90578602-4c9c-4e3d-9308-9c9033e7d429">
 <title>Apargon selftest: stays open</title>
 <body style="font: 14px ui-monospace, monospace; padding: 20px">Stays open until Apargon closes it.</body>

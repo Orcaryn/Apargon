@@ -1,4 +1,0 @@
-(version 1)
-(allow default)
-(deny network*)
-(deny mach-lookup (global-name "com.apple.nsurlsessiond" "com.apple.trustd" "com.apple.trustd.agent") (xpc-service-name-prefix "com.apple.WebKit."))

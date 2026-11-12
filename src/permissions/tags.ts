@@ -1,252 +1,279 @@
+import { randomUUID } from 'crypto';
 import fs from 'fs';
 import net from 'net';
-import os from 'os';
 import path from 'path';
-import { PROGRAM_ENV } from './env.ts';
-import { LOCAL_HOSTS, privateNetwork } from './network.ts';
-import { absolutePath, BIG_FOLDERS, HOME, realEntry, realPath } from './paths.ts';
-import { changeableSources, isInside, literalBase } from './patterns.ts';
+import { absolutePath, HOME, isInside } from './paths.ts';
 import { PERMISSIONS_PLATFORM } from './platform.ts';
 
+// No Electron here: the Node tests load it.
+
+// What a .papp file's tags allow. Without permission tags: read every local disk, write its own folder, no network.
 export type Permissions = {
-  own: string | null;
-  read: string[];
+  // papp-id: a UUID that names the app, whatever the file is called or wherever it moves. Its folder and its secrets are kept by it, so an update finds them.
+  id: string;
+  // Folders it may change, each ending in the separator.
   write: string[];
+  // papp-write all: any file but Apargon's own.
+  writeAll: boolean;
+  // By the name the .papp file runs it by.
+  run: Record<string, Program>;
+  // Each host:port it may reach, and open links to.
   net: string[];
-  open: string[];
-  run: Record<string, string>;
-  env: string[];
-  sockets: string[];
-  system: boolean;
-  use: Use[];
-  shortcuts: string[];
-  // papp-global-shortcut any: the page may pick shortcuts while it runs, with papp.shortcuts.
-  anyShortcut: boolean;
-  window: WindowSettings | null;
   listen: Listen | null;
+  sockets: string[];
+  use: Use[];
+  window: WindowSettings | null;
+  env: string[];
+  shortcuts: string[];
+  // papp-global-shortcut any: the .papp file may pick its keys while it runs, with papp.shortcuts.
+  anyShortcut: boolean;
+  // papp-system: no limits. The .papp file runs as a Node script.
+  system: boolean;
+  // Every permission tag as written, for the popup. Not papp-id: it asks for nothing.
   tags: string[];
 };
+export type Program = { file: string; unfenced: boolean };
 export type Use = (typeof USES)[number];
-// Who may send the page requests: programs on this computer, or devices on the network too.
+// Who may connect to what the .papp file serves: this computer, or the network too.
 export type Listen = 'localhost' | 'network';
-// Only the keys the tag sets.
+// Only the settings the tag names.
 export type WindowSettings = { width?: number; height?: number; minWidth?: number; minHeight?: number; resizable?: boolean; titleBar?: boolean; frame?: boolean; transparent?: boolean; onTop?: boolean; allSpaces?: boolean; clickThrough?: boolean; private?: boolean; dock?: boolean; blur?: boolean; mark?: boolean };
+// Folders no tag may hand over: Apargon's data, the .papp files' own folders, and the app itself. The trampoline names them.
+export type Protected = string[];
 
-const INVISIBLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
-const USES = ['notifications', 'clipboard', 'location', 'sound', 'camera', 'microphone', 'screen', 'background', 'login', 'usb', 'serial', 'hid', 'midi', 'print', 'cursor', 'broadcasts', 'share'] as const;
+export const USES = ['notifications', 'clipboard', 'location', 'sound', 'camera', 'microphone', 'screen', 'background', 'login', 'usb', 'serial', 'hid', 'midi', 'cursor', 'broadcasts', 'share', 'cloud', 'bluetooth'] as const;
+export const TAGS = ['id', 'write', 'run', 'net', 'listen', 'socket', 'use', 'window', 'env', 'global-shortcut', 'system'];
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SIZES = { width: 'width', height: 'height', 'min-width': 'minWidth', 'min-height': 'minHeight' } as const;
 const SWITCHES = { resizable: 'resizable', 'title-bar': 'titleBar', frame: 'frame', transparent: 'transparent', 'on-top': 'onTop', 'all-spaces': 'allSpaces', 'click-through': 'clickThrough', private: 'private', dock: 'dock', blur: 'blur', mark: 'mark' } as const;
+// Per tag: whether it takes content, and the attributes it takes beside name. Any other attribute refuses the file.
+const SHAPES: Record<string, { content: boolean; options: string[] }> = {
+  id: { content: true, options: [] },
+  write: { content: true, options: ['all'] },
+  run: { content: true, options: ['unfenced'] },
+  net: { content: true, options: [] },
+  listen: { content: false, options: ['network'] },
+  socket: { content: true, options: [] },
+  use: { content: true, options: [] },
+  window: { content: false, options: ['size', ...Object.keys(SIZES), ...Object.keys(SWITCHES)] },
+  env: { content: true, options: [] },
+  'global-shortcut': { content: true, options: [] },
+  system: { content: false, options: [] },
+};
+const OLD_TAGS: Record<string, string> = {
+  read: 'papp-read is gone: every .papp file reads the local disks. Remove the tag.',
+  open: 'papp-open is gone: a site in papp-net opens its links too. Write <meta name="papp-net" content="example.com">.',
+};
+const INVISIBLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 const MODIFIERS: Partial<Record<string, string>> = { commandorcontrol: 'CommandOrControl', cmdorctrl: 'CommandOrControl', command: 'Command', cmd: 'Command', control: 'Control', ctrl: 'Control', alt: 'Alt', option: 'Alt', altgr: 'AltGr', shift: 'Shift', super: 'Super', meta: 'Super' };
 const KEYS = [...Array.from({ length: 24 }, (_, i) => `F${i + 1}`), 'Space', 'Tab', 'Backspace', 'Delete', 'Insert', 'Return', 'Enter', 'Up', 'Down', 'Left', 'Right', 'Home', 'End', 'PageUp', 'PageDown', 'Escape', 'Esc'];
 // Taken alone: no app types with them.
 const MEDIA_KEYS = ['MediaPlayPause', 'MediaNextTrack', 'MediaPreviousTrack', 'MediaStop'];
 
-export function declaredPermissions(page: string, html = fs.readFileSync(page, 'utf8')) {
+export function noPermissions(id: string): Permissions {
+  return { id, write: [], writeAll: false, run: {}, net: [], listen: null, sockets: [], use: [], window: null, env: [], shortcuts: [], anyShortcut: false, system: false, tags: [] };
+}
+
+// The tags in the head, as the browser reads them. A tag Apargon can't keep refuses the whole file, and so does a missing papp-id.
+export function declaredPermissions(page: string, html: string, protectedFolders: Protected) {
   const dir = path.dirname(page);
-  const permissions: Permissions = { own: null, read: [], write: [], net: [], open: [], run: {}, env: [], sockets: [], system: false, use: [], shortcuts: [], anyShortcut: false, window: null, listen: null, tags: [] };
+  const permissions = noPermissions('');
+
+  // The path goes, as it is, into files the OS reads line by line, as Linux's launcher entry: a line break in it would write lines of its own there.
+  if (/\p{Cc}/u.test(page)) {
+    throw new Error(`${JSON.stringify(path.basename(page))} has a line break or another control character in its path. Rename it.`);
+  }
+
   const head = html.replace(/<!--[\s\S]*?-->/g, '').split(/<script\b|<body\b|<\/head\b/i)[0];
 
   for (const [, attrs] of head.matchAll(/<meta\s+([^>]*)>/gi)) {
     const attributes = readAttributes(attrs);
     const name = attributes.get('name');
-    const content = attributes.get('content');
 
     if (!name?.value.toLowerCase().startsWith('papp-')) {
       continue;
     }
 
-    const tag = `<meta ${attrs.replace(/\s+/g, ' ').trim()}>`;
-
-    if (!name.quoted || !content?.quoted) {
-      throw new Error(`${tag} needs a quoted name and content, as in <meta name="papp-read" content="./data">.`);
-    }
-
-    const value = content.value.trim();
-    const invisible = [tag, value].find(text => INVISIBLE.test(text));
-
-    if (invisible) {
-      throw new Error(`${JSON.stringify(invisible)} has a line break or another invisible character, which the popup cannot show. Write the value on one line.`);
-    }
-
-    permissions.tags.push(tag);
+    const tag = `<meta ${attrs.replace(/\s+/g, ' ').replace(/\s*\/$/, '').trim()}>`;
     const kind = name.value.slice('papp-'.length).toLowerCase();
+    const shape = Object.hasOwn(SHAPES, kind) ? SHAPES[kind] : undefined;
 
-    if (Object.hasOwn(PERMISSIONS_PLATFORM.refusedTags, kind)) {
+    if (INVISIBLE.test(tag)) {
+      throw new Error(`${JSON.stringify(tag)} has a line break or another invisible character, which the popup can't show. Write the tag on one line.`);
+    } else if (Object.hasOwn(OLD_TAGS, kind)) {
+      throw new Error(OLD_TAGS[kind]);
+    } else if (!shape) {
+      throw new Error(`Unknown tag papp-${kind}. The tags are ${TAGS.map(each => `papp-${each}`).join(', ')}.`);
+    } else if (PERMISSIONS_PLATFORM.refusedTags[kind]) {
       throw new Error(PERMISSIONS_PLATFORM.refusedTags[kind]);
-    } else if (kind === 'read' || kind === 'write') {
-      permissions[kind].push(pathPattern(value, dir));
-    } else if (kind === 'net') {
-      permissions.net.push(hostPattern(value));
-    } else if (kind === 'open') {
-      permissions.open.push(hostName(value, 'papp-open', value));
-    } else if (kind === 'run' && Object.hasOwn(permissions.run, path.basename(value))) {
-      throw new Error(`Two papp-run tags name a program ${path.basename(value)}. The page runs programs by name, so keep one.`);
+    }
+
+    const unknown = [...attributes.keys()].find(key => key !== 'name' && (key !== 'content' || !shape.content) && !shape.options.includes(key));
+    const content = attributes.get('content');
+
+    if (unknown === 'content') {
+      throw new Error(`${tag}: papp-${kind} takes no content.${kind === 'window' ? ' Its settings are attributes now, as in <meta name="papp-window" on-top frame="no" size="320x80">.' : kind === 'listen' ? ' Write <meta name="papp-listen"> for this computer, or <meta name="papp-listen" network> for the network too.' : kind === 'system' ? ' Write <meta name="papp-system">.' : ''}`);
+    } else if (unknown !== undefined) {
+      throw new Error(`${tag}: papp-${kind} has no attribute "${unknown}".${shape.options.length ? ` It takes ${shape.options.join(', ')}.` : ''}`);
+    } else if (!name.quoted || (content && !content.quoted)) {
+      throw new Error(`${tag} needs quoted values, as in <meta name="papp-net" content="example.com">.`);
+    }
+
+    // A tag that takes content needs it, unless an option stands in for it: papp-write all.
+    const value = content?.value.trim() ?? '';
+    const yes = (key: string) => attributes.has(key) && isYes(attributes.get(key)!, tag);
+
+    if (kind !== 'id') {
+      permissions.tags.push(tag);
+    }
+
+    if (shape.content && !value && !(kind === 'write' && attributes.has('all'))) {
+      throw new Error(`${tag} needs content: the ${{ id: 'UUID', write: 'folder', run: 'program', net: 'site', socket: 'socket', use: 'feature', env: 'variable', 'global-shortcut': 'keys' }[kind]} it allows.`);
+    } else if (kind === 'id' && permissions.id) {
+      throw new Error('Two papp-id tags. Keep one.');
+    } else if (kind === 'id' && !UUID.test(value)) {
+      throw new Error(`Bad papp-id "${value}". It is a UUID, such as ${randomUUID()}.`);
+    } else if (kind === 'id') {
+      permissions.id = value.toLowerCase();
+    } else if (kind === 'write' && attributes.has('all')) {
+      if (content) {
+        throw new Error(`${tag}: papp-write all takes no folder. Keep one or the other.`);
+      }
+
+      permissions.writeAll = yes('all');
+    } else if (kind === 'write') {
+      permissions.write.push(writeFolder(value, dir, protectedFolders));
     } else if (kind === 'run') {
-      permissions.run[path.basename(value)] = findProgram(value, dir);
-    } else if (kind === 'env') {
-      permissions.env.push(envName(value));
+      const program = findProgram(value, dir);
+      const runName = path.basename(value);
+
+      if (Object.hasOwn(permissions.run, runName)) {
+        throw new Error(`Two papp-run tags name a program ${runName}. The .papp file runs programs by name, so keep one.`);
+      }
+
+      // Unfenced: its real file, so a link can't hide that papp-write reaches it.
+      const unfenced = yes('unfenced');
+      permissions.run[runName] = { file: unfenced ? fs.realpathSync.native(program) : program, unfenced };
+    } else if (kind === 'net') {
+      permissions.net.push(site(value));
+    } else if (kind === 'listen' && permissions.listen) {
+      throw new Error('Two papp-listen tags. Keep one: the network includes this computer.');
+    } else if (kind === 'listen') {
+      permissions.listen = yes('network') ? 'network' : 'localhost';
     } else if (kind === 'socket') {
       permissions.sockets.push(socketPath(value, dir));
-    } else if (kind === 'system' && value === 'full') {
-      permissions.system = true;
-    } else if (kind === 'system') {
-      throw new Error(`Bad papp-system value "${value}". The only value is "full".`);
     } else if (kind === 'use') {
-      permissions.use.push(...value.split(',').map(name => useName(name.trim())));
-    } else if (kind === 'global-shortcut' && value === 'any') {
+      permissions.use.push(useName(value));
+    } else if (kind === 'window' && permissions.window) {
+      throw new Error('Two papp-window tags. Put every setting in one, as in <meta name="papp-window" on-top frame="no">.');
+    } else if (kind === 'window') {
+      permissions.window = windowSettings(attributes, tag);
+    } else if (kind === 'env' && !/^[A-Za-z_]\w*$/.test(value)) {
+      throw new Error(`Bad papp-env "${value}". Name one environment variable, such as AWS_PROFILE.`);
+    } else if (kind === 'env') {
+      permissions.env.push(value);
+    } else if (kind === 'global-shortcut' && value.toLowerCase() === 'any') {
       permissions.anyShortcut = true;
     } else if (kind === 'global-shortcut') {
       permissions.shortcuts.push(shortcut(value));
-    } else if (kind === 'window' && permissions.window) {
-      throw new Error('Two papp-window tags. Put every setting in one, as in content="size=900x600, title-bar=no".');
-    } else if (kind === 'window') {
-      permissions.window = windowSettings(value);
-    } else if (kind === 'listen' && permissions.listen) {
-      throw new Error('Two papp-listen tags. Keep one: network includes this computer.');
-    } else if (kind === 'listen') {
-      permissions.listen = listenScope(value);
-    } else {
-      throw new Error(`Unknown tag papp-${kind}. The tags are papp-read, papp-write, papp-net, papp-open, papp-run, papp-env, papp-socket, papp-listen, papp-use, papp-global-shortcut, papp-window and papp-system.`);
+    } else if (kind === 'system') {
+      permissions.system = true;
     }
   }
 
-  if (permissions.system && (Object.keys(permissions.run).length || permissions.env.length)) {
-    throw new Error('papp-system already allows every program and variable. Remove papp-run and papp-env.');
-  } else if (permissions.env.length && !Object.keys(permissions.run).length) {
-    throw new Error('papp-env passes a variable to the programs a page runs, and this page runs none. Add papp-run, or remove papp-env.');
-  } else if (permissions.window?.dock === false && !permissions.use.includes('background')) {
-    throw new Error('papp-window dock=no leaves the page no icon to find it by. Add <meta name="papp-use" content="background">, which keeps its tray icon.');
+  if (!permissions.id) {
+    throw new Error(`${path.basename(page)} has no papp-id. Add <meta name="papp-id" content="${randomUUID()}"> to its head: it names the app, so an update keeps its data.`);
   }
 
-  checkPermissions(permissions, page);
-  permissions.own = [path.parse(dir).root, HOME, ...BIG_FOLDERS].includes(dir) ? null : dir + path.sep;
+  checkTogether(permissions, protectedFolders);
 
   return permissions;
 }
 
-// What the sandbox is built from must pass these, whether a tag or a pick named it: run on the tags here, and again with the picks before the sandbox is built.
-export function checkPermissions(permissions: Permissions, page: string) {
-  const { read, write, run, sockets, system } = permissions;
-  const dir = path.dirname(page);
-  // Protect both the launch name and its target: an executable alias must not be writable either.
-  const programFiles = [...new Set(Object.values(run).flatMap(file => [file, realEntry(file), realPath(file)]))];
-  // Seatbelt takes each in a quoted string: a " would end it, and the rest would be rules.
-  const quoted = [page, ...read, ...write, ...programFiles, ...sockets].find(file => file.includes('"'));
-  const refusal = PERMISSIONS_PLATFORM.refuse(permissions, dir);
-  const invisible = [page, ...read, ...write, ...programFiles, ...sockets].find(text => INVISIBLE.test(text));
-  const wildcardProgram = programFiles.find(program => program.includes('*'));
-  // A program the page can change is any program: "Run tool" would say nothing. As on disk, like the patterns, so a link cannot hide it. Where the sandbox grants folders whole, a program in one counts too.
-  const changeable = changeableSources(permissions).files.map(source => new RegExp(source));
-  const granted = write.map(literalBase);
-  const rewritable = programFiles.find(program => changeable.some(pattern => pattern.test(program)) || (PERMISSIONS_PLATFORM.writesWholeFolders && granted.some(folder => isInside(program, folder))));
-  // There a program could rewrite the page too: ./out* grants the page's own folder.
-  const holdsPage = PERMISSIONS_PLATFORM.writesWholeFolders && (system || Object.keys(run).length > 0) && granted.find(folder => isInside(page, folder));
+// What only the tags together decide.
+function checkTogether(permissions: Permissions, protectedFolders: Protected) {
+  const { system, writeAll, write, run, net, sockets, listen, env, use, window } = permissions;
+  const unfencedRewritable = Object.entries(run).find(([, program]) => program.unfenced && (writeAll || [...write, ...protectedFolders].some(folder => isInside(program.file, folder))));
+  const duplicate = [write, net, sockets, use, env, permissions.shortcuts].map(list => list.find((each, i) => list.indexOf(each) !== i)).find(each => each !== undefined);
 
-  if (quoted) {
-    throw new Error(`${quoted} has a " in its path, which the sandbox cannot take. Rename it.`);
-  } else if (wildcardProgram) {
-    throw new Error(`Program ${wildcardProgram} has * in its path. The sandbox must grant one executable, not a pattern.`);
-  } else if (refusal) {
-    throw new Error(refusal);
-  } else if (invisible) {
-    throw new Error(`${JSON.stringify(invisible)} has a line break or another invisible character, which the popup cannot show. Rename the file.`);
-  } else if (rewritable) {
-    throw new Error(`The page could change ${rewritable}, which it runs: a papp-write tag or a pick covers it. Keep a program where the page cannot write.`);
-  } else if (holdsPage) {
-    throw new Error(`Here the sandbox lets programs change all of ${holdsPage}, which holds this page, so a program could rewrite it. Write to a folder of its own, such as ./data/*.`);
+  if (system && (writeAll || write.length || Object.keys(run).length || net.length || sockets.length || listen || env.length)) {
+    throw new Error('papp-system already allows everything: every file, every program and the internet. Remove the other papp-write, papp-run, papp-net, papp-socket, papp-listen and papp-env tags.');
+  } else if (writeAll && write.length) {
+    throw new Error('papp-write all already allows every folder. Remove the other papp-write tags.');
+  } else if (env.length && !Object.keys(run).length) {
+    throw new Error('papp-env passes a variable to the programs a .papp file runs, and this one runs none. Add papp-run, or remove papp-env.');
+  } else if (unfencedRewritable) {
+    throw new Error(`The .papp file could change ${unfencedRewritable[1].file}, which papp-run unfenced runs with no limits. Keep it where the .papp file can't write.`);
+  } else if (duplicate !== undefined) {
+    throw new Error(`Two tags allow ${duplicate}. Keep one.`);
+  } else if (window?.dock === false && !use.includes('background')) {
+    throw new Error('papp-window dock="no" leaves no icon to find the .papp file by. Add <meta name="papp-use" content="background">, which keeps its tray icon.');
   }
 }
 
-// As the browser reads them: the first of each name wins, in any case. Quoted means name="value", no spaces around the =.
+// As the browser reads them: the first of each name wins, in any case. A bare attribute has the value ''. Quoted means name="value", no spaces around the =.
 function readAttributes(attrs: string) {
   const attributes = new Map<string, { value: string; quoted: boolean }>();
 
   for (const [, key, equals, double, single, bare] of attrs.matchAll(/([^\s"'>/=]+)(?:(\s*=\s*)(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g)) {
     if (!attributes.has(key.toLowerCase())) {
-      attributes.set(key.toLowerCase(), { value: double ?? single ?? bare ?? '', quoted: (double ?? single) !== undefined && equals === '=' });
+      attributes.set(key.toLowerCase(), { value: double ?? single ?? bare ?? '', quoted: equals === undefined || ((double ?? single) !== undefined && equals === '=') });
     }
   }
 
   return attributes;
 }
 
-function pathPattern(value: string, dir: string) {
-  if (value === '*') {
-    throw new Error('A path of "*" is unclear. Use / for the whole disk or ~/ for your home folder.');
-  } else if (!value || /["\\]/.test(value) || (value.includes('*') && value.endsWith('/'))) {
-    throw new Error(`Bad path "${value}". Use a path such as ./notes.txt, ~/notes/ or ~/notes/*.md.`);
-  } else if (value.split('**').length > 2 || value.split('/').some(name => name !== '**' && name.split('*').length > 2)) {
-    // More would make each check try every way to split the path between them.
-    throw new Error(`Bad path "${value}". Write one * per name and one ** per path, such as ~/notes/**/*.md.`);
+// A bare attribute is yes, and so is ="yes". ="no" is no.
+function isYes({ value, quoted }: { value: string; quoted: boolean }, tag: string) {
+  const answer = value.trim().toLowerCase();
+
+  if (!quoted || !['', 'yes', 'no'].includes(answer)) {
+    throw new Error(`${tag}: write a setting bare for yes, as in on-top, or ="no" for no.`);
   }
 
-  // A folder ends in /, anything else is a file: the popup shows which, and Apargon makes the right one if it is not there.
-  const folder = value.endsWith('/');
-  const absolute = absolutePath(value, dir);
-  const stats = absolute.includes('*') ? undefined : fs.statSync(absolute, { throwIfNoEntry: false });
-  const base = absolute.includes('*') || stats ? literalBase(absolute) : path.dirname(absolute);
-
-  if (!fs.existsSync(base)) {
-    throw new Error(`Folder ${base} does not exist (from "${value}").`);
-  } else if (stats && fs.lstatSync(absolute).isSymbolicLink()) {
-    // The sandbox would grant what it leads to, which the page could change between opens.
-    throw new Error(`${absolute} is a link (from "${value}"). Name what it leads to.`);
-  } else if (stats && stats.isDirectory() !== folder) {
-    throw new Error(stats.isDirectory() ? `${absolute} is a folder: write "${value}/".` : `${absolute} is a file: write "${value.slice(0, -1)}".`);
-  }
-
-  return path.join(fs.realpathSync.native(base), path.relative(base, absolute), folder ? path.sep : '');
+  return answer !== 'no';
 }
 
-function hostPattern(value: string) {
-  const pattern = value.includes(':') ? value : `${value}:443`;
-  const [name, port] = pattern.split(':');
+// One folder, as on disk. Not the home folder, not one that holds it, and not Apargon's own.
+function writeFolder(value: string, dir: string, protectedFolders: Protected) {
+  const absolute = absolutePath(value, dir);
 
-  if (value === '*') {
-    throw new Error('Write papp-net "*:443" for any server on port 443, or "*:*" for any port.');
-  } else if (!/^[^:]+:(\*|[1-9]\d*)$/.test(pattern) || +port > 65535) {
-    throw new Error(`Bad papp-net value "${value}". One host per <meta>, with a port after a colon if not 443, such as api.example.com, *.example.com or example.com:8080.`);
+  if (!fs.statSync(absolute, { throwIfNoEntry: false })?.isDirectory()) {
+    throw new Error(`papp-write "${value}": ${absolute} is not a folder, or isn't there. For any folder, write <meta name="papp-write" all>.`);
   }
 
-  const host = hostName(name, 'papp-net', value);
+  const folder = fs.realpathSync.native(absolute);
+  const own = protectedFolders.find(each => isInside(folder, each) || isInside(each, folder));
 
-  if (host !== '127.0.0.1' && /^(0|127|169\.254)\./.test(host)) {
-    throw new Error(`Apargon never reaches ${host}, which is this computer or a link-local address, where cloud machines keep their keys. For a program on this computer, declare localhost:<port>.`);
-  } else if (net.isIPv4(host) && Object.values(os.networkInterfaces()).flat().some(own => own?.address === host && !own.internal)) {
-    throw new Error(`Apargon never reaches ${host}: it is one of this computer's own addresses. For a program on this computer, declare localhost:<port>.`);
-  } else if (host.endsWith('.local')) {
-    throw new Error(`Apargon reaches a device on your local network only by its address in numbers, such as 192.168.1.5:${port === '*' ? '80' : port}, not by a name such as ${host}.`);
-  } else if ((LOCAL_HOSTS.includes(host) || privateNetwork().check(host)) && (port === '*' || !value.includes(':'))) {
-    // On this computer, any port would include other pages' proxies, and with them their hosts. 443 is a web server's port, not a guess at a local one.
-    throw new Error(`Apargon reaches ${host} on one port only, which you name. Write ${host}:<port>.`);
+  if (isInside(HOME, folder)) {
+    throw new Error(`papp-write can't name ${folder}: it holds your whole home folder. Name a folder inside it, or write <meta name="papp-write" all>.`);
+  } else if (own) {
+    throw new Error(`papp-write can't name ${folder}: it is or holds Apargon's own folder ${own}.`);
+  }
+
+  return folder + path.sep;
+}
+
+// A host and an optional port, 443 if none. No scheme, no *. An IP address and localhost are fine: the user says yes to them.
+export function site(value: string) {
+  const [name, port = '443', ...rest] = value.toLowerCase().split(':');
+  // A trailing dot names the same host.
+  const host = name.replace(/\.$/, '');
+
+  if (rest.length || !/^[1-9]\d{0,4}$/.test(port) || +port > 65535 || !host.split('.').every(label => /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(label))) {
+    throw new Error(`Bad papp-net "${value}". Write one site and an optional port, as in example.com or example.com:8080. No scheme, no path, no *.`);
+  } else if (!net.isIPv4(host) && URL.parse(`http://${host}`)?.hostname !== host) {
+    // The browser reads 0x7f.1 and 127.1 as 127.0.0.1: the popup would show a name for an address.
+    throw new Error(`Bad papp-net "${value}". Write an address in full, as in 127.0.0.1.`);
+  } else if (host !== 'localhost' && host.endsWith('.localhost')) {
+    throw new Error(`Bad papp-net "${value}". For this computer, write localhost.`);
   }
 
   return `${host}:${port}`;
 }
 
-// The host of a papp-net or papp-open value, read as a browser reads a link's, so the popup never shows an address as a name.
-function hostName(name: string, tag: string, value: string) {
-  // A trailing dot names the same host: without dropping it, localhost. would not count as this computer.
-  const host = name.toLowerCase().replace(/\.$/, '');
-  // A wildcard as one of the hosts it covers.
-  const example = host.replace(/^\*\./, 'x.');
-
-  if (host === '*') {
-    return host;
-  } else if (!example.split('.').every(label => /^[a-z0-9][a-z0-9-]*$/.test(label))) {
-    throw new Error(`Bad ${tag} value "${value}". One host per <meta>, no scheme, such as x.com or *.example.com.`);
-  } else if (URL.parse(`http://${example}`)?.hostname !== example) {
-    // The browser reads 0x7f.1 and 127.1 as 127.0.0.1, and x.0.1 as no host at all: *.0.1 covers addresses, not names.
-    throw new Error(`Bad ${tag} value "${value}". A host of numbers must be a full address with no *, such as 1.1.1.1.`);
-  } else if (example.endsWith('.localhost')) {
-    // Browsers send every name under localhost to this computer.
-    throw new Error(`Bad ${tag} value "${value}". For a program on this computer, write localhost.`);
-  }
-
-  return host;
-}
-
-// A name on PATH, a full path, or a path from the page's folder (./bin/tool) for a program the page ships.
+// A name on PATH, a full path, or a path from the .papp file's folder (./bin/tool) for a program it ships.
 function findProgram(value: string, dir: string) {
   const { programExtensions, programFolders } = PERMISSIONS_PLATFORM;
 
@@ -256,7 +283,7 @@ function findProgram(value: string, dir: string) {
     }
 
     try {
-      // X_OK checks execute permission on POSIX; Windows relies on the executable extensions above.
+      // X_OK checks execute permission on POSIX. Windows relies on the extensions above.
       fs.accessSync(file, fs.constants.X_OK);
 
       return true;
@@ -265,34 +292,22 @@ function findProgram(value: string, dir: string) {
     }
   };
 
-  // Before the file is looked for: Windows would ask the server of a network path, before the popup.
-  const refusal = PERMISSIONS_PLATFORM.refusePath(value);
-  const bundled = /^\.[\\/]/.test(value);
-
-  if (value.includes('*')) {
-    throw new Error('papp-run takes one program, no wildcards. For any program, use papp-system.');
-  } else if (path.isAbsolute(value) && path.normalize(value) !== value) {
-    throw new Error(`Bad papp-run value "${value}". Write the path without .., . or //, as in ${path.normalize(value)}.`);
-  } else if (bundled && value.slice(2).split(/[\\/]/).some(name => ['', '.', '..'].includes(name))) {
-    throw new Error(`Bad papp-run value "${value}". Write the path from the page's folder without .., . or //, as in ./bin/${path.basename(value)}.`);
-  } else if (refusal) {
-    throw new Error(refusal);
-  } else if (path.isAbsolute(value) || bundled) {
-    const file = bundled ? absolutePath(value, dir) : value;
+  if (path.isAbsolute(value) || /^\.[\\/]/.test(value)) {
+    const file = absolutePath(value, dir);
 
     if (!runnable(file)) {
-      throw new Error(`Program ${file} was not found, or is a folder or another file that cannot run.`);
+      throw new Error(`Program ${file} was not found, or is a folder or a file that can't run.`);
     }
 
     return file;
   } else if (!/^[\w.+-]+$/.test(value)) {
-    throw new Error(`Bad papp-run value "${value}". Name one program, such as git, or give its full path.`);
+    throw new Error(`Bad papp-run "${value}". Name one program, such as git, or give its full path.`);
   }
 
   // An empty PATH entry, as a trailing ; leaves, is no folder.
-  const folders = [...process.env.PATH!.split(path.delimiter), ...programFolders].filter(Boolean);
+  const folders = [...(process.env.PATH ?? '').split(path.delimiter), ...programFolders].filter(Boolean);
   const names = programExtensions.map(extension => (value.toLowerCase().endsWith(extension) ? value : value + extension));
-  const found = folders.flatMap(dir => names.map(name => path.join(dir, name))).find(runnable);
+  const found = folders.flatMap(folder => names.map(each => path.join(folder, each))).find(runnable);
 
   if (!found) {
     throw new Error(`Program ${value} was not found. Give its full path in papp-run.`);
@@ -301,99 +316,80 @@ function findProgram(value: string, dir: string) {
   return found;
 }
 
-function listenScope(value: string): Listen {
-  const scope = value.toLowerCase();
-
-  if (scope !== 'localhost' && scope !== 'network') {
-    throw new Error(`Bad papp-listen value "${value}". Write localhost, for programs on this computer, or network, for devices on your network too.`);
-  }
-
-  return scope;
-}
-
-function envName(value: string) {
-  if (!/^[A-Za-z_]\w*$/.test(value)) {
-    throw new Error(`Bad papp-env value "${value}". Name one environment variable, such as AWS_PROFILE.`);
-  } else if (PROGRAM_ENV.includes(value)) {
-    throw new Error(`Programs get ${value} already. Remove its papp-env.`);
-  }
-
-  return value;
-}
-
 function socketPath(value: string, dir: string) {
-  if (value.includes('*')) {
-    throw new Error('papp-socket takes one socket file or folder, no wildcards.');
-  } else if (!value || /["\\]/.test(value)) {
-    throw new Error(`Bad papp-socket value "${value}". Use a path such as /var/run/docker.sock or ~/.gnupg/.`);
-  }
-
   const absolute = absolutePath(value, dir);
-  const stats = fs.statSync(absolute, { throwIfNoEntry: false });
 
-  if (!stats) {
-    throw new Error(`Socket ${absolute} does not exist (from "${value}"). Start the program that makes it first.`);
-  } else if (!stats.isSocket() && !stats.isDirectory()) {
-    throw new Error(`${absolute} is not a socket or a folder (from "${value}").`);
-  } else if (stats.isDirectory() !== value.endsWith('/')) {
-    throw new Error(stats.isDirectory() ? `${absolute} is a folder: write "${value}/".` : `${absolute} is a socket: write "${value.slice(0, -1)}".`);
+  if (!fs.statSync(absolute, { throwIfNoEntry: false })?.isSocket()) {
+    throw new Error(`papp-socket "${value}": ${absolute} is not a socket, or isn't there. Start the program that makes it first.`);
   }
 
-  return path.join(fs.realpathSync.native(absolute), stats.isDirectory() ? path.sep : '');
-}
-
-// As the viewport tag: key=value pairs, separated by commas. window.open's features take the same.
-export function windowSettings(value: string) {
-  const settings: WindowSettings = {};
-  const seen = new Set<string>();
-  const keys = ['size', ...Object.keys(SIZES), ...Object.keys(SWITCHES)].join(', ');
-  const sized = value.replace(/(^|,)\s*size\s*=\s*(\d+)x(\d+)/gi, '$1width=$2, height=$3');
-
-  if ((value.match(/\bsize\s*=/gi) ?? []).length > 1) {
-    throw new Error('papp-window sets size twice. Keep one.');
-  }
-
-  for (const setting of sized.split(',')) {
-    const [key, given] = setting.split('=').map(part => part.trim().toLowerCase());
-
-    if (seen.has(key)) {
-      throw new Error(`papp-window sets ${key} twice. Keep one.`);
-    } else if (Object.hasOwn(SIZES, key) && /^[1-9]\d{1,3}$/.test(given)) {
-      settings[SIZES[key as keyof typeof SIZES]] = +given;
-    } else if (Object.hasOwn(SWITCHES, key) && (given === 'yes' || given === 'no')) {
-      settings[SWITCHES[key as keyof typeof SWITCHES]] = given === 'yes';
-    } else {
-      throw new Error(`Bad papp-window setting "${setting.trim()}". Write key=value pairs, such as size=900x600, title-bar=no. The keys are ${keys}: size as 900x600, the other sizes in pixels, the rest yes or no.`);
-    }
-
-    seen.add(key);
-  }
-
-  return settings;
+  return fs.realpathSync.native(absolute);
 }
 
 function useName(value: string) {
   const name = value.toLowerCase() as Use;
 
-  if (!USES.includes(name)) {
-    throw new Error(`Bad papp-use value "${value}". The values are ${USES.join(', ')}, one or more separated by commas.`);
+  if (value.includes(',')) {
+    throw new Error(`Bad papp-use "${value}": one feature per tag. Write a tag for each.`);
+  } else if (!USES.includes(name)) {
+    throw new Error(`Bad papp-use "${value}". The features are ${USES.join(', ')}.`);
+  } else if (PERMISSIONS_PLATFORM.refusedUses[name]) {
+    throw new Error(PERMISSIONS_PLATFORM.refusedUses[name]);
   }
 
   return name;
 }
 
-// Also for papp.shortcuts, on the keys a page picks while it runs.
+// Attributes, as <meta name="papp-window" on-top frame="no" size="320x80">. window.open's features take the same, as on-top, frame=no, size=320x80.
+export function windowSettings(attributes: Map<string, { value: string; quoted: boolean }>, tag: string) {
+  const settings: WindowSettings = {};
+
+  for (const [key, given] of attributes) {
+    const value = given.value.trim().toLowerCase();
+
+    if (key === 'name') {
+      continue;
+    } else if (key === 'size' && (attributes.has('width') || attributes.has('height'))) {
+      throw new Error(`${tag}: size sets the width and height. Keep size, or width and height.`);
+    } else if (key === 'size' && /^[1-9]\d{1,3}x[1-9]\d{1,3}$/.test(value)) {
+      const [width, height] = value.split('x').map(Number);
+      Object.assign(settings, { width, height });
+    } else if (Object.hasOwn(SIZES, key) && /^[1-9]\d{1,3}$/.test(value)) {
+      settings[SIZES[key as keyof typeof SIZES]] = +value;
+    } else if (Object.hasOwn(SWITCHES, key)) {
+      settings[SWITCHES[key as keyof typeof SWITCHES]] = isYes(given, tag);
+    } else {
+      throw new Error(`${tag}: bad window setting ${key}${given.value ? `="${given.value}"` : ''}. Sizes take pixels, as in size="900x600" or min-width="400". The rest are bare for yes, as in on-top, or ="no", as in frame="no".`);
+    }
+  }
+
+  return settings;
+}
+
+// window.open's features, as on-top, frame=no, size=320x80: read as the tag's attributes.
+export function windowFeatures(features: string) {
+  const attributes = new Map<string, { value: string; quoted: boolean }>();
+
+  for (const feature of features.split(',').map(each => each.trim()).filter(Boolean)) {
+    const [key, value = ''] = feature.split('=').map(part => part.trim());
+    attributes.set(key.toLowerCase(), { value, quoted: true });
+  }
+
+  return windowSettings(attributes, `window.open features "${features}"`);
+}
+
+// Also for papp.shortcuts, on the keys a .papp file picks while it runs.
 export function shortcut(value: string) {
   const parts = value.split('+');
   const last = parts[parts.length - 1];
   const named = parts.slice(0, -1).map(part => MODIFIERS[part.toLowerCase()]);
-  const modifiers = named.filter(name => name !== undefined);
-  const keysHeld = new Set(modifiers.map(name => PERMISSIONS_PLATFORM.sameKey[name] ?? name));
+  const modifiers = named.filter(each => each !== undefined);
+  const keysHeld = new Set(modifiers.map(each => PERMISSIONS_PLATFORM.sameKey[each] ?? each));
   const key = [...KEYS, ...MEDIA_KEYS].find(known => known.toLowerCase() === last.toLowerCase()) ?? (/^[a-z0-9]$/i.test(last) ? last.toUpperCase() : undefined);
 
   if (modifiers.length < named.length || key === undefined) {
-    throw new Error(`Bad papp-global-shortcut value "${value}". Write modifiers and one key, such as CommandOrControl+Shift+N or Alt+F9.`);
-  } else if (!MEDIA_KEYS.includes(key) && (/^F\d+$/.test(key) ? keysHeld.size === 0 : keysHeld.size < 2 || [...keysHeld].every(name => PERMISSIONS_PLATFORM.typingModifiers.includes(name)))) {
+    throw new Error(`Bad papp-global-shortcut "${value}". Write modifiers and one key, such as CommandOrControl+Shift+N or Alt+F9.`);
+  } else if (!MEDIA_KEYS.includes(key) && (/^F\d+$/.test(key) ? keysHeld.size === 0 : keysHeld.size < 2 || [...keysHeld].every(each => PERMISSIONS_PLATFORM.typingModifiers.includes(each)))) {
     throw new Error(`papp-global-shortcut ${value} would catch keys meant for the app in front. Use two different modifiers, not only ${PERMISSIONS_PLATFORM.typingModifiers.join(' and ')}, or one with a function key.`);
   }
 

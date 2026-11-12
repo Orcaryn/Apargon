@@ -10,11 +10,9 @@ import { fileServer } from '../../src/page/serve.ts';
 const dir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'apargon-serve-')));
 const page = path.join(dir, 'page.papp');
 const clip = path.join(dir, 'clip.mp4');
-const unseen = path.join(dir, 'unseen.txt');
 const approved = '<!doctype html><title>approved</title>';
 fs.writeFileSync(page, approved);
 fs.writeFileSync(clip, Buffer.from(Array.from({ length: 100 }, (_, i) => i)));
-fs.writeFileSync(unseen, 'no');
 test.after(() => fs.rmSync(dir, { recursive: true }));
 
 const pageHash = createHash('sha256').update(approved).digest('hex');
@@ -22,8 +20,9 @@ const dependencies = new Set<string>();
 const serve = fileServer(
   page,
   pageHash,
-  file => file !== unseen,
-  file => { dependencies.add(file); },
+  file => {
+    dependencies.add(file);
+  },
   async () => new Response('from Chromium')
 );
 const get = (file: string, range?: string) => serve(new Request(pathToFileURL(file), { headers: range ? { range } : {} }));
@@ -41,9 +40,9 @@ test('a .papp file changed since approval is refused', async () => {
   assert.equal(response.status, 409);
 });
 
-test('a refused file is neither served nor registered as a dependency', async () => {
-  assert.equal((await get(unseen)).status, 403);
-  assert.equal(dependencies.has(unseen), false);
+test('any local file is served: every .papp file reads the local disks', async () => {
+  fs.writeFileSync(path.join(dir, 'any.txt'), 'yes');
+  assert.equal(await (await get(path.join(dir, 'any.txt'))).text(), 'from Chromium');
 });
 
 test('a range is streamed as 206', async () => {

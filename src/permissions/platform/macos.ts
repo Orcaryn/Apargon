@@ -1,27 +1,18 @@
-import path from 'path';
 import type { PermissionsPlatform } from '../platform.ts';
 
 export const macos: PermissionsPlatform = {
-  // Encrypted with the login password, but a copy can be cracked at leisure.
-  secrets: { 'Library/Keychains': 'keychains' },
   programEnv: [],
   pageEnv: ['__CF_USER_TEXT_ENCODING'],
   refusedTags: {},
-  refuse: () => null,
-  refusePath: () => null,
-  // Launch agents.
-  launchFolder: 'Library',
-  writesWholeFolders: false,
-  programsSendOut: false,
-  homeFolders: ['/Users', '/Volumes'],
-  // Fonts, and the keyboard layouts and input methods the user added: typing goes wrong without them.
-  homeReads: ['Library/Fonts', 'Library/Keyboard Layouts', 'Library/Input Methods'],
-  systemReadsAll: true,
-  soundServerRecords: false,
+  refusedUses: {},
+  useLines: { cloud: 'Read your iCloud and Dropbox files' },
+  allSocketsLine: null,
+  dock: 'Dock',
   programFolders: ['/opt/homebrew/bin', '/usr/local/bin'],
   programExtensions: [''],
-  // The .app bundle: Apargon.app/Contents/MacOS/Apargon.
-  installFolder: path.resolve(process.execPath, '../../..'),
+  refusePath: () => null,
   sameKey: { CommandOrControl: 'Command', Super: 'Command' },
   typingModifiers: ['Alt', 'Shift'],
+  keyNames: { Command: '⌘', Control: '⌃', Alt: '⌥', Shift: '⇧' },
+  keyJoin: '',
 };

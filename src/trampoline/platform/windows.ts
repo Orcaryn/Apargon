@@ -1,43 +1,48 @@
 import { app } from 'electron';
+import { spawnSync } from 'child_process';
 import { EventEmitter } from 'events';
 import fs from 'fs';
-import type { AddressInfo } from 'net';
+import os from 'os';
 import path from 'path';
 import { finished } from 'stream/promises';
 import type { ContainerRequest } from '@microsoft/mxc-sdk/v1';
-import { isInside, literalBase } from '../../permissions/patterns.ts';
+import { isInside } from '../../permissions/paths.ts';
 import type { Use } from '../../permissions/tags.ts';
-import { APP_ROOT, DATA, pageAppId, pageStorage, SECRETS_DATA } from '../../shared/data.ts';
+import { APP_ROOT, DATA, OWN_FOLDERS, pageAppId } from '../../shared/data.ts';
 import type { PageProcess, TrampolinePlatform } from '../platform.ts';
-import { startProxy } from '../network/proxy.ts';
+import { startPiped } from './pipes.ts';
 
 const DEVICE_CAPABILITIES: Partial<Record<Use, string>> = { camera: 'webcam', microphone: 'microphone', location: 'location', usb: 'usb', serial: 'serialcommunication', hid: 'humaninterfacedevice' };
+const HOME = fs.realpathSync.native(os.homedir());
+// The root's folders Windows keeps for itself.
+const SKIPPED_ROOTS = ['$recycle.bin', 'system volume information', '$windows.~bt', '$windows.~ws', '$winreagent', 'recovery'];
 
 export const windows: TrampolinePlatform = {
-  async prepare(page, permissions) {
-    const seen = permissions.read.map(literalBase);
-    const written = permissions.write.map(literalBase);
-    const pageFolder = path.dirname(page);
-    // Every sandbox may read Windows' own folder already.
-    const programFolders = Object.values(permissions.run).map(program => path.dirname(program)).filter(folder => !isInside(folder, process.env.SYSTEMROOT!) && !isInside(folder, pageFolder));
-    const reachesData = written.find(folder => isInside(DATA, folder) || isInside(folder, DATA));
-    const holdsPagesSecrets = [...seen, ...written, pageFolder, ...programFolders].find(folder => isInside(SECRETS_DATA, folder));
+  // Asked of MXC: only its ProcessContainer is tested.
+  async unsupported() {
+    loadMxcLibrary();
 
-    // The sandbox nests no read-only folder in a writable one, and the reverse would let a page write in Apargon's data. A folder that holds the secrets would grant them too: a tag's, the page's own, or a program's.
-    if (reachesData) {
-      throw new Error(`On Windows a page may not change ${reachesData}: it holds or is inside Apargon's data. Name another folder.`);
-    } else if (holdsPagesSecrets) {
-      throw new Error(`On Windows a page may not see ${holdsPagesSecrets}: it holds the secrets Apargon keeps for pages. Keep the page, its programs and its folders inside a folder of their own.`);
+    try {
+      const { probe } = await import('@microsoft/mxc-sdk/v1');
+      const { tier, error } = probe();
+
+      return tier === 'base-container' ? null : `Apargon needs Windows 11 with ProcessContainer, which this Windows doesn't have${error ? ` (${error})` : ''}. Update Windows, then try again.`;
+    } catch (err) {
+      return `Apargon needs Windows 11 with ProcessContainer, which this Windows doesn't have (${(err as Error).message}).`;
     }
-
-    // A folder named twice keeps one grant: one also listed could not be read. So each folder is named once, with the most it needs.
-    const storage = pageStorage(page);
-    const writable = [fs.realpathSync(app.getPath('temp')), storage, ...written];
-    const readable = [path.dirname(process.execPath), APP_ROOT, DATA, pageFolder, ...seen, ...programFolders].filter(folder => !writable.some(writableFolder => isInside(folder, writableFolder)));
+  },
+  unsafeDesktop: false,
+  installed: app.isPackaged ? path.dirname(process.execPath) : null,
+  async prepare(sandbox) {
+    const { page, permissions, own, proxyPort } = sandbox;
+    const kept = [DATA, OWN_FOLDERS, windows.installed].filter(folder => folder !== null);
+    const everything = readableRoots(permissions.use.includes('cloud'));
+    const temp = fs.realpathSync(app.getPath('temp'));
+    // papp-write all: every folder but Apargon's own, which stay read-only.
+    const writable = [temp, own, ...(permissions.writeAll ? everything.flatMap(root => around(root, kept)) : permissions.write.map(folder => folder.replace(/[\\/]$/, '')))];
+    // The sandbox nests no read-only folder in a writable one: each is named once, with the most it needs.
+    const readable = [...everything, path.dirname(process.execPath), APP_ROOT].filter(folder => !writable.some(writableFolder => isInside(folder, writableFolder)));
     const granted = [...readable, ...writable];
-    fs.mkdirSync(storage, { recursive: true });
-    const proxy = permissions.net.length ? await startProxy(permissions.net, null) : null;
-    const proxyPort = proxy && (proxy.address() as AddressInfo).port;
     // Node and Electron check every folder from the drive root down, so the sandbox lists each folder above what it may open.
     const parents = new Set<string>();
 
@@ -51,29 +56,32 @@ export const windows: TrampolinePlatform = {
       }
     }
 
+    const request = (command: string[], environment: NodeJS.ProcessEnv): ContainerRequest => ({
+      command: command.map(arg => `"${arg}"`).join(' '),
+      environment,
+      // Not where Apargon was started from: MXC would grant that folder.
+      workingDirectory: path.dirname(page),
+      containment: { type: 'processcontainer', config: { filesystem: { enumeratePaths: [...parents] }, capabilities: permissions.use.flatMap(name => DEVICE_CAPABILITIES[name] ?? []) } },
+      filesystem: { readonlyPaths: [...new Set(readable)], readwritePaths: [...new Set(writable)], deniedPaths: [] },
+      // Deny for every .papp file. A proxy on this computer's loopback needs both directions allowed; the firewall rules still let it reach only the proxy.
+      network: proxyPort === null ? { egress: { default: 'deny' } } : { egress: { default: 'deny' }, ingress: { default: 'allow', hostLoopback: 'allow' }, runtimeConfig: { networkProxy: `http://127.0.0.1:${proxyPort}` } },
+      ui: { disable: false, clipboard: 'all' },
+    });
+
     return {
-      start: (apargon, env) =>
-        startContained({
-          command: apargon.map(arg => `"${arg}"`).join(' '),
-          environment: env,
-          // Not where Apargon was started from: MXC would grant that folder.
-          workingDirectory: pageFolder,
-          containment: { type: 'processcontainer', config: { filesystem: { enumeratePaths: [...parents] }, capabilities: permissions.use.flatMap(name => DEVICE_CAPABILITIES[name] ?? []) } },
-          filesystem: { readonlyPaths: readable, readwritePaths: writable, deniedPaths: [SECRETS_DATA] },
-          // Deny for every page, not MXC's default. A proxy on this computer's loopback needs both directions of the private network allowed; the firewall rules still let the page reach only the proxy.
-          network: proxyPort === null ? { egress: { default: 'deny' } } : { egress: { default: 'deny' }, ingress: { default: 'allow', hostLoopback: 'allow' }, runtimeConfig: { networkProxy: `http://127.0.0.1:${proxyPort}` } },
-          // Chromium decides what the page may read from the clipboard; the user's own paste needs the rest.
-          ui: { disable: false, clipboard: 'all' },
-        }),
-      // The page's requests come on its standard output, mixed with its other output, which is passed on. The replies go to its standard input.
+      start: (apargon, env) => (permissions.system ? startPiped(apargon, ['pipe', 'pipe', 'pipe'], env, 1, 0) : startContained(request(apargon, env))),
+      // The requests come on its standard output, mixed with its other output. The replies go to its standard input.
       requestFd: 1,
       replyFd: 0,
-      proxyPort,
-      bridges: [],
-      close: () => proxy?.close(),
+      muxFd: null,
+      proxy: proxyPort === null ? null : `127.0.0.1:${proxyPort}`,
+      relays: [],
+      relayTargets: {},
+      // Started inside the container, they keep its limits.
+      programsHere: true,
+      close: () => undefined,
     };
   },
-  installHint: '. Apargon needs Windows 11 24H2 or later, updated to September 2026 or later.',
   downloadAddress(page) {
     try {
       return /^(?:HostUrl|ReferrerUrl)=(.+)$/m.exec(fs.readFileSync(`${page}:Zone.Identifier`, 'utf8'))?.[1].trim() ?? '';
@@ -81,50 +89,88 @@ export const windows: TrampolinePlatform = {
       return null;
     }
   },
-  markDownloaded(file) {
+  markWritten(file) {
     try {
       fs.writeFileSync(`${file}:Zone.Identifier`, '[ZoneTransfer]\r\nZoneId=3\r\n');
     } catch {
-      // A drive without file streams, like a USB stick, takes no mark: the file stays, unmarked.
+      // A drive without file streams, like a USB stick, takes no mark.
     }
   },
-  // A Run value of its own per page, named as its taskbar button.
   startAtLogin(page, on) {
     app.setLoginItemSettings({ openAtLogin: on, path: process.execPath, args: [...(app.isPackaged ? [] : [APP_ROOT]), page].map(arg => `"${arg}"`), name: pageAppId(page) });
   },
-  // Windows has none; making a link there needs an administrator or developer mode.
+  // Windows has none. Making a link there needs an administrator or developer mode.
   noFollow: 0,
   autoUpdates: false,
   trayClicks: true,
 };
 
-// Through MXC's library, not its wxc-exec.exe: that one hands the page its standard input only once it closes, so no reply could arrive while the page runs.
-async function startContained(request: ContainerRequest): Promise<PageProcess> {
-  // The installed app keeps the library beside the others in its resources, outside the archive it cannot load one from.
+// What a .papp file reads: the folders at the root of every local drive, and each item in the user's folder. MXC can't grant a drive whole. Network drives are skipped, and OneDrive unless papp-use cloud. A folder made at a root after start isn't readable until the next start.
+function readableRoots(cloud: boolean) {
+  const drives = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', "[System.IO.DriveInfo]::GetDrives() | Where-Object { $_.IsReady -and $_.DriveType -in 'Fixed','Removable','CDRom' } | ForEach-Object { $_.RootDirectory.FullName }"], { encoding: 'utf8', windowsHide: true })
+    .stdout.split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(line => /^[A-Z]:\\$/i.test(line));
+  const entries = (folder: string) => fs.readdirSync(folder, { withFileTypes: true }).filter(entry => !entry.isSymbolicLink());
+  const rootFolders = drives.flatMap(drive => entries(drive).filter(entry => entry.isDirectory() && !SKIPPED_ROOTS.includes(entry.name.toLowerCase())).map(entry => path.join(drive, entry.name)));
+  // Not the registry's own files: Windows holds them open, and MXC can't grant one in use.
+  const homeItems = entries(HOME).filter(entry => !/^ntuser\./i.test(entry.name) && (cloud || !/^onedrive/i.test(entry.name))).map(entry => path.join(HOME, entry.name));
+
+  return [...rootFolders, ...homeItems];
+}
+
+// A folder, as folders that cover all of it but the kept ones: each kept one, and the folders above it, stay out.
+function around(folder: string, kept: string[]): string[] {
+  const inside = kept.filter(each => isInside(each, folder));
+
+  if (!inside.length) {
+    return [folder];
+  } else if (inside.some(each => path.relative(folder, each) === '')) {
+    return [];
+  }
+
+  try {
+    return fs
+      .readdirSync(folder, { withFileTypes: true })
+      .filter(entry => entry.isDirectory() && !entry.isSymbolicLink())
+      .flatMap(entry => around(path.join(folder, entry.name), inside));
+  } catch {
+    return [];
+  }
+}
+
+function loadMxcLibrary() {
+  // The installed app keeps the library beside the others in its resources, outside the archive it can't load one from.
   if (app.isPackaged) {
     process.env.MXC_FFI_DIR = path.join(process.resourcesPath, 'mxc');
   }
+}
 
+// Through MXC's library, not its wxc-exec.exe: that one hands the process its standard input only once it closes, so no reply could arrive while it runs.
+async function startContained(request: ContainerRequest): Promise<PageProcess> {
+  loadMxcLibrary();
   // Loaded here: it loads a Windows library, which the other systems' builds leave out.
   const { spawn } = await import('@microsoft/mxc-sdk/v1');
   const contained = await spawn(request, { telemetry: { enabled: false } });
   const output = contained.standardOutput!;
-  const page = Object.assign(new EventEmitter(), { requests: output, output, errors: contained.standardError!, replies: contained.standardInput! });
-  // wait() settles on process exit, not on consumption of the transferred streams.
-  // Attach immediately, but let the caller's readers drain them before disposing the SDK handles.
-  void Promise.allSettled([contained.wait(), finished(output, { readable: true, writable: false, cleanup: true }), finished(page.errors, { readable: true, writable: false, cleanup: true })]).then(results => {
-    try {
-      contained.dispose();
-    } finally {
-      page.emit('close');
-    }
-
-    for (const result of results) {
-      if (result.status === 'rejected') {
-        console.error(`Apargon: ${(result.reason as Error).message}`);
+  const page = Object.assign(new EventEmitter(), { requests: output, output, errors: contained.standardError!, replies: contained.standardInput!, mux: null });
+  // wait() settles on process exit, not on consumption of the streams. Attach now, but let the readers drain them before disposing.
+  void Promise.allSettled([contained.wait(), finished(output, { readable: true, writable: false, cleanup: true }), finished(page.errors, { readable: true, writable: false, cleanup: true })])
+    .then(results => {
+      try {
+        contained.dispose();
+      } finally {
+        page.emit('close');
       }
-    }
-  }).catch((err: Error) => console.error(`Apargon: ${err.message}`));
+
+      for (const result of results) {
+        if (result.status === 'rejected') {
+          console.error(`Apargon: ${(result.reason as Error).message}`);
+        }
+      }
+    })
+    .catch((err: Error) => console.error(`Apargon: ${err.message}`));
 
   return page;
 }
+

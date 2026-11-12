@@ -1,13 +1,12 @@
 import { safeStorage } from 'electron';
-import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { SECRETS_DATA } from '../../shared/data.ts';
 import { readJson, writeJson } from '../../shared/json.ts';
 
-// One file per page, each value sealed on its own with the OS's store for this user, in a folder every page's sandbox hides.
-export async function readSecret(page: string, name: string) {
-  const secrets = readJson<Record<string, string>>(fileOf(page));
+// One file per app, by its papp-id, each value sealed on its own with the OS's store for this user, in Apargon's data, where no .papp file writes.
+export async function readSecret(id: string, name: string) {
+  const secrets = readJson<Record<string, string>>(fileOf(id));
 
   if (!Object.hasOwn(secrets, name)) {
     return null;
@@ -18,31 +17,24 @@ export async function readSecret(page: string, name: string) {
   const { result, shouldReEncrypt } = await safeStorage.decryptStringAsync(Buffer.from(sealed, 'base64'));
 
   if (shouldReEncrypt) {
-    await writeSecret(page, name, result);
+    await writeSecret(id, name, result);
   }
 
   return result;
 }
 
-export async function writeSecret(page: string, name: string, value: string | null) {
+export async function writeSecret(id: string, name: string, value: string | null) {
   fs.mkdirSync(SECRETS_DATA, { recursive: true });
   const sealed = value === null ? null : (await safeStorage.encryptStringAsync(value)).toString('base64');
   // Read after sealing: another write may have landed meanwhile.
-  const { [name]: _dropped, ...kept } = readJson<Record<string, string>>(fileOf(page));
-  writeJson(fileOf(page), sealed === null ? kept : { ...kept, [name]: sealed });
+  const { [name]: _dropped, ...kept } = readJson<Record<string, string>>(fileOf(id));
+  writeJson(fileOf(id), sealed === null ? kept : { ...kept, [name]: sealed });
 }
 
-export function forgetSecrets(page: string) {
-  fs.rmSync(fileOf(page), { force: true });
+export function forgetSecrets(id: string) {
+  fs.rmSync(fileOf(id), { force: true });
 }
 
-// With the page's storage: the secrets are the page's data, not the user's approval.
-export function moveSecrets(from: string, to: string) {
-  if (fs.existsSync(fileOf(from))) {
-    fs.renameSync(fileOf(from), fileOf(to));
-  }
-}
-
-function fileOf(page: string) {
-  return path.join(SECRETS_DATA, `${createHash('sha256').update(page).digest('hex')}.json`);
+function fileOf(id: string) {
+  return path.join(SECRETS_DATA, `${id}.json`);
 }

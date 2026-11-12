@@ -1,25 +1,15 @@
 <!doctype html>
 <meta charset="utf-8">
-<meta name="papp-write" content="./results/result-win.json">
-<meta name="papp-write" content="./scratch*">
+<meta name="papp-id" content="a5ac2006-46e0-4582-9bc6-afbe59339206">
 <meta name="papp-net" content="example.com">
 <meta name="papp-net" content="localhost:47181">
 <title>Apargon selftest for Windows</title>
+<script src="lib.js"></script>
 <link rel="dns-prefetch" href="https://apg-leak-prefetch.example.com">
 <body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
 
 <script type="module">
   // Names starting apg-leak- must never reach the network: the Windows test looks for them in a packet capture.
-  const result = {};
-  // Refused by Apargon itself, not failed some other way: a renamed call or a crash is not a refusal. What else happened goes to check.ts, as refused_wrongly.
-  const wrong = [];
-  const refused = async (call, expected = /^Error: Apargon: (?!no such call)/) => {
-    const said = await call().then(() => 'not refused', (err) => `${err.name}: ${err.message}`);
-    if (!expected.test(said)) {
-      wrong.push(`${call}: ${said}`);
-    }
-    return expected.test(said);
-  };
   const loads = (src) => new Promise((done) => {
     const script = document.createElement('script');
     script.src = src;
@@ -37,24 +27,19 @@
     result.local_port_undeclared_blocked = !(await fetches('http://127.0.0.1:47182/'));
     result.network_path_refused = await refused(() => papp.readFile('//apg-leak-unc.example.com/share/x')) && await refused(() => papp.readdir('\\\\apg-leak-unc2.example.com\\share'));
     result.network_url_refused = !(await loads('file://apg-leak-file.example.com/share/x.js'));
-    result.network_open_refused = await refused(() => papp.open('//apg-leak-open.example.com/share/x.txt'));
-    // ./scratch* matches these names, but Windows writes them to scratch.papp, a page.
-    result.page_stream_refused = await refused(() => papp.writeFile('scratch.papp::$DATA', 'x')) && await refused(() => papp.writeFile('scratch.papp:hidden', 'x'));
-    result.page_trailing_dot_refused = await refused(() => papp.writeFile('scratch.papp.', 'x')) && await refused(() => papp.writeFile('scratch.papp ', 'x'));
+    // In its own folder, but Windows reads these as other names: a stream of a file, or a name with its trailing dot or space dropped.
+    result.page_stream_refused = await refused(() => papp.writeFile(`${papp.folder}\\scratch.papp::$DATA`, 'x')) && await refused(() => papp.writeFile(`${papp.folder}\\scratch.txt:hidden`, 'x'));
+    result.page_trailing_dot_refused = await refused(() => papp.writeFile(`${papp.folder}\\scratch.papp.`, 'x')) && await refused(() => papp.writeFile(`${papp.folder}\\scratch.papp `, 'x'));
 
     const connection = new RTCPeerConnection({ iceServers: [{ urls: 'stun:apg-leak-stun.example.com:3478' }] });
     connection.createDataChannel('x');
     await connection.setLocalDescription(await connection.createOffer());
     await new Promise((done) => setTimeout(done, 3000));
     connection.close();
+    await finish('win');
   } catch (err) {
-    result.error = err.message;
-  }
-  if (wrong.length) {
-    result.refused_wrongly = wrong;
+    await finish('win', err);
   }
 
-  document.body.textContent = JSON.stringify(result);
-  await papp.writeFile('results/result-win.json', JSON.stringify(result, null, 2) + '\n');
-  setTimeout(() => window.close(), 200);
+  setTimeout(() => papp.quit(), 200);
 </script>

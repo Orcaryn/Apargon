@@ -1,6 +1,6 @@
 import fs from 'fs';
 
-// Without Electron: the Node tests load what uses these. A missing file reads as {}; a write replaces the file whole, never half-written.
+// Without Electron: the Node tests load what uses these. A missing file reads as {}. A write replaces the file whole, never half-written.
 export function readJson<T extends object>(file: string): T {
   return JSON.parse(fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '{}');
 }

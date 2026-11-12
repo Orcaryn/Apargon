@@ -1,33 +1,57 @@
-import { app, BrowserWindow, dialog, globalShortcut, powerMonitor, screen } from 'electron';
+import { app, BrowserWindow, dialog, globalShortcut, powerMonitor, protocol, screen } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import { pathToFileURL } from 'url';
+import { Worker } from 'worker_threads';
 import { describe } from '../permissions/describe.ts';
-import { isInside } from '../permissions/patterns.ts';
-import { shortcut, windowSettings, type WindowSettings } from '../permissions/tags.ts';
-import { onTrampolineEvent, relay, tellTrampoline, type PageConfig } from '../shared/channel.ts';
-import { APP_ROOT, pageStorage } from '../shared/data.ts';
+import { isInside } from '../permissions/paths.ts';
+import { shortcut, windowFeatures, type WindowSettings } from '../permissions/tags.ts';
+import { onTrampolineEvent, tellTrampoline, type PageConfig } from '../shared/channel.ts';
+import { APP_ROOT, DATA, OWN_FOLDERS, pageStorage } from '../shared/data.ts';
 import { pageAccess } from './api/access.ts';
-import { serveApi } from './api/ipc.ts';
+import type { Picks } from './api/files.ts';
+import { BYTES_SCHEME, serveApi } from './api/ipc.ts';
+import { remoteProgramExit } from './api/programs.ts';
 import { followFavicon } from './icon/icon.ts';
 import { installMenu } from './menu.ts';
 import { PAGE_PLATFORM } from './platform.ts';
-import { createPageSession } from './session.ts';
+import { chooseBluetooth, createPageSession } from './session.ts';
 
-export function preparePage({ page, proxy }: PageConfig) {
-  app.setPath('userData', pageStorage(page));
+export function preparePage({ page, own, proxy, permissions, relays, muxFd }: PageConfig) {
+  app.setPath('userData', pageStorage(own));
 
-  if (proxy) {
-    app.commandLine.appendSwitch('proxy-server', proxy);
+  // Linux: the relays listen before Chromium starts, as on X11 it connects to the screen through one. 10 seconds at most. Before ready there is no dialog: the trampoline shows what the process wrote.
+  if (muxFd !== null) {
+    const ready = new Int32Array(new SharedArrayBuffer(4));
+    new Worker(new URL('./relays.ts', import.meta.url), { workerData: { muxFd, relays, ready } });
+    Atomics.wait(ready, 0, 0, 10_000);
+
+    if (!Atomics.load(ready, 0)) {
+      console.error('Apargon: the relays to the trampoline did not start.');
+      process.exit(1);
+    }
   }
 
+  // All network goes through the proxy, this computer's too.
+  if (proxy) {
+    app.commandLine.appendSwitch('proxy-server', proxy);
+    app.commandLine.appendSwitch('proxy-bypass-list', '<-loopback>');
+  }
+
+  // Bluetooth is off in Chromium unless asked for.
+  if (permissions.use.includes('bluetooth')) {
+    app.commandLine.appendSwitch('enable-experimental-web-platform-features');
+  }
+
+  protocol.registerSchemesAsPrivileged([{ scheme: BYTES_SCHEME, privileges: { supportFetchAPI: true, stream: true, corsEnabled: true, bypassCSP: true } }]);
   PAGE_PLATFORM.beforeReady?.(page);
   app.on('window-all-closed', () => app.quit());
 }
 
-export async function startPage({ page, permissions, pageHash, proxy, bridges, bounds, menu }: PageConfig) {
-  if (!(await PAGE_PLATFORM.isOffline())) {
-    const refusal = 'This process can still open sockets, so it is not in the sandbox. Refusing to open the page. If APARGON is set in your environment, unset it.';
+export async function startPage({ page, permissions, pageHash, own, proxy, bounds, menu, picks: firstPicks, programsHere }: PageConfig) {
+  // The offline check: a .papp file never opens with network it wasn't given. papp-system has the internet.
+  if (!permissions.system && !(await PAGE_PLATFORM.isOffline())) {
+    const refusal = 'This process can still reach the network, so it is not in the sandbox. Refusing to open the .papp file. If APARGON is set in your environment, unset it.';
     console.error(`Apargon: ${refusal}`);
     dialog.showErrorBox('Apargon', refusal);
     app.quit();
@@ -35,13 +59,10 @@ export async function startPage({ page, permissions, pageHash, proxy, bridges, b
     return;
   }
 
-  await Promise.all(bridges.map(({ port, socket }) => relay({ port, host: '127.0.0.1' }, { path: socket })));
-
   const dir = path.dirname(page);
-  // A papp-system page's process sees every file; its papp, what the tags name, as any page's.
-  const access = pageAccess(permissions);
-  const canSee = (file: string) => permissions.system || file === page || access.canSee(file);
-  const pageSession = createPageSession(page, permissions, pageHash, canSee, liveReload(page, access, () => pageWindows().forEach(other => other.webContents.reloadIgnoringCache())));
+  const access = pageAccess(permissions, own, [DATA, OWN_FOLDERS, ...(app.isPackaged ? [APP_ROOT] : [])]);
+  const picks: Picks = { current: firstPicks };
+  const pageSession = createPageSession(page, permissions, pageHash, liveReload(page, access, () => pageWindows().forEach(other => other.webContents.reloadIgnoringCache())));
   const menus = installMenu(page, describe(permissions), menu);
   const icon = app.isPackaged ? undefined : path.join(APP_ROOT, 'build/icon.png');
 
@@ -82,7 +103,7 @@ export async function startPage({ page, permissions, pageHash, proxy, bridges, b
   const win = new BrowserWindow({ ...mainOptions, ...(saved && (mainOptions.resizable ? saved : { x: saved.x, y: saved.y })) });
   win.on('close', () => tellTrampoline('bounds', win.getNormalBounds()));
   PAGE_PLATFORM.pin?.(win, page);
-  const pageIcon = followFavicon(win, canSee, pageHash === null, mark);
+  const pageIcon = followFavicon(win, true, mark);
   const pageWindows = () => BrowserWindow.getAllWindows().filter(other => other.webContents.session === pageSession);
   const background = permissions.use.includes('background');
   let quitting = false;
@@ -109,12 +130,12 @@ export async function startPage({ page, permissions, pageHash, proxy, bridges, b
 
   const pickShortcuts = (keys: string[]) => {
     if (!permissions.anyShortcut) {
-      throw new Error('Apargon: this page may not pick shortcuts. Ask for it with <meta name="papp-global-shortcut" content="any">.');
-    } else if (!Array.isArray(keys) || keys.length > 10) {
+      throw new Error('Apargon: this .papp file may not pick shortcuts. Ask for it with <meta name="papp-global-shortcut" content="any">.');
+    } else if (keys.length > 10) {
       throw new Error('Apargon: shortcuts takes a list of up to 10 keys, such as ["CommandOrControl+Shift+N"].');
     }
 
-    const checked = new Set(keys.map(each => shortcut(String(each))));
+    const checked = new Set(keys.map(shortcut));
     picked.forEach(old => globalShortcut.unregister(old));
     picked = [...checked].filter(each => !permissions.shortcuts.includes(each));
 
@@ -128,7 +149,7 @@ export async function startPage({ page, permissions, pageHash, proxy, bridges, b
     }
   };
 
-  const api = serveApi(dir, permissions, access, { menus, toFront, pageIcon, proxy, pickShortcuts });
+  const api = serveApi(dir, own, permissions, access, { menus, toFront, pageIcon, proxy, pickShortcuts, picks, programsHere });
   const pagePath = decodeURIComponent(pathToFileURL(page).pathname);
 
   const isPage = (href: string) => {
@@ -142,8 +163,11 @@ export async function startPage({ page, permissions, pageHash, proxy, bridges, b
     }
   };
 
+  // The window shows only the .papp file: no other page. A frame may hold a local file, or what the .papp file made itself. A link the user follows opens in the browser, if its site is in papp-net.
   const stayOnPage = (event: Electron.Event<{ url: string; isMainFrame: boolean }>) => {
-    if (!isPage(event.url) && (event.isMainFrame || new URL(event.url).protocol === 'file:')) {
+    const protocol = URL.parse(event.url)?.protocol;
+
+    if (event.isMainFrame ? !isPage(event.url) : !['file:', 'about:', 'data:', 'blob:'].includes(protocol ?? '')) {
       event.preventDefault();
 
       if (event.isMainFrame) {
@@ -165,7 +189,7 @@ export async function startPage({ page, permissions, pageHash, proxy, bridges, b
       }
 
       try {
-        return { action: 'allow', overrideBrowserWindowOptions: windowOptions({ ...declared, ...(features ? windowSettings(features) : {}) }) };
+        return { action: 'allow', overrideBrowserWindowOptions: windowOptions({ ...declared, ...(features ? windowFeatures(features) : {}) }) };
       } catch (err) {
         console.error(`Apargon: window.open: ${(err as Error).message}`);
 
@@ -174,12 +198,19 @@ export async function startPage({ page, permissions, pageHash, proxy, bridges, b
     });
     opened.webContents.on('did-create-window', (child, { options }) => setUpWindow(child, options));
     opened.webContents.setAudioMuted(!permissions.use.includes('sound'));
+
+    if (permissions.use.includes('bluetooth')) {
+      chooseBluetooth(opened.webContents);
+    }
+
     // Windows tells a window, not powerMonitor, that the session ends.
     opened.on('session-end', () => opened.webContents.send('apargon-system', 'shutdown'));
 
     // Not a window option Electron takes: set on each window, the page's second ones too. Only when on: on macOS each call hides the window a moment.
     if (allSpaces) {
       opened.setVisibleOnAllWorkspaces(true);
+      // On macOS this drops the window's level: on top again, as the tag says.
+      opened.setAlwaysOnTop(onTop);
     }
 
     if (privateWindow) {
@@ -221,11 +252,9 @@ export async function startPage({ page, permissions, pageHash, proxy, bridges, b
     trayItem: id => pageWindows().forEach(other => other.webContents.send('apargon-tray', id)),
     // Where the icon is, so the page can put a window under it.
     trayClick: bounds => pageWindows().forEach(other => other.webContents.send('apargon-tray-click', bounds)),
-    restart: () => {
-      pageWindows().forEach(other => other.webContents.once('will-prevent-unload', event => event.preventDefault()));
-      app.quit();
-    },
     request: incoming => api.request(incoming),
+    picks: latest => (picks.current = latest),
+    programExit: remoteProgramExit,
   });
 }
 

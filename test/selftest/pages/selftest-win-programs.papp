@@ -1,5 +1,6 @@
 <!doctype html>
 <meta charset="utf-8">
+<meta name="papp-id" content="0a9f56ec-4716-4e6c-9f2b-ea187282aa2a">
 <meta name="papp-net" content="example.com">
 <meta name="papp-net" content="localhost:47181">
 <meta name="papp-run" content="cmd">
@@ -8,23 +9,13 @@
 <meta name="papp-run" content="git">
 <meta name="papp-run" content="node">
 <meta name="papp-env" content="APARGON_TEST_ENV">
-<meta name="papp-write" content="./results/result-win-programs.json">
-<meta name="papp-write" content="./touched/*">
+<meta name="papp-write" content="./touched/">
 <title>Apargon selftest for Windows programs</title>
+<script src="lib.js"></script>
 <body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
 
 <script type="module">
   // Programs here can leak through Windows' name lookups, as SECURITY.md says: so no name below starts apg-leak-, which the Windows test looks for.
-  const result = {};
-  // Refused by Apargon itself, not failed some other way: a renamed call or a crash is not a refusal. What else happened goes to check.ts, as refused_wrongly.
-  const wrong = [];
-  const refused = async (call, expected = /^Error: Apargon: (?!no such call)/) => {
-    const said = await call().then(() => 'not refused', (err) => `${err.name}: ${err.message}`);
-    if (!expected.test(said)) {
-      wrong.push(`${call}: ${said}`);
-    }
-    return expected.test(said);
-  };
   const curl = async (...args) => (await papp.run('curl', ['-s', '-o', 'NUL', '-m', '5', '-w', '%{http_code}', ...args])).stdout;
   const cmd = (line) => papp.run('cmd', ['/d', '/c', line]);
   const lines = (text) => text.replace(/\r/g, '');
@@ -36,12 +27,15 @@
     // Through the proxy only: the sandbox refuses the direct connection, and the proxy the port not declared.
     result.local_port_declared = await curl('http://localhost:47181/') === '200';
     result.local_port_direct_blocked = await curl('--noproxy', '*', 'http://127.0.0.1:47181/') !== '200';
-    result.local_port_undeclared_blocked = await curl('http://127.0.0.1:47182/') !== '200';
+    result.local_port_undeclared_blocked = await curl('http://localhost:47182/') !== '200';
 
     result.program_writes_granted = (await cmd('echo x> touched\\x.tmp')).status === 0;
     await papp.rm('touched/x.tmp');
     result.program_outside_write_blocked = (await cmd('echo x> ..\\touched-outside.tmp')).status !== 0;
-    // Under Program Files, outside the folders Apargon grants.
+    // Reads every local disk, the user's folder too.
+    const homeRead = await papp.run('node', ['-e', "require('fs').readdirSync(require('path').join(require('os').homedir(), '.ssh'))"]);
+    result.program_reads_home = homeRead.status === 0 || homeRead.stderr;
+    // Under Program Files.
     result.program_installed_runs = (await papp.run('git', ['--version'])).stdout.startsWith('git version');
     result.program_input = lines((await papp.run('findstr', ['^'], { input: 'piped\n' })).stdout) === 'piped\n';
 
@@ -73,14 +67,10 @@
     result.program_env_unnamed_left_out = !env.includes('APARGON_TEST_ALLOW=') && !env.includes('APARGON=');
     result.undeclared_program_refused = await refused(() => papp.run('where'));
     result.options_as_args_refused = await refused(() => papp.run('cmd', { cwd: 'C:\\' }));
+    await finish('win-programs');
   } catch (err) {
-    result.error = err.message;
-  }
-  if (wrong.length) {
-    result.refused_wrongly = wrong;
+    await finish('win-programs', err);
   }
 
-  document.body.textContent = JSON.stringify(result);
-  await papp.writeFile('results/result-win-programs.json', JSON.stringify(result, null, 2) + '\n');
-  setTimeout(() => window.close(), 200);
+  setTimeout(() => papp.quit(), 200);
 </script>

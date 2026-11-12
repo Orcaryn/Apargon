@@ -1,4 +1,6 @@
 import { app, ShareMenu, systemPreferences } from 'electron';
+import { spawnSync } from 'child_process';
+import { randomUUID } from 'crypto';
 import net from 'net';
 import { tellTrampoline } from '../../shared/channel.ts';
 import type { PagePlatform } from '../platform.ts';
@@ -8,7 +10,6 @@ export const macos: PagePlatform = {
   notifiesHere: true,
   processGroups: true,
   programsInheritFds: true,
-  freshProgramHome: true,
   appMenu: true,
   hear(name, heard) {
     const subscribed = systemPreferences.subscribeNotification(name, (_name, info, sender) => heard(info, sender));
@@ -16,6 +17,10 @@ export const macos: PagePlatform = {
     return () => systemPreferences.unsubscribeNotification(subscribed);
   },
   share: (win, item) => new ShareMenu(item).popup({ window: win }),
+  // As a browser marks a download. The sandbox lets it set this only where it may write.
+  markWritten(file) {
+    spawnSync('/usr/bin/xattr', ['-w', 'com.apple.quarantine', `0083;${Math.floor(Date.now() / 1000).toString(16)};Apargon;${randomUUID().toUpperCase()}`, file]);
+  },
   // The trampoline sets the file's icon: this process may not write there.
   showIcon(_win, icon, madeHere) {
     app.dock?.setIcon(icon);

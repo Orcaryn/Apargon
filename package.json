@@ -1,7 +1,7 @@
 {
   "name": "apargon",
   "version": "0.4.0",
-  "description": "A local page runner: a page asks for folders, servers and programs in <meta> tags; the OS denies everything else on the network.",
+  "description": "A reverse browser: a .papp file reads your files, writes its own folder, and sends nothing off your computer unless you allow it in a <meta> tag.",
   "type": "module",
   "main": "src/main.ts",
   "scripts": {
@@ -72,11 +72,11 @@
       "notarize": true,
       "icon": "build/icon.icns",
       "extendInfo": {
-        "NSCameraUsageDescription": "A page you opened in Apargon asked to use the camera.",
-        "NSMicrophoneUsageDescription": "A page you opened in Apargon asked to use the microphone.",
-        "NSLocationUsageDescription": "A page you opened in Apargon asked for this computer's location.",
-        "NSLocationWhenInUseUsageDescription": "A page you opened in Apargon asked for this computer's location.",
-        "NSBluetoothAlwaysUsageDescription": "A page you opened in Apargon asked for a serial port; macOS lists Bluetooth ones among them."
+        "NSCameraUsageDescription": "A .papp file you opened in Apargon asked to use the camera.",
+        "NSMicrophoneUsageDescription": "A .papp file you opened in Apargon asked to use the microphone.",
+        "NSLocationUsageDescription": "A .papp file you opened in Apargon asked for this computer's location.",
+        "NSLocationWhenInUseUsageDescription": "A .papp file you opened in Apargon asked for this computer's location.",
+        "NSBluetoothAlwaysUsageDescription": "A .papp file you opened in Apargon asked to use Bluetooth or a serial port."
       },
       "files": [
         "!node_modules/@microsoft/**",

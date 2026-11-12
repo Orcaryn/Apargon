@@ -1,87 +1,87 @@
 <!doctype html>
 <meta charset="utf-8">
-<meta name="papp-net" content="example.com">
+<meta name="papp-id" content="51c99b36-d8a4-4216-8369-c02f273469e8">
+<meta name="papp-net" content="localhost:47181">
 <meta name="papp-run" content="curl">
+<meta name="papp-run" content="sh">
 <meta name="papp-run" content="/usr/bin/open">
 <meta name="papp-run" content="/usr/bin/osascript">
-<meta name="papp-run" content="/usr/sbin/ipconfig">
+<meta name="papp-run" content="/usr/bin/shortcuts">
 <meta name="papp-run" content="/usr/bin/defaults">
-<meta name="papp-write" content="./results/result-mac.json">
-<meta name="papp-window" content="width=700, height=500, resizable=no, on-top=yes, all-spaces=yes, click-through=yes, private=yes, blur=yes, mark=no">
-<meta name="papp-use" content="cursor, broadcasts, share">
+<meta name="papp-run" content="/sbin/mount_smbfs">
+<meta name="papp-run" content="./results/leak">
+<meta name="papp-window" size="700x500" resizable="no" on-top all-spaces click-through private blur mark="no">
+<meta name="papp-use" content="cursor">
+<meta name="papp-use" content="broadcasts">
+<meta name="papp-use" content="share">
 <meta name="papp-global-shortcut" content="any">
-<title>Apargon selftest (macOS programs)</title>
+<title>Apargon selftest (macOS)</title>
+<script src="lib.js"></script>
 <body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
 
 <script type="module">
-  // macOS only: Apargon refuses a papp-run path that does not exist, so on Linux these tags would refuse the whole page.
-  const result = {};
+  // macOS only: these programs are on no other OS, and a papp-run that is not there refuses the whole file.
+  const own = papp.folder;
 
   try {
-    const lan = (await papp.run('ipconfig', ['getifaddr', 'en0'])).stdout.trim();
-    result.proxy_refuses_own_lan_address = lan === '' || (await papp.run('curl', ['-s', '-o', '/dev/null', '-m', '5', '-w', '%{http_code}', `http://${lan}:9/`])).stdout === '403';
-    result.program_open_app_blocked = (await papp.run('open', ['-g', '-a', 'Finder'])).status !== 0;
-    // activate, not a query: a query also fails without the sandbox, on the Automation permission, so it would not notice the rule gone.
-    result.program_apple_event_blocked = (await papp.run('osascript', ['-e', 'tell application "Finder" to activate'])).status !== 0;
+    // The window first: a program that makes another app come forward drops it from on top.
     result.window_size_declared = innerWidth === 700;
-    // What the tag turned on, the page may turn off and on again.
+    // What the tag turned on, the .papp file may turn off and on again.
     const start = await papp.window();
     const off = await papp.window({ onTop: false, allSpaces: false });
     const on = await papp.window({ onTop: true, allSpaces: true });
     result.window_switches_declared = start.onTop && start.allSpaces && !off.onTop && !off.allSpaces && on.onTop && on.allSpaces;
-    // Private from the start, as the tag says; clickable until the page lets clicks through.
     const through = await papp.window({ clickThrough: true, private: false });
     const back = await papp.window({ clickThrough: false, private: true });
     result.window_click_through_private = start.private && !start.clickThrough && through.clickThrough && !through.private && !back.clickThrough && back.private;
-    // Checked as the tag is; the same keys written twice count once.
     await papp.shortcuts(['CommandOrControl+Alt+Shift+F12', 'cmdorctrl+alt+shift+f12']);
     const badKeys = await papp.shortcuts(['Shift+A']).then(() => false, (err) => err.message.includes('app in front'));
     result.shortcuts_picked = badKeys && (await papp.shortcuts([])) === undefined;
     result.window_opacity = (await papp.window({ opacity: 0.5 })).opacity === 0.5 && (await papp.window({ opacity: 1 })).opacity === 1;
-    const refusedHere = (change) => papp.window(change).then(() => false, (err) => err.message.startsWith('Apargon: '));
-    result.window_fixed_size_refused = (await refusedHere({ bounds: { width: 800 } })) && (await refusedHere({ state: 'maximized' })) && (await papp.window({ bounds: { x: on.bounds.x + 1 } })).bounds.x === on.bounds.x + 1;
-    // Minimising animates: wait for it, then back.
-    const reaches = async (state) => {
-      for (let waited = 0; waited < 3000; waited += 100) {
-        if ((await papp.window()).state === state) {
-          return true;
-        }
-        await new Promise((done) => setTimeout(done, 100));
-      }
-      return false;
-    };
-    await papp.window({ state: 'minimized' });
-    const minimized = await reaches('minimized');
-    await papp.window({ state: 'normal' });
-    result.window_minimize = minimized && (await reaches('normal'));
-    result.program_preference_write_blocked = (await papp.run('defaults', ['write', 'com.apargon.selftest', 'leaked', '-bool', 'true'])).status !== 0;
-    // Size rules while it runs; resizable=no in the tag keeps it fixed.
-    const rules = await papp.window({ minSize: { width: 300, height: 200 }, maxSize: { width: 0, height: 0 }, aspectRatio: 1.5, resizable: false });
-    result.window_size_rules = rules.minSize.width === 300 && rules.minSize.height === 200 && rules.aspectRatio === 1.5 && !rules.resizable && (await refusedHere({ resizable: true }));
-    // The file in the title bar: only one the page may see.
-    const shown = await papp.window({ file: 'results/result-mac.json', edited: true });
+    result.window_fixed_size_refused = await refused(() => papp.window({ bounds: { width: 800 } })) && await refused(() => papp.window({ state: 'maximized' }));
+    const shown = await papp.window({ file: 'selftest-mac.papp', edited: true });
     const cleared = await papp.window({ file: null, edited: false });
-    result.window_document = shown.file === `${papp.dir}/results/result-mac.json` && shown.edited && cleared.file === null && !cleared.edited && (await refusedHere({ file: '/etc/hosts' }));
+    result.window_document = shown.file === `${papp.dir}/selftest-mac.papp` && shown.edited && cleared.file === null && !cleared.edited;
+    // Programs get no services: through one, a program could ask another app to go online for it. daemons.ts shows each answers outside the sandbox.
+    for (const mode of ['download', 'webkit']) {
+      result[`program_${mode}_service_blocked`] = (await ran('leak', [mode, 'https://example.com/'])).out !== 'answered';
+    }
+    result.program_open_url_blocked = (await ran('open', ['https://example.com/'])).status !== 0;
+    result.program_open_app_blocked = (await ran('open', ['-g', '-a', 'Finder'])).status !== 0;
+    // activate, not a query: AppleScript answers some queries itself, without an event.
+    result.program_apple_event_blocked = (await ran('osascript', ['-e', 'tell application "Finder" to activate'])).status !== 0;
+    result.program_shortcuts_blocked = (await ran('shortcuts', ['list'])).status !== 0;
+    result.program_preference_write_blocked = (await ran('defaults', ['write', 'com.apargon.selftest', 'leaked', '-bool', 'true'])).status !== 0;
+    // The kernel connects for a mount, past "no network": listen.ts counts who reaches 47184.
+    await papp.mkdir(`${own}/mnt`);
+    await ran('mount_smbfs', ['-N', '//guest@127.0.0.1:47184/share', `${own}/mnt`], { timeout: 4000 });
+    result.program_mount_blocked = (await ran('curl', ['-s', 'http://localhost:47181/hits?port=47184'])).out === '0';
+    result.program_smb_device_blocked = (await ran('sh', ['-c', 'cat /dev/nsmb0 2>/dev/null; ls /dev/nsmb0 2>/dev/null && echo seen || echo hidden'])).out === 'hidden';
+    result.program_terminal_blocked = (await ran('sh', ['-c', 'echo x > /dev/tty'])).status !== 0;
+    result.program_volumes_listed = (await ran('sh', ['-c', 'ls /Volumes >/dev/null && echo listed'])).out === 'listed';
+    // Written files are marked, so the Mac asks before running them. check.ts finds the program's file marked once the .papp file has closed.
+    await papp.writeFile(`${own}/page-written.txt`, 'x');
+    result.page_write_marked = (await ran('sh', ['-c', 'xattr -p com.apple.quarantine "$1" >/dev/null && echo marked', 'sh', `${own}/page-written.txt`])).out === 'marked';
+    await ran('sh', ['-c', 'rm -f "$1"; echo x > "$1"', 'sh', `${own}/program-written.txt`]);
+
     const cursor = await papp.cursor();
     result.cursor_read = Number.isFinite(cursor.x) && Number.isFinite(cursor.y);
-    // Another app's announcement, posted by a program outside the page: osascript, which the sandbox lets talk to the notification center or not.
+    // Another app's announcement, posted by a program outside the .papp file.
     const name = `com.apargon.selftest.${crypto.randomUUID()}`;
     const { promise: heard, resolve: hear } = Promise.withResolvers();
     const stop = await papp.hear(name, (broadcast) => hear(broadcast.name === name && broadcast.info.said === 'hello'));
-    const post = `ObjC.import('Foundation'); $.NSDistributedNotificationCenter.defaultCenter.postNotificationNameObjectUserInfoDeliverImmediately('${name}', $(), $({ said: 'hello' }), true)`;
-    const posted = await papp.run('osascript', ['-l', 'JavaScript', '-e', post]);
-    result.hear_other_app = posted.status === 0 ? await Promise.race([heard, new Promise((done) => setTimeout(() => done('nothing heard'), 3000))]) : `post failed: ${posted.stderr.trim()}`;
+    // A program in the sandbox has no services, so listen.ts, outside, posts it.
+    await fetch(`http://localhost:47181/post?name=${encodeURIComponent(name)}`);
+    result.hear_other_app = await Promise.race([heard, new Promise((done) => setTimeout(() => done('nothing heard'), 3000))]);
     await stop();
     await papp.share({ text: 'Apargon selftest' });
-    result.share_unseen_refused = (await papp.share({ files: ['/etc/hosts'] }).then(() => false, (err) => err.message.startsWith('Apargon: '))) && (await papp.share({ url: 'file:///etc/hosts' }).then(() => false, (err) => err.message.startsWith('Apargon: ')));
+    result.share_url_refused = await refused(() => papp.share({ url: 'file:///etc/hosts' }));
     await papp.tray('selftest', [{ label: 'Item', id: 'item' }], { click: true });
     result.tray_click_set = true;
+    await finish('mac');
   } catch (err) {
-    result.error = err.message;
+    await finish('mac', err);
   }
 
-  document.body.textContent = JSON.stringify(result);
-  await papp.writeFile('results/result-mac.json', JSON.stringify(result, null, 2) + '\n');
-  // papp.quit, not window.close: if it did not quit, the run would wait here until its timeout.
   setTimeout(() => papp.quit(), 200);
 </script>

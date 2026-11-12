@@ -1,38 +1,35 @@
 import { linux } from './platform/linux.ts';
 import { macos } from './platform/macos.ts';
 import { windows } from './platform/windows.ts';
-import type { Permissions } from './tags.ts';
+import type { Use } from './tags.ts';
 
+// What the tags and the popup need to know about the OS. No Electron here: the Node tests load it.
 export type PermissionsPlatform = {
-  // Named in the popup when a tag covers one, beside the shared list: a path in the home folder, to what it holds.
-  secrets: Record<string, string>;
-  // Passed to the page's programs, beside PROGRAM_ENV, and so to the page process too.
+  // A tag this OS can't keep yet: the reason, shown when a .papp file uses it.
+  refusedTags: Partial<Record<string, string>>;
+  // A papp-use feature this OS can't give yet, with the reason.
+  refusedUses: Partial<Record<Use, string>>;
+  // Popup lines that differ here.
+  useLines: Partial<Record<Use, string>>;
+  // Where papp-socket can't allow one socket and opens them all: its one popup line. null where each socket gets its own.
+  allSocketsLine: string | null;
+  // Passed to programs beside the shared list, and to the .papp file's process too.
   programEnv: string[];
   pageEnv: string[];
-  refusedTags: Record<string, string>;
-  refuse(permissions: Permissions, dir: string): string | null;
-  // A path the OS reads as a server or as another file's name, past the checks: the reason, or null.
-  refusePath(file: string): string | null;
-  // Where written files run outside the sandbox, in the home folder; null where hidden names cover it.
-  launchFolder: string | null;
-  writesWholeFolders: boolean;
-  // A program can send what it sees past the sandbox.
-  programsSendOut: boolean;
-  // Every user's home and the disks the user plugs in: the OS keeps a .papp file's process out of them, but for what its tags name.
-  homeFolders: string[];
-  // What every .papp file reads in the home folder, as the system does: fonts and the desktop's settings. None holds a secret.
-  homeReads: string[];
-  // The sandbox lets a papp-system .papp file's process read every file. Any other, and on Windows that one too, reads only what is granted: a new pick needs the sandbox built again.
-  systemReadsAll: boolean;
-  soundServerRecords: boolean;
+  // What the Dock is called here.
+  dock: string;
+  // Folders searched for a program by name, after PATH.
   programFolders: string[];
-  // The endings of a file the OS runs as a program, tried in turn after a name; '' where any file can be one.
+  // The endings of a file the OS runs as a program, tried in turn after a name. '' where any file can be one.
   programExtensions: string[];
-  installFolder: string;
-  // Modifiers that are one key here, and the ones held for typing.
+  // A path the OS reads as a server or as another file's name: the reason, or null.
+  refusePath(file: string): string | null;
+  // Modifiers that are one key here, the ones held for typing, and how the popup writes each.
   sameKey: Partial<Record<string, string>>;
   typingModifiers: string[];
+  keyNames: Partial<Record<string, string>>;
+  keyJoin: string;
 };
 
-// Another system opens no page, as it has no sandbox; Linux's rules are the closest.
+// Any other OS gets Linux's facts. It opens no .papp file: the trampoline refuses it.
 export const PERMISSIONS_PLATFORM: PermissionsPlatform = process.platform === 'darwin' ? macos : process.platform === 'win32' ? windows : linux;

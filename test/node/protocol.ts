@@ -14,7 +14,8 @@ const calls = {
   },
   setSecret: () => Promise.reject(new Error('rejected')),
 } as unknown as CallHandlers;
-const handle = (line: Record<string, unknown>) => handleLine(line, events, calls, answer);
+const streamLines: unknown[] = [];
+const handle = (line: Record<string, unknown>) => handleLine(line, events, calls, answer, sent => streamLines.push(sent));
 const answerTo = (id: string) => answers.find(sent => sent.id === id);
 const handled = [
   handle({ call: 'given', id: 'g' }),
@@ -44,6 +45,12 @@ test('an event runs its handler', () => assert.deepEqual(told, ['/a.papp']));
 test('every event and call counts as handled', () => assert.ok(handled.every(Boolean)));
 test('an unknown event throws', () => assert.throws(() => handle({ event: 'constructor' }), { message: 'no such event constructor' }));
 test('a call without an id is output', () => assert.equal(handle({ call: 'given' }), false));
+
+test("a stream's line goes to the streams, whatever else it names", () => {
+  assert.equal(handle({ stream: 's', data: 'aGk=', call: 'given', id: 'never' }), true);
+  assert.deepEqual(streamLines, [{ stream: 's', data: 'aGk=', call: 'given', id: 'never' }]);
+  assert.equal(answerTo('never'), undefined);
+});
 
 test('a line that is no event or call is output', () => {
   for (const line of [{ id: 'x', value: 1 }, { text: 'hi' }, {}]) {

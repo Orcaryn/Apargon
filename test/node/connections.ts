@@ -36,7 +36,8 @@ for (const secure of [false, true]) {
     t.after(() => api.reset());
     const rejected = assert.rejects(api.connect('pending', 'allowed.example', 443, { tls: secure }), /reloaded/);
     await entered.promise;
-    const closed = Promise.all([...sockets].map(socket => once(socket, 'close')));
+    // The proxy's side sees the end: Node's HTTP server keeps its half open.
+    const closed = Promise.all([...sockets].map(socket => once(socket, 'end')));
     api.reset();
     await rejected;
     await closed;

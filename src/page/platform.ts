@@ -14,10 +14,10 @@ export type PagePlatform = {
   processGroups: boolean;
   // A child keeps every open fd that is not close-on-exec, the page's pipes to the trampoline included.
   programsInheritFds: boolean;
-  // Programs get an empty home folder in the .papp file's storage: the OS keeps them out of the user's, and a program such as git stops rather than go on without its settings there. A papp-system .papp file's programs keep the user's.
-  freshProgramHome: boolean;
   // Hears what other apps announce under a name, macOS's distributed notifications, until the function it returns is called. Where there are none, papp.hear refuses.
   hear?(name: string, heard: (info: Record<string, unknown>, sender: string) => void): () => void;
+  // Marks a new file the .papp file wrote, so the OS asks before running it.
+  markWritten?(file: string): void;
   // The system's share menu, over the window. Where there is none, papp.share refuses.
   share?(win: BrowserWindow, item: Electron.SharingItem): void;
 };

@@ -1,15 +1,20 @@
 <!doctype html>
 <meta charset="utf-8">
-<meta name="papp-use" content="camera, microphone, location, usb, serial, hid, midi">
+<meta name="papp-id" content="f59fda01-79eb-4568-bef3-5b33863f29aa">
+<meta name="papp-use" content="camera">
+<meta name="papp-use" content="microphone">
+<meta name="papp-use" content="location">
+<meta name="papp-use" content="usb">
+<meta name="papp-use" content="serial">
+<meta name="papp-use" content="hid">
+<meta name="papp-use" content="midi">
 <meta name="papp-run" content="tokencaps">
-<meta name="papp-write" content="./results/result-win-devices.json">
-<meta name="papp-write" content="./results/devices-win.json">
 <title>Apargon selftest for Windows devices</title>
+<script src="lib.js"></script>
 <body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
 
 <script type="module">
   // tokencaps is built by the Windows workflow: it prints the capabilities in its own token, which it shares with the page, and the ones Windows derives from each device's name.
-  const result = {};
   // What the devices answer: a CI runner has none, so these are recorded, not checked.
   const seen = {};
 
@@ -32,12 +37,11 @@
       seen[name] = await navigator.mediaDevices.getUserMedia(constraints).then((stream) => (stream.getTracks().forEach((track) => track.stop()), 'opened'), (err) => err.name);
     }
     seen.location = await new Promise((done) => navigator.geolocation.getCurrentPosition(() => done('found'), (err) => done(`error ${err.code}: ${err.message}`), { timeout: 10000 }));
+    await papp.writeFile(`${papp.folder}/devices-win.json`, JSON.stringify(seen, null, 2) + '\n');
+    await finish('win-devices');
   } catch (err) {
-    result.error = err.message;
+    await finish('win-devices', err);
   }
 
-  document.body.textContent = JSON.stringify({ result, seen });
-  await papp.writeFile('results/devices-win.json', JSON.stringify(seen, null, 2) + '\n');
-  await papp.writeFile('results/result-win-devices.json', JSON.stringify(result, null, 2) + '\n');
-  setTimeout(() => window.close(), 200);
+  setTimeout(() => papp.quit(), 200);
 </script>

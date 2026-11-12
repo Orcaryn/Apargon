@@ -2,9 +2,9 @@ import path from 'path';
 import type { MenuState } from '../shared/channel.ts';
 import { DATA, PAGE_RECORDS } from '../shared/data.ts';
 import { readJson, writeJson } from '../shared/json.ts';
-import { pageRecords } from './storage.ts';
+import { pageRecords } from './records.ts';
 
-// Apargon's own JSON files: one per page, and two for Apargon itself. Only the trampoline reads or writes them, through here. Each call reads the file again: another dialog may have saved meanwhile.
+// Apargon's own JSON files. Only the trampoline reads or writes them, through here.
 
 export type UpdateState = { automatic?: boolean; checked?: string; noticed?: string };
 
@@ -25,7 +25,7 @@ export function menuState(): MenuState {
   return {
     approved: records
       .all()
-      .filter(saved => saved.grant || saved.links)
+      .filter(saved => saved.approved || saved.picks)
       .map(saved => saved.page),
     automaticUpdates: updates.get().automatic !== false,
   };

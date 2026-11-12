@@ -2,13 +2,13 @@ import { desktopCapturer, dialog, net, session } from 'electron';
 import type { Permissions, Use } from '../permissions/tags.ts';
 import { fileServer } from './serve.ts';
 
-export function createPageSession(page: string, { use }: Permissions, pageHash: string | null, canSee: (file: string) => boolean, served: (file: string) => void) {
+export function createPageSession(page: string, { use }: Permissions, pageHash: string | null, served: (file: string) => void) {
   const pageSession = session.defaultSession;
 
-  pageSession.protocol.handle('file', fileServer(page, pageHash, canSee, served, request => net.fetch(request, { bypassCustomProtocolHandlers: true })));
+  pageSession.protocol.handle('file', fileServer(page, pageHash, served, request => net.fetch(request, { bypassCustomProtocolHandlers: true })));
 
   // Chromium asks for system-exclusive MIDI, which can also change an instrument's settings, for any MIDI access.
-  const webPermissions: Partial<Record<Use, string[]>> = { clipboard: ['clipboard-read'], location: ['geolocation'], camera: ['media:video'], microphone: ['media:audio'], screen: ['display-capture'], usb: ['usb'], serial: ['serial'], hid: ['hid'], midi: ['midi', 'midiSysex'] };
+  const webPermissions: Partial<Record<Use, string[]>> = { clipboard: ['clipboard-read'], location: ['geolocation'], camera: ['media:video'], microphone: ['media:audio'], screen: ['display-capture'], usb: ['usb'], serial: ['serial'], hid: ['hid'], midi: ['midi', 'midiSysex'], bluetooth: ['bluetooth'] };
   const allowed = ['clipboard-sanitized-write', 'fullscreen', 'pointerLock', ...use.flatMap(name => webPermissions[name] ?? [])];
   pageSession.setPermissionRequestHandler((_contents, permission, answer, details) => {
     const asked = permission === 'media' && 'mediaTypes' in details ? (details.mediaTypes ?? []).map(type => `media:${type}`) : [permission];
@@ -31,7 +31,7 @@ export function createPageSession(page: string, { use }: Permissions, pageHash: 
   if (use.includes('usb')) {
     pageSession.on('select-usb-device', async (event, { deviceList }, choose) => {
       event.preventDefault();
-      const picked = await pickOne('Give the page which USB device?', deviceList.map(device => device.productName ?? `USB device ${device.vendorId}:${device.productId}`));
+      const picked = await pickOne('Give it which USB device?', deviceList.map(device => device.productName ?? `USB device ${device.vendorId}:${device.productId}`));
       choose(picked === null ? undefined : deviceList[picked].deviceId);
     });
   }
@@ -39,7 +39,7 @@ export function createPageSession(page: string, { use }: Permissions, pageHash: 
   if (use.includes('serial')) {
     pageSession.on('select-serial-port', async (event, portList, _contents, choose) => {
       event.preventDefault();
-      const picked = await pickOne('Give the page which serial port?', portList.map(port => port.displayName ?? port.portName));
+      const picked = await pickOne('Give it which serial port?', portList.map(port => port.displayName ?? port.portName));
       choose(picked === null ? '' : portList[picked].portId);
     });
   }
@@ -47,12 +47,21 @@ export function createPageSession(page: string, { use }: Permissions, pageHash: 
   if (use.includes('hid')) {
     pageSession.on('select-hid-device', async (event, { deviceList }, choose) => {
       event.preventDefault();
-      const picked = await pickOne('Give the page which input device?', deviceList.map(device => device.name));
+      const picked = await pickOne('Give it which input device?', deviceList.map(device => device.name));
       choose(picked === null ? null : deviceList[picked].deviceId);
     });
   }
 
   return pageSession;
+}
+
+// Bluetooth asks each window, not the session.
+export function chooseBluetooth(contents: Electron.WebContents) {
+  contents.on('select-bluetooth-device', async (event, devices, choose) => {
+    event.preventDefault();
+    const picked = await pickOne('Give it which Bluetooth device?', devices.map(device => device.deviceName || device.deviceId));
+    choose(picked === null ? '' : devices[picked].deviceId);
+  });
 }
 
 // In this process's own dialog, as text: the page cannot draw the choice or make it.

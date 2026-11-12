@@ -1,133 +1,40 @@
 <!doctype html>
 <meta charset="utf-8">
-<meta name="papp-system" content="full">
-<meta name="papp-write" content="./results/result-system.json">
-<meta name="papp-window" content="frame=no">
-<title>Apargon selftest (full Node)</title>
+<meta name="papp-id" content="922d649a-0b4a-4f28-975a-2774474a2213">
+<meta name="papp-system">
+<title>Apargon selftest (papp-system)</title>
+<script src="lib.js"></script>
 <body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
 
 <script>
-  const fs = require('fs');
-  const os = require('os');
-  const path = require('path');
-  const dns = require('dns');
-  const { execFileSync, execSync, spawnSync } = require('child_process');
-
-  const here = path.dirname(decodeURIComponent(location.pathname));
-  const result = {};
-
-  // The sandbox's refusal, not the folder's owner, a missing folder or a file already there: Seatbelt answers EPERM, a read-only mount EROFS. Any other code fails, named.
-  const refusal = process.platform === 'darwin' ? 'EPERM' : 'EROFS';
-  try {
-    fs.writeFileSync(path.join(here, '..', 'node-outside.tmp'), 'hi');
-    result.ungranted_write_refused = false;
-  } catch (err) {
-    result.ungranted_write_refused = err.code === refusal || err.code;
-  }
-
-  // Seatbelt denies the folder; on Linux an empty one covers it. selftest.papp left a secret there.
-  try {
-    result.secrets_hidden = fs.readdirSync(path.join(os.homedir(), process.platform === 'darwin' ? 'Library/Application Support/apargon-secrets' : '.config/apargon-secrets')).length === 0;
-  } catch (err) {
-    result.secrets_hidden = err.code === 'EPERM';
-  }
-
-  // A papp-system page sees all: the home folder too, which any other page's process is kept out of.
-  result.system_reads_home = fs.readdirSync(os.homedir()).includes('.ssh');
-
-  result.child_process = execSync('echo ok').toString().trim() === 'ok';
-
-  result.storage_apart = localStorage.getItem('apargon-selftest') === null;
-
-  const data = path.join(os.homedir(), process.platform === 'darwin' ? 'Library/Application Support/apargon' : '.config/apargon');
-  const recordName = require('crypto').createHash('sha256').update(fs.realpathSync.native(path.join(here, 'selftest-system.papp'))).digest('hex') + '.json';
-  const record = path.join(data, 'pages-saved', recordName);
-  if (!fs.existsSync(record)) {
-    result.grants_protected = 'the actual approval record is missing';
-  } else {
+  // papp-system: no limits. The .papp file is a Node script, with the internet.
+  (async () => {
     try {
-      fs.appendFileSync(record, '');
-      result.grants_protected = false;
+      const fs = require('fs');
+      const net = require('net');
+      const os = require('os');
+      const path = require('path');
+      result.node = typeof process.versions.node === 'string';
+      result.child_process = require('child_process').execFileSync(process.platform === 'win32' ? 'cmd' : 'sh', process.platform === 'win32' ? ['/c', 'echo ran'] : ['-c', 'echo ran'], { encoding: 'utf8' }).trim() === 'ran';
+      const outside = path.join(os.tmpdir(), `apargon-system-${Date.now()}.tmp`);
+      fs.writeFileSync(outside, 'x');
+      result.writes_anywhere = fs.readFileSync(outside, 'utf8') === 'x';
+      fs.rmSync(outside);
+      // listen.ts serves 47182, which no tag names: papp-system reaches it directly.
+      result.network = await new Promise((done) => {
+        const socket = net.connect(47182, '127.0.0.1', () => {
+          socket.destroy();
+          done(true);
+        });
+        socket.on('error', (err) => done(err.code));
+      });
+      result.papp_api = (await papp.readdir('.')).includes('selftest-system.papp');
+      result.window_shape_set = (await papp.window({ shape: [] })).shape.length === 0;
+      await finish('system');
     } catch (err) {
-      result.grants_protected = err.code === refusal || err.code;
+      await finish('system', err);
     }
-  }
 
-  // Only its own storage: another page's holds settings that page trusts, like its window. Partitions holds this page's own, so it exists.
-  try {
-    fs.mkdirSync(path.join(data, 'pages', 'Partitions', 'f'.repeat(64)));
-    result.other_storage_write_blocked = false;
-  } catch (err) {
-    result.other_storage_write_blocked = err.code === refusal || err.code;
-  }
-
-  try {
-    fs.closeSync(fs.openSync('/dev/tty', 'r+'));
-    result.terminal_unreachable = false;
-  } catch {
-    result.terminal_unreachable = [0, 1, 2].every((fd) => !require('tty').isatty(fd));
-  }
-
-  try {
-    execSync('curl -s -m 3 https://example.com');
-    result.curl_blocked = false;
-  } catch {
-    result.curl_blocked = true;
-  }
-
-  if (process.platform === 'darwin') {
-    const leak = path.join(here, 'results', 'leak');
-    result.download_service_blocked = execFileSync(leak, ['download', 'https://example.com/'], { encoding: 'utf8' }).trim() === 'blocked';
-    result.webkit_blocked = execFileSync(leak, ['webkit', 'https://example.com/'], { encoding: 'utf8' }).trim() === 'blocked';
-    result.trust_blocked = execFileSync(leak, ['trust', path.join(here, 'results', 'leak.der')], { encoding: 'utf8' }).trim() === 'blocked';
-    result.open_app_blocked = spawnSync('open', ['-g', '-a', 'Finder']).status !== 0;
-    // activate, not a query: a query also fails without the sandbox, on the Automation permission.
-    result.apple_event_blocked = spawnSync('osascript', ['-e', 'tell application "Finder" to activate']).status !== 0;
-    result.preference_write_blocked = spawnSync('defaults', ['write', 'com.apargon.selftest', 'leaked', '-bool', 'true']).status !== 0;
-  }
-
-  if (process.platform === 'linux') {
-    result.processes_hidden = fs.readFileSync('/proc/1/comm', 'utf8').trim() === 'bwrap';
-    result.own_session = result.processes_hidden && fs.readFileSync('/proc/self/stat', 'utf8').split(') ')[1].split(' ')[3] !== '0';
-    const runtime = process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid()}`;
-    const x11 = /^:(\d+)/.exec(process.env.DISPLAY ?? '');
-    const display = [process.env.WAYLAND_DISPLAY && path.resolve(runtime, process.env.WAYLAND_DISPLAY), x11 && `/tmp/.X11-unix/X${x11[1]}`].filter(Boolean);
-    const sockets = ['/run', '/tmp', '/var/tmp'].flatMap((folder) => fs.readdirSync(folder, { recursive: true, withFileTypes: true }).filter((entry) => entry.isSocket()).map((entry) => path.join(entry.parentPath, entry.name)));
-    result.socket_folders_hidden = sockets.every((socket) => display.includes(socket));
-    result.other_pages_sockets_hidden = fs.readdirSync(path.join(os.homedir(), '.config/apargon/net')).length === 0;
-  }
-
-  const fetched = fetch('https://example.com', { cache: 'no-store', signal: AbortSignal.timeout(3000) })
-    .then((r) => {
-      result.fetch_leak = { status: r.status, type: r.type, url: r.url };
-      return false;
-    }, () => true);
-  const resolved = new Promise((done) => dns.lookup('example.com', (err) => done(!!err)));
-
-  const pappChecked = (async () => {
-    result.papp_api = typeof papp === 'object' && (await papp.displays()).length > 0 && (await papp.window()).visible === true;
-    result.papp_tags_checked = await papp.window({ onTop: true }).then(() => false, (err) => err.message.startsWith('Apargon: '));
-    // frame=no lets the page shape its window; the shape it set comes back, and [] takes it off.
-    const shaped = await papp.window({ shape: [{ x: 0, y: 0, width: 200, height: 100 }] });
-    result.window_shape_set = shaped.shape.length === 1 && shaped.shape[0].width === 200 && (await papp.window({ shape: [] })).shape.length === 0;
-    // macOS only: the OS holds the keep-awake for the page's process, from inside the sandbox, and lets it go.
-    if (process.platform === 'darwin') {
-      // This window's parent is the page's process, which holds it.
-      const holder = new RegExp(`pid ${process.ppid}\\(`);
-      const letSleep = await papp.keepAwake();
-      const held = holder.test(execFileSync('/usr/bin/pmset', ['-g', 'assertions'], { encoding: 'utf8' }));
-      await letSleep();
-      result.keep_awake_held = held && !holder.test(execFileSync('/usr/bin/pmset', ['-g', 'assertions'], { encoding: 'utf8' }));
-    }
-  })().catch((err) => {
-    result.papp_error = err.message;
-  });
-
-  Promise.all([fetched, resolved, pappChecked]).then(([fetchBlocked, dnsBlocked]) => {
-    result.fetch_blocked = fetchBlocked;
-    result.dns_blocked = dnsBlocked;
-    document.body.textContent = JSON.stringify(result);
-    fs.writeFileSync(path.join(here, 'results', 'result-system.json'), JSON.stringify(result, null, 2) + '\n');
-    setTimeout(() => window.close(), 200);
-  });
+    setTimeout(() => papp.quit(), 200);
+  })();
 </script>

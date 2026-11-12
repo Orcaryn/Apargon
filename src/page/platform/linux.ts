@@ -15,7 +15,6 @@ export const linux: PagePlatform = {
   },
   processGroups: true,
   programsInheritFds: true,
-  freshProgramHome: true,
   appMenu: false,
   // In the launcher entry too, where the dock takes it from: the trampoline writes it, as this process may not.
   showIcon(win, icon) {

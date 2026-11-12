@@ -1,4 +1,4 @@
-import { spawn } from 'child_process';
+import { execFileSync, spawn } from 'child_process';
 import { once } from 'events';
 import fs from 'fs';
 import http from 'http';
@@ -11,11 +11,21 @@ const sockets = process.platform === 'win32' ? [] : ['declared.sock', 'other.soc
 // A run stopped with Ctrl-C leaves them.
 sockets.forEach(socket => fs.rmSync(socket, { force: true }));
 
-// GET /reach?port=N answers whether this process, outside the sandbox, reaches port N on loopback and on this computer's network address: a page tests its own listener with it.
+// Who reached 47184, a plain TCP port: a mount from inside the sandbox must not.
+let hits = 0;
+await once(net.createServer(socket => (hits++, socket.destroy())).listen(47184, '127.0.0.1'), 'listening');
+
+// GET /hits counts them. GET /post?name=N posts another app's announcement, on macOS. GET /reach?port=N answers whether this process, outside the sandbox, reaches port N on loopback and on this computer's network address: a page tests its own listener with it.
 const server = async (request: http.IncomingMessage, response: http.ServerResponse) => {
   const url = new URL(request.url!, 'http://listener');
 
-  if (url.pathname === '/reach') {
+  if (url.pathname === '/hits') {
+    response.end(String(hits));
+  } else if (url.pathname === '/post') {
+    const script = `ObjC.import('Foundation'); $.NSDistributedNotificationCenter.defaultCenter.postNotificationNameObjectUserInfoDeliverImmediately(${JSON.stringify(url.searchParams.get('name'))}, $(), $({ said: 'hello' }), true)`;
+    execFileSync('/usr/bin/osascript', ['-l', 'JavaScript', '-e', script]);
+    response.end();
+  } else if (url.pathname === '/reach') {
     const port = Number(url.searchParams.get('port'));
     const address = Object.values(os.networkInterfaces())
       .flat()

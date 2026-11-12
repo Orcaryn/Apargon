@@ -49,16 +49,16 @@ function menuTemplate(page: string, lines: Line[], pageMenus: MenuItemConstructo
       label: 'Permissions',
       submenu: [
         {
-          label: "This Page's Permissions…",
+          label: "What This File Can Do…",
           click: () =>
             dialog.showMessageBox({
               type: 'info',
-              message: `${path.basename(page)} may:`,
-              detail: lines.length ? lines.map(line => `${line.short}: ${line.text}`).join('\n') : 'Nothing: no files, no network.',
+              message: `${path.basename(page)} can:`,
+              detail: lines.length ? lines.map(line => line.text).join('\n') : 'Read your files and change its own folder. No network.',
             }),
         },
         {
-          label: 'Approved Pages',
+          label: 'Files You Said Yes To',
           submenu: approved.length ? approved.map(other => ({ label: `Revoke ${other}`, click: () => tellTrampoline('revoke', [other]) })) : [{ label: 'None', enabled: false }],
         },
         { label: 'Revoke All Approvals', enabled: approved.length > 0, click: () => tellTrampoline('revoke', approved) },

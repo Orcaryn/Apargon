@@ -1,43 +1,52 @@
 import { app } from 'electron';
-import { spawnSync } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import { createHash, randomUUID } from 'crypto';
 import fs from 'fs';
-import type { AddressInfo } from 'net';
 import os from 'os';
 import path from 'path';
-import { localPorts } from '../../permissions/network.ts';
-import { HOME_FOLDERS, HOME_READS, realEntry, realPath } from '../../permissions/paths.ts';
-import { changeableSources, isInside, listableSources, literalBase, PAGE_SOURCE, patternSource } from '../../permissions/patterns.ts';
-import type { Permissions } from '../../permissions/tags.ts';
 import { REPLY_FD, REQUEST_FD } from '../../shared/channel.ts';
-import { APP_FILES, APP_ROOT, DATA, INSTALL_FOLDER, pageAppId, pageStorage, SECRETS_DATA } from '../../shared/data.ts';
-import type { TrampolinePlatform } from '../platform.ts';
-import { startProxy } from '../network/proxy.ts';
+import { APP_ROOT, DATA, OWN_FOLDERS } from '../../shared/data.ts';
+import type { Sandbox, TrampolinePlatform } from '../platform.ts';
 import { startPiped } from './pipes.ts';
 
-// This user's temp and cache folders, under /private/var/folders: every app keeps files there. The icon cache is put back: the share menu draws its icons from it, and crashes without.
 const USER_TEMP = fs.realpathSync(app.getPath('temp'));
-const USER_FOLDER = path.dirname(USER_TEMP);
-const ICON_CACHE = path.join(USER_FOLDER, 'C', 'com.apple.iconservices');
+const HOME = fs.realpathSync(os.homedir());
+// Where macOS keeps iCloud Drive, Dropbox, OneDrive and Google Drive. Reading an online-only file there downloads it.
+const CLOUD = ['Library/CloudStorage', 'Library/Mobile Documents'].map(name => path.join(HOME, name));
+// The devices every .papp file gets. Any other, like the SMB device or BPF, could reach past "no network".
+const DEVICES = ['(literal "/dev/null")', '(literal "/dev/zero")', '(literal "/dev/random")', '(literal "/dev/urandom")', '(literal "/dev/dtracehelper")', '(subpath "/dev/fd")', '(literal "/dev/autofs_nowait")'];
 
 export const macos: TrampolinePlatform = {
-  async prepare(page, permissions) {
-    const proxy = permissions.net.length ? await startProxy(permissions.net, null) : null;
-    const proxyPort = proxy && (proxy.address() as AddressInfo).port;
-    // A temp folder of the .papp file's own: the shared one holds other apps' files. Chromium takes its own variable for it, Node TMPDIR.
+  // Electron itself refuses a macOS older than it supports, and every macOS has sandbox-exec.
+  unsupported: async () => null,
+  unsafeDesktop: false,
+  // The .app bundle: Apargon.app/Contents/MacOS/Apargon.
+  installed: app.isPackaged ? path.resolve(process.execPath, '../../..') : null,
+  async prepare(sandbox) {
+    const { proxyPort, permissions } = sandbox;
+    // A temp folder of its own: the shared one holds other apps' files. Chromium takes its own variable for it, Node TMPDIR.
     const temp = fs.mkdtempSync(path.join(USER_TEMP, 'apargon-page-'));
-    const profile = seatbeltProfile(page, permissions, proxyPort, temp);
+    const profile = permissions.system ? null : pageProfile(sandbox, temp);
+    // Files its programs write are marked when it closes: the ones newer than this.
+    const started = path.join(temp, '.started');
+    fs.writeFileSync(started, '');
+    const programProfile = permissions.system ? null : `${profile}\n; Programs get no services: through one, a program could ask another to go online for it.\n(deny mach-lookup)\n`;
 
     return {
-      start: (apargon, env) => startPiped(['sandbox-exec', '-p', profile, ...apargon], ['ignore', 'pipe', 'pipe', 'pipe', 'ignore', 'pipe'], { ...env, TMPDIR: temp, MAC_CHROMIUM_TMPDIR: temp }),
+      start: (apargon, env) => startPiped([...(profile ? ['/usr/bin/sandbox-exec', '-p', profile] : []), ...apargon], ['ignore', 'pipe', 'pipe', 'pipe', 'ignore', 'pipe'], { ...env, TMPDIR: temp, MAC_CHROMIUM_TMPDIR: temp }),
       requestFd: REQUEST_FD,
       replyFd: REPLY_FD,
-      proxyPort,
-      bridges: [],
+      muxFd: null,
+      proxy: proxyPort === null ? null : `127.0.0.1:${proxyPort}`,
+      relays: [],
+      relayTargets: {},
+      // A sandbox can't start a stricter one inside it, so the trampoline starts the programs.
+      programsHere: false,
+      startProgram: (file, args, cwd, env) => spawn('/usr/bin/sandbox-exec', ['-p', programProfile!, file, ...args], { cwd, env: { ...env, TMPDIR: temp }, detached: true }),
       close() {
-        proxy?.close();
+        markNewFiles(permissions.system || permissions.writeAll ? [] : [sandbox.own, ...permissions.write], started);
 
-        // A folder the process left read-only, or a program still writing there, makes this fail. Logged, not thrown: a throw here would skip the reopen.
+        // A folder the process left read-only, or a program still writing there, makes this fail. Logged, not thrown.
         try {
           fs.rmSync(temp, { recursive: true });
         } catch (err) {
@@ -46,8 +55,7 @@ export const macos: TrampolinePlatform = {
       },
     };
   },
-  installHint: '',
-  // The quarantine mark says the file was downloaded; Spotlight keeps where from, the page last.
+  // The quarantine mark says the file was downloaded. Spotlight keeps where from, the page last.
   downloadAddress(page) {
     if (spawnSync('/usr/bin/xattr', ['-p', 'com.apple.quarantine', page]).status !== 0) {
       return null;
@@ -60,7 +68,6 @@ export const macos: TrampolinePlatform = {
   pageIcon(page, png) {
     const hash = createHash('sha256').update(png).digest('hex');
 
-    // A page that may write itself could have become a link: the icon would land on what it leads to.
     if (fs.lstatSync(page).isSymbolicLink() || spawnSync('/usr/bin/xattr', ['-p', 'com.apargon.icon', page], { encoding: 'utf8' }).stdout.trim() === hash) {
       return;
     }
@@ -73,12 +80,12 @@ export const macos: TrampolinePlatform = {
     spawnSync('/usr/bin/osascript', ['-l', 'JavaScript', '-e', script, page, png]);
     spawnSync('/usr/bin/xattr', ['-w', 'com.apargon.icon', hash, page]);
   },
-  markDownloaded(file) {
+  markWritten(file) {
     spawnSync('/usr/bin/xattr', ['-w', 'com.apple.quarantine', `0083;${Math.floor(Date.now() / 1000).toString(16)};Apargon;${randomUUID().toUpperCase()}`, file]);
   },
-  // A launch agent: login items take no arguments, so they could not name the page. Written only when it changes, as macOS tells the user each time.
+  // A launch agent: login items take no arguments, so they could not name the .papp file. Written only when it changes, as macOS tells the user each time.
   startAtLogin(page, on) {
-    const label = `com.${pageAppId(page)}`;
+    const label = `com.apargon.page.${createHash('sha256').update(page).digest('hex').slice(0, 16)}`;
     const agent = path.join(os.homedir(), 'Library', 'LaunchAgents', `${label}.plist`);
     const args = [process.execPath, ...(app.isPackaged ? [] : [APP_ROOT]), page].map(arg => `<string>${arg.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</string>`);
     const plist = `<?xml version="1.0" encoding="UTF-8"?>
@@ -98,78 +105,63 @@ export const macos: TrampolinePlatform = {
   trayClicks: true,
 };
 
-function seatbeltProfile(page: string, permissions: Permissions, proxyPort: number | null, temp: string) {
-  const ports = [proxyPort ?? [], localPorts(permissions)].flat();
-  const { files, pages } = changeableSources(permissions);
-  // Every home folder, the plugged-in disks, this user's temp and cache folders, and the temp folders every app shares: the .papp file's process sees in them only what is put back. Seatbelt takes the last rule that matches, so each put-back follows what it undoes.
-  const fenced = [...HOME_FOLDERS, USER_FOLDER, '/private/tmp', '/private/var/tmp'];
-  // Put back: the .papp file and its folders by their patterns, with the folders above each wildcard, so it can list them; the app; the .papp file's temp folder; and what every .papp file reads. Not the keychain: the process goes without encryption rather than see its files.
-  const seenPatterns = [permissions.own ?? [], permissions.read, permissions.write].flat();
-  // Approving a program grants the executable itself, not its surrounding home folder.
-  const programFiles = [...new Set(Object.values(permissions.run).flatMap(file => [file, realEntry(file), realPath(file)]))];
-  const seenFolders = [...APP_FILES, temp, ICON_CACHE, ...HOME_READS];
-  const putBack = [
-    ...(permissions.own ? [] : [`(literal "${page}")`]),
-    ...[...seenPatterns.map(pattern => patternSource(pattern)), ...listableSources(permissions)].map(source => `(regex #"${source}")`),
-    ...programFiles.map(program => `(regex #"${patternSource(program, false)}")`),
-    ...seenFolders.map(folder => `(subpath "${folder}")`),
-  ];
-  const storage = pageStorage(page);
-  const onTheWay = foldersOnTheWay([page, ...seenPatterns.map(literalBase), ...programFiles, ...seenFolders, storage], fenced);
-  const rules = [
-    fs.readFileSync(path.join(import.meta.dirname, 'profiles', 'macos.sb'), 'utf8'),
-    ...ports.map(port => `(allow network-outbound (remote ip "localhost:${port}"))`),
-    ...permissions.sockets.map(socket => `(allow network-outbound (${socket.endsWith(path.sep) ? 'subpath' : 'literal'} "${literalBase(socket)}"))`),
-    // The print server, which sends jobs on to the printers it knows.
-    ...(permissions.use.includes('print') ? ['(allow network-outbound (literal "/private/var/run/cupsd"))'] : []),
-    // A papp-system .papp file sees all.
-    ...(permissions.system ?
-      []
-    : [
-        `(deny file-read* ${fenced.map(folder => `(subpath "${folder}")`).join(' ')})`,
-        `(allow file-read* ${putBack.join(' ')})`,
-        // Apargon's data holds every .papp file's storage, the approvals and the picks: of it, the .papp file sees only its own storage, even under a tag that names a folder holding it.
-        `(deny file-read* (subpath "${DATA}"))`,
-        `(allow file-read* (subpath "${storage}"))`,
-        // Last, so no deny above hides a folder on the way.
-        `(allow file-read-metadata ${onTheWay.map(folder => `(literal "${folder}")`).join(' ')})`,
-      ]),
-    // Another app, or an Apple Event to one, would run outside the sandbox.
+// What its programs wrote, as macOS marks a download, so the Mac asks before running it. Not its Electron data.
+function markNewFiles(folders: string[], since: string) {
+  const mark = `0083;${Math.floor(Date.now() / 1000).toString(16)};Apargon;${randomUUID().toUpperCase()}`;
+
+  for (const folder of folders.map(each => each.replace(/\/$/, '')).filter(each => fs.existsSync(each))) {
+    spawnSync('/usr/bin/find', [folder, '-path', path.join(folder, '.electron'), '-prune', '-o', '-type', 'f', '-newer', since, '-exec', '/usr/bin/xattr', '-w', 'com.apple.quarantine', mark, '{}', '+']);
+  }
+}
+
+// Seatbelt takes the last rule that matches. Reads: every local disk. Writes: its own folder and papp-write. No network but the proxy. No mounting, no other devices, no opening other apps.
+export function pageProfile({ permissions, own, storage, proxyPort }: Sandbox, temp: string) {
+  const quote = (file: string) => {
+    if (/["\\\p{Cc}]/u.test(file)) {
+      throw new Error(`${file} has a " or a \\ in its name, which the sandbox can't take. Rename it.`);
+    }
+
+    return `"${file}"`;
+  };
+
+  const { remote, local } = mounts();
+  const unread = [...remote, '/Volumes', '/Network', ...(permissions.use.includes('cloud') ? [] : CLOUD)];
+  const writable = permissions.writeAll ? null : [own, storage, temp, ...permissions.write];
+  const kept = [DATA, OWN_FOLDERS, macos.installed].filter(folder => folder !== null);
+
+  return [
+    '(version 1)',
+    '(allow default)',
+    '(deny network*)',
+    ...(proxyPort === null ? [] : [`(allow network-outbound (remote tcp4 "localhost:${proxyPort}"))`]),
+    ...permissions.sockets.map(socket => `(allow network-outbound (literal ${quote(socket)}))`),
+    // Network drives and cloud folders: reading one sends a request. /Volumes is refused whole, so a drive attached later is too, and the local ones attached now are put back.
+    `(deny file-read* ${unread.map(folder => `(subpath ${quote(folder)})`).join(' ')})`,
+    `(allow file-read* (literal "/Volumes") ${local.map(folder => `(subpath ${quote(folder)})`).join(' ')})`,
+    // The kernel connects for a mount, past "no network".
+    '(deny file-mount)',
+    // Another app, or an Apple Event to one, would run outside the sandbox. Receiving them stays: Quit, logout, and a .papp file opened while it runs.
     '(deny lsopen)',
-    // Sending only. The page's process must still receive Apple Events: Dock > Quit, logout, and a page opened while it runs.
     '(deny appleevent-send)',
     '(deny user-preference-write)',
     '(deny file-write*)',
-    `(allow file-write* (literal "/dev/null") (literal "/dev/zero") (literal "/dev/dtracehelper") (subpath "/dev/fd") (subpath "${temp}"))`,
-    // Web Serial opens the port from this process. Any other device, like BPF, would reach past the network deny.
-    ...(permissions.use.includes('serial') ? ['(allow file-write* (regex #"^/dev/(cu|tty)\\."))'] : []),
-    ...files.map(source => `(allow file-write* (regex #"${source}"))`),
-    `(deny file-write* (regex #"${PAGE_SOURCE}"))`,
-    ...pages.map(source => `(allow file-write* (regex #"${source}"))`),
-    `(deny file-read* file-write* (subpath "${SECRETS_DATA}"))`,
-    `(deny file-write* (subpath "${DATA}"))`,
-    `(allow file-write* (subpath "${storage}"))`,
-  ];
-
-  if (INSTALL_FOLDER) {
-    rules.push(`(deny file-write* (subpath "${INSTALL_FOLDER}"))`);
-  }
-
-  // No terminal, not even by name: through it a page could type commands into the shell that started Apargon. Last, as /dev is writable above.
-  rules.push('(deny file-read* file-write* file-ioctl (literal "/dev/tty") (regex #"^/dev/ttys[0-9]+$"))');
-
-  return rules.join('\n') + '\n';
+    writable ? `(allow file-write* ${writable.map(folder => `(subpath ${quote(folder.replace(/[\\/]$/, ''))})`).join(' ')})` : '(allow file-write*)',
+    // Apargon's data holds the approvals, the .papp files' folders hold each other, and the app is the app: none is written, even under papp-write all.
+    `(deny file-write* ${kept.map(folder => `(subpath ${quote(folder)})`).join(' ')})`,
+    `(allow file-write* (subpath ${quote(own)}))`,
+    // Last: the devices it may open. No terminal, not even by name: through it the .papp file could type into the shell that started Apargon.
+    '(deny file-read* file-write* file-ioctl (subpath "/dev"))',
+    `(allow file-read* file-write* file-ioctl ${DEVICES.join(' ')})`,
+    '(allow file-read-metadata (literal "/dev"))',
+    // Web Serial opens the port from this process.
+    ...(permissions.use.includes('serial') ? ['(allow file-read* file-write* file-ioctl (regex #"^/dev/cu\\."))'] : []),
+  ].join('\n');
 }
 
-// The folders between a fenced root and each put-back, the root included: the process looks a path up through them by name, or nothing under them opens. Each by its exact name, so what else they hold stays hidden.
-function foldersOnTheWay(files: string[], fenced: string[]) {
-  const folders = new Set<string>();
+// Every disk mounted now, by whether it is on this computer. A network drive is refused wherever it is mounted.
+function mounts() {
+  const lines = spawnSync('/sbin/mount', { encoding: 'utf8' }).stdout.split('\n').filter(Boolean);
+  const parsed = lines.map(line => /^.+? on (.+) \(([^)]*)\)$/.exec(line)).filter(match => match !== null).map(([, where, flags]) => ({ where, local: flags.split(', ').includes('local') }));
 
-  for (const file of files) {
-    for (let folder = path.dirname(file); fenced.some(root => isInside(folder, root)); folder = path.dirname(folder)) {
-      folders.add(folder);
-    }
-  }
-
-  return [...folders];
+  return { remote: parsed.filter(mount => !mount.local).map(mount => mount.where), local: parsed.filter(mount => mount.local && mount.where.startsWith('/Volumes/')).map(mount => mount.where) };
 }

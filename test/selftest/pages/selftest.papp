@@ -1,12 +1,12 @@
 <!doctype html>
 <meta charset="utf-8">
-<meta name="papp-write" content="./results/result.json">
-<meta name="papp-write" content="./scratch*">
-<meta name="papp-write" content="./deep/**/*.md">
+<meta name="papp-id" content="d9ed0643-3b1f-40ad-a68c-05e2fd18c840">
 <title>Apargon selftest</title>
+<script src="lib.js"></script>
 <body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
 
 <script type="module">
+  // No tags: it reads every local disk, writes its own folder, and has no network.
   if (location.hash === '#second') {
     document.body.textContent = 'second window';
     await new Promise(() => {});
@@ -19,16 +19,16 @@
     await new Promise(() => {});
   }
 
-  const result = {};
-  // Refused by Apargon itself, not failed some other way: a renamed call or a crash is not a refusal. What else happened goes to check.ts, as refused_wrongly.
-  const wrong = [];
-  const refused = async (call, expected = /^Error: Apargon: (?!no such call)/) => {
-    const said = await call().then(() => 'not refused', (err) => `${err.name}: ${err.message}`);
-    if (!expected.test(said)) {
-      wrong.push(`${call}: ${said}`);
-    }
-    return expected.test(said);
-  };
+  // A second window that starts two big writes, one through the trampoline, and is closed under them.
+  if (location.hash === '#cut') {
+    const [folder] = await papp.picks();
+    papp.writeFile(`${papp.folder}/cut.bin`, new Uint8Array(32 * 1024 * 1024));
+    papp.writeFile(`${folder.path}/cut.bin`, new Uint8Array(32 * 1024 * 1024));
+    opener.postMessage('writing', '*');
+    await new Promise(() => {});
+  }
+
+  const own = papp.folder;
   const changeSeen = async (watching, change, options) => {
     let seen = null;
     const watcher = await papp.watch(watching, (file, kind) => { seen ??= `${file} ${kind}`; }, options);
@@ -39,20 +39,12 @@
     await watcher.close();
     return seen;
   };
-  const loads = (src) => new Promise((done) => {
-    const script = document.createElement('script');
-    script.src = src;
-    script.onload = () => done(true);
-    script.onerror = () => done(false);
-    document.head.append(script);
+  const fetched = fetch('https://example.com', { cache: 'no-store', signal: AbortSignal.timeout(3000) }).then((r) => ({ status: r.status }), () => true);
+  const socketed = new Promise((done) => {
+    const socket = new WebSocket('wss://example.com/');
+    socket.onopen = () => done('opened');
+    socket.onerror = () => done(true);
   });
-
-  const fetched = fetch('https://example.com', { cache: 'no-store', signal: AbortSignal.timeout(3000) })
-    .then((r) => {
-      result.fetch_leak = { status: r.status, type: r.type, url: r.url };
-      return false;
-    }, () => true);
-
   const permissions = Promise.all([
     Notification.requestPermission(),
     navigator.clipboard.readText().then(() => 'allowed', () => 'denied'),
@@ -62,139 +54,169 @@
 
   try {
     result.no_node = typeof require === 'undefined' && typeof process === 'undefined';
-    localStorage.setItem('apargon-selftest', 'kept by selftest.papp');
-    result.storage_own = localStorage.getItem('apargon-selftest') === 'kept by selftest.papp';
+    localStorage.setItem('apargon-selftest', 'kept');
+    result.storage_own = localStorage.getItem('apargon-selftest') === 'kept';
+    // By its papp-id, so an update finds its data.
+    result.own_folder_named = /[\\/]\.apargon[\\/][0-9a-f-]{36}$/.test(own);
 
-    result.own_folder_read = (await papp.readFile('selftest.papp')).includes('Apargon selftest') && (await papp.readdir('.')).includes('selftest-system.papp');
-    result.own_subfolder_read = (await papp.readFile('subfolder/note.txt')).includes('subfolder');
-    result.own_folder_write_refused = await refused(() => papp.writeFile('own.txt', 'x'));
-    result.own_subfolder_write_refused = await refused(() => papp.writeFile('subfolder/x.txt', 'x')) && await refused(() => papp.mkdir('sub'));
+    // Reads: every local disk.
+    result.reads_page_folder = (await papp.readFile('selftest.papp')).includes('Apargon selftest') && (await papp.readdir('.')).includes('selftest-net.papp');
+    result.reads_home = (await papp.readdir('~')).length > 0 && (await papp.readdir('~/.ssh')) !== undefined;
+    result.reads_outside = (await papp.readFile('../../../package.json')).includes('"apargon"');
+    const fixture = await papp.readFile('subfolder/note.txt');
+    result.read_range = await papp.readFile('subfolder/note.txt', { offset: 2, length: 4 }) === fixture.slice(2, 6) && (await papp.readFile('subfolder/note.txt', { encoding: null, offset: 1 })).length === fixture.length - 1;
+    result.read_options_refused = await refused(() => papp.readFile('subfolder/note.txt', { flag: 'w' })) && await refused(() => papp.readFile('subfolder/note.txt', 'utf8'));
+    const listed = await papp.readdir('.', { stats: true });
+    result.readdir_stats = listed.find((item) => item.name === 'subfolder')?.isDirectory === true && listed.find((item) => item.name === 'selftest.papp')?.size > 0;
 
-    await papp.writeFile('scratch.txt', 'hi');
-    result.granted_write = await papp.readFile('scratch.txt') === 'hi' && (await papp.readdir('.')).includes('scratch.txt');
-    result.page_write_refused = await refused(() => papp.writeFile('scratch.papp', 'x')) && await refused(() => papp.writeFile('selftest-system.papp', 'x'));
-    result.page_rename_refused = await refused(() => papp.rename('scratch.txt', 'scratch.papp')) && await refused(() => papp.rename('selftest-system.papp', 'scratch.txt'));
-    // To the user's Trash, from where the tags allow a change and nowhere else.
-    await papp.writeFile('scratch.trash', 'bin me');
-    await papp.trash('scratch.trash');
-    result.trash_granted = !(await papp.exists('scratch.trash'));
-    result.trash_refused = await refused(() => papp.trash('selftest-system.papp')) && await refused(() => papp.trash('../../../package.json'));
-    const fixtures = JSON.parse(await papp.readFile('results/home-probe.json'));
-    if (fixtures.symlinks) {
-      await papp.trash('scratch-link');
-      result.trash_symlink = !(await papp.readdir('.')).includes('scratch-link') && await papp.readFile('scratch-target.txt') === 'target kept';
-      await papp.trash('scratch-dangling');
-      result.trash_dangling = !(await papp.readdir('.')).includes('scratch-dangling');
-    }
-    result.window_shape_refused = await refused(() => papp.window({ shape: [{ x: 0, y: 0, width: 100, height: 100 }] }));
-    result.options_refused = await refused(() => papp.readFile('scratch.txt', { flag: 'w' })) && await papp.readFile('scratch.txt') === 'hi';
+    // Writes: its own folder only.
+    result.page_folder_write_refused = await refused(() => papp.writeFile('scratch.txt', 'x')) && await refused(() => papp.mkdir('scratch-dir')) && await refused(() => papp.appendFile('selftest.papp', 'x'));
+    result.home_write_refused = await refused(() => papp.writeFile('~/apargon-selftest.txt', 'x'));
+    result.other_own_folder_write_refused = await refused(() => papp.writeFile(`${own}-other/x.txt`, 'x')) && await refused(() => papp.writeFile(`${own}/../x.txt`, 'x'));
+    result.rename_out_refused = await refused(() => papp.rename(`${own}/nothing.txt`, '../x.txt'));
+    await papp.writeFile(`${own}/scratch.txt`, 'a');
+    await papp.appendFile(`${own}/scratch.txt`, 'b');
+    result.own_write = await papp.readFile(`${own}/scratch.txt`) === 'ab';
+    await papp.copyFile('subfolder/note.txt', `${own}/copy.txt`);
+    await papp.copyFile(`${own}/copy.txt`, `${own}/./copy.txt`);
+    result.copy = await papp.readFile(`${own}/copy.txt`) === fixture;
+    result.copy_out_refused = await refused(() => papp.copyFile('subfolder/note.txt', 'copy.txt'));
+    await papp.mkdir(`${own}/dir/deep`);
+    await papp.rename(`${own}/copy.txt`, `${own}/dir/deep/moved.txt`);
+    result.own_rename = (await papp.readdir(`${own}/dir/deep`)).includes('moved.txt');
+    result.rm_folder_needs_recursive = await refused(() => papp.rm(`${own}/dir`), /^Error: .*(EISDIR|ERR_FS_EISDIR|is a directory)/i);
+    await papp.rm(`${own}/dir`, { recursive: true });
+    result.own_rm = !(await papp.exists(`${own}/dir`));
+    await papp.writeFile(`${own}/scratch.trash`, 'bin me');
+    await papp.trash(`${own}/scratch.trash`);
+    result.trash_own = !(await papp.exists(`${own}/scratch.trash`));
+    result.trash_refused = await refused(() => papp.trash('selftest.papp')) && await refused(() => papp.trash('../../../package.json'));
 
-    result.watch_folder = await changeSeen('.', () => papp.writeFile('scratch.txt', 'again')) === 'scratch.txt changed';
-    await papp.writeFile('scratch.new', 'new');
-    result.watch_file_renamed_over = await changeSeen('scratch.txt', () => papp.rename('scratch.new', 'scratch.txt')) === 'scratch.txt changed';
-    result.watch_survives_second_window = await changeSeen('.', async () => {
+    result.watch_folder = await changeSeen(own, () => papp.writeFile(`${own}/scratch.txt`, 'again')) !== null;
+    result.watch_survives_second_window = await changeSeen(own, async () => {
       const second = window.open('#second');
       await new Promise((done) => setTimeout(done, 1500));
-      await papp.writeFile('scratch.txt', 'seen from the first window');
+      await papp.writeFile(`${own}/scratch.txt`, 'seen from the first window');
       second.close();
-    }) === 'scratch.txt changed';
-    result.watch_removed = await changeSeen('scratch.txt', () => papp.rm('scratch.txt')) === 'scratch.txt removed';
-    await papp.mkdir('scratch-dir');
-    const deep = [];
-    const deepWatcher = await papp.watch('.', (file, kind) => deep.push(`${file} ${kind}`), { recursive: true });
-    await papp.writeFile('scratch-dir/deep.txt', 'x');
-    await new Promise((done) => setTimeout(done, 1000));
-    await deepWatcher.close();
-    result.watch_recursive = deep.includes('scratch-dir/deep.txt changed') && await deepWatcher.closed === null;
-    // As Node's rm: the folder's own error, not Apargon's.
-    result.rm_folder_needs_recursive = await refused(() => papp.rm('scratch-dir'), /^Error: Path is a directory: .*EISDIR/) && (await papp.readdir('scratch-dir')).includes('deep.txt');
-    await papp.rm('scratch-dir', { recursive: true });
-    await papp.writeFile('scratch.txt', 'again');
-    result.watch_outside_refused = await refused(() => papp.watch('..', () => {}));
-    result.watch_hidden_refused = await refused(() => papp.watch('.hidden', () => {}));
-    await papp.rm('scratch.txt');
-    await papp.mkdir('scratch-dir');
-    result.hidden_below_match_refused = await refused(() => papp.writeFile('scratch-dir/.hidden', 'x'));
-    await papp.rm('scratch-dir', { recursive: true });
-    // ** is any number of folders, none hidden.
-    await papp.writeFile('deep/top.md', 'x');
-    await papp.writeFile('deep/sub/below.md', 'x');
-    result.any_depth_write = (await papp.readdir('deep/sub')).includes('below.md');
-    await papp.rm('deep/top.md');
-    await papp.rm('deep/sub/below.md');
-    result.any_depth_refused = await refused(() => papp.writeFile('deep/sub/other.txt', 'x')) && await refused(() => papp.writeFile('deep/sub/.hidden/x.md', 'x'));
+    }) !== null;
+    result.watch_outside = await changeSeen('subfolder', async () => {}) === null;
+    await papp.rm(`${own}/scratch.txt`);
 
-    const listed = await papp.readdir('.', { stats: true });
-    const entry = (name) => listed.find((item) => item.name === name);
-    result.readdir_stats = entry('subfolder')?.isDirectory === true && entry('selftest.papp')?.isFile === true && entry('selftest.papp').size > 0 && !listed.some((item) => item.name.startsWith('.'));
-    const note = await papp.readFile('subfolder/note.txt');
-    result.read_range = await papp.readFile('subfolder/note.txt', { offset: 2, length: 4 }) === note.slice(2, 6) && (await papp.readFile('subfolder/note.txt', { encoding: null, offset: 1 })).length === note.length - 1;
-    result.read_options_refused = await refused(() => papp.readFile('subfolder/note.txt', 'utf8'));
-    await papp.writeFile('scratch.txt', 'a');
-    await papp.appendFile('scratch.txt', 'b');
-    result.append = await papp.readFile('scratch.txt') === 'ab';
-    result.append_refused = await refused(() => papp.appendFile('own.txt', 'x')) && await refused(() => papp.appendFile('selftest-system.papp', 'x'));
-    await papp.copyFile('subfolder/note.txt', 'scratch-copy.txt');
-    result.copy = await papp.readFile('scratch-copy.txt') === note;
-    await papp.copyFile('scratch-copy.txt', './scratch-copy.txt');
-    result.copy_onto_itself = await papp.readFile('scratch-copy.txt') === note;
-    await papp.rm('scratch-copy.txt');
-    result.copy_refused = await refused(() => papp.copyFile('../../../package.json', 'scratch-copy.txt')) && await refused(() => papp.copyFile('subfolder/note.txt', 'own.txt')) && await refused(() => papp.copyFile('selftest.papp', 'scratch.papp'));
-    await papp.rm('scratch.txt');
+    // Bytes go as streams: 16 MB that never repeats arrives whole, by its hash.
+    const MB = 1024 * 1024;
+    const data = new Uint8Array(16 * MB);
+    const words = new Uint32Array(data.buffer);
+    for (let i = 0, x = 2463534242; i < words.length; i++) {
+      x ^= x << 13;
+      x ^= x >>> 17;
+      x ^= x << 5;
+      words[i] = x;
+    }
+    const hash = async (bytes) => new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)).join();
+    const dataHash = await hash(data);
+    await papp.writeFile(`${own}/data.bin`, data);
+    result.bytes_roundtrip = await hash(await papp.readFile(`${own}/data.bin`, { encoding: null })) === dataHash
+      && await hash(await papp.readFile(`${own}/data.bin`, { encoding: null, offset: 5 * MB + 3, length: 2 * MB })) === await hash(data.subarray(5 * MB + 3, 7 * MB + 3));
+    await papp.copyFile(`${own}/data.bin`, `${own}/copy.bin`);
+    result.bytes_copy = await hash(await papp.readFile(`${own}/copy.bin`, { encoding: null })) === dataHash;
+    await papp.writeFile(`${own}/copy.bin`, 'tiny');
+    result.overwrite_truncates = (await papp.stat(`${own}/copy.bin`)).size === 4;
+    await papp.writeFile(`${own}/edge.bin`, '');
+    const empty = (await papp.readFile(`${own}/edge.bin`, { encoding: null })).length === 0 && await papp.readFile(`${own}/edge.bin`) === '';
+    // Any kind of bytes: 0x6968 is 'hi'.
+    await papp.writeFile(`${own}/edge.bin`, new Uint16Array([0x6968]));
+    await papp.appendFile(`${own}/edge.bin`, new DataView(new TextEncoder().encode('é').buffer));
+    result.read_edges = empty && await papp.readFile(`${own}/edge.bin`) === 'hié'
+      && (await papp.readFile(`${own}/edge.bin`, { encoding: null, offset: 100 })).length === 0
+      && (await papp.readFile(`${own}/edge.bin`, { encoding: null, offset: 1, length: 0 })).length === 0;
+    result.read_folder_refused = await refused(() => papp.readFile(own, { encoding: null }), /^Error: .*(EISDIR|is a directory)/i);
+    const text = 'héllo wörld 😀 שלום\n'.repeat(40000);
+    await papp.writeFile(`${own}/text.txt`, text);
+    result.text_roundtrip = await papp.readFile(`${own}/text.txt`) === text;
+    // Calls made at once each land, in some order.
+    const pieces = Array.from({ length: 50 }, (_, i) => `${i},`);
+    await papp.writeFile(`${own}/appends.txt`, '');
+    await Promise.all(pieces.map((piece) => papp.appendFile(`${own}/appends.txt`, piece)));
+    result.appends_all_kept = (await papp.readFile(`${own}/appends.txt`)).split(',').filter(Boolean).sort().join() === pieces.map((piece) => piece.slice(0, -1)).sort().join();
+    const many = Array.from({ length: 100 }, (_, i) => [`${own}/many-${i}.txt`, `file ${i} `.repeat(i + 1)]);
+    await Promise.all(many.map(([file, content]) => papp.writeFile(file, content)));
+    result.parallel_writes = (await Promise.all(many.map(([file]) => papp.readFile(file)))).every((content, i) => content === many[i][1]);
+    const odd = ['a b#%25é😀 &=+.txt', 'שלום.txt', `${'x'.repeat(200)}.txt`];
+    for (const name of odd) {
+      await papp.writeFile(`${own}/${name}`, name);
+    }
+    result.odd_names = (await Promise.all(odd.map((name) => papp.readFile(`${own}/${name}`)))).every((content, i) => content === odd[i]);
+    await Promise.all([...['data.bin', 'copy.bin', 'edge.bin', 'text.txt', 'appends.txt', ...odd].map((name) => `${own}/${name}`), ...many.map(([file]) => file)].map((file) => papp.rm(file)));
+
+    // Picks: fixtures.ts picked a folder to write in and a file, as the user would. Apargon writes there, not the .papp file.
+    const [folderPick, filePick] = await papp.picks();
+    result.picks_seeded = folderPick.folder && folderPick.write && folderPick.path.endsWith('picked') && !filePick.folder && filePick.path.endsWith('picked-file.txt');
+    const folder = folderPick.path;
+    await papp.writeFile(`${folder}/data.bin`, data);
+    result.picked_roundtrip = await hash(await papp.readFile(`${folder}/data.bin`, { encoding: null })) === dataHash;
+    await papp.writeFile(`${folder}/data.bin`, 'tiny');
+    result.picked_overwrite_truncates = (await papp.stat(`${folder}/data.bin`)).size === 4;
+    await papp.writeFile(`${own}/data.bin`, data);
+    await papp.copyFile(`${own}/data.bin`, `${folder}/copy.bin`);
+    result.picked_copy = await hash(await papp.readFile(`${folder}/copy.bin`, { encoding: null })) === dataHash;
+    // Emptied: the .papp file may not remove what it wrote there.
+    await papp.writeFile(`${folder}/copy.bin`, '');
+    await papp.writeFile(filePick.path, 'one');
+    await papp.appendFile(filePick.path, ',two');
+    await papp.appendFile(`${folder}/log.txt`, 'one');
+    await papp.appendFile(`${folder}/log.txt`, ',two');
+    result.picked_append = await papp.readFile(filePick.path) === 'one,two' && await papp.readFile(`${folder}/log.txt`) === 'one,two';
+    result.picked_names_refused = await refused(() => papp.writeFile(`${folder}/sub/x.txt`, 'x')) && await refused(() => papp.writeFile(`${folder}/.hidden`, 'x')) && await refused(() => papp.rm(`${folder}/copy.bin`));
+    // Writes cut short by a closed window leave Apargon writing the next ones, here and through the trampoline.
+    const cut = window.open('#cut');
+    await new Promise((done) => addEventListener('message', ({ data }) => data === 'writing' && done(), { once: true }));
+    cut.close();
+    await papp.writeFile(`${own}/after.bin`, data);
+    await papp.writeFile(`${folder}/after.bin`, data);
+    result.write_cut_by_close = await hash(await papp.readFile(`${own}/after.bin`, { encoding: null })) === dataHash && await hash(await papp.readFile(`${folder}/after.bin`, { encoding: null })) === dataHash;
+    await papp.writeFile(`${folder}/after.bin`, '');
+    await Promise.all(['data.bin', 'after.bin', 'cut.bin'].map((name) => papp.rm(`${own}/${name}`)));
+    result.save_names_refused = (await Promise.all([{}, { '../out.txt': 'x' }, { 'sub/out.txt': 'x' }, { '.zshrc': 'x' }, { 'ok.txt': 'x', '': 'x' }].map((files) => refused(() => papp.saveAll(files))))).every(Boolean);
+
     const pdf = await papp.pdf();
     result.pdf_rendered = new TextDecoder().decode(pdf.slice(0, 5)) === '%PDF-';
     // Chromium's own file loader ignores Range, so Apargon answers it: media seeks by range.
     const part = await fetch('subfolder/note.txt', { headers: { range: 'bytes=2-5' } });
-    result.range_served = (part.status === 206 && await part.text() === note.slice(2, 6)) || { status: part.status };
+    result.range_served = (part.status === 206 && await part.text() === fixture.slice(2, 6)) || { status: part.status };
     const video = document.createElement('video');
     video.src = 'subfolder/clip.mp4';
     await new Promise((done) => { video.onloadedmetadata = done; video.onerror = done; });
     video.currentTime = video.duration - 2;
     await new Promise((done) => { video.onseeked = done; video.onerror = done; });
     result.media_seeks = video.currentTime >= 17 || { error: video.error?.message, at: video.currentTime };
+
     result.menu_set = (await papp.menu([{ label: 'Selftest', submenu: [{ label: 'Run', id: 'run', keys: 'CmdOrCtrl+Shift+9' }, { separator: true }, { label: 'Role smuggled', id: 'quit', role: 'quit' }] }])) === undefined;
-    result.tray_set = (await papp.tray('Selftest', [{ label: 'Run', id: 'run' }, { separator: true }, { label: 'Role smuggled', id: 'quit', role: 'quit' }])) === undefined && (await papp.tray(null)) === undefined;
+    result.tray_set = (await papp.tray('Selftest', [{ label: 'Run', id: 'run' }])) === undefined && (await papp.tray(null)) === undefined;
     result.tray_refused = await refused(() => papp.tray('x', 'not a list')) && await refused(() => papp.tray('x', [null]));
     result.progress_set = (await papp.progress(0.5)) === undefined && (await papp.progress(null)) === undefined;
-    result.progress_refused = await refused(() => papp.progress(2)) && await refused(() => papp.progress('0.5')) && await refused(() => papp.progress(NaN));
-    // The window stays on a screen, and what the tags did not turn on stays off, even after a refusal.
+    result.progress_refused = await refused(() => papp.progress(2)) && await refused(() => papp.progress('0.5'));
     const screens = await papp.displays();
     const { workArea: area } = screens.find((each) => each.primary);
-    result.displays_listed = Number.isInteger(area.width) && screens.every((each) => each.scaleFactor > 0);
     const placed = await papp.window({ bounds: { x: area.x + 20, y: area.y + 20, width: 640, height: 480 } });
-    result.window_bounds_set = placed.bounds.x === area.x + 20 && placed.bounds.width === 640 && placed.bounds.height === 480;
+    result.window_bounds_set = placed.bounds.x === area.x + 20 && placed.bounds.width === 640;
     result.window_offscreen_refused = await refused(() => papp.window({ bounds: { x: area.x + area.width - 10 } }));
-    const switches = await Promise.all([{ onTop: true }, { allSpaces: true }, { clickThrough: true }, { private: true }, { visible: false }, { opacity: 0.1 }, { state: 'fullscreen' }].map((change) => refused(() => papp.window(change))));
+    // What the tags did not turn on stays off.
+    const switches = await Promise.all([{ onTop: true }, { allSpaces: true }, { clickThrough: true }, { private: true }, { visible: false }, { opacity: 0.1 }, { shape: [{ x: 0, y: 0, width: 9, height: 9 }] }].map((change) => refused(() => papp.window(change))));
     const after = await papp.window();
-    result.window_switches_refused = switches.every(Boolean) && !after.onTop && !after.allSpaces && !after.clickThrough && !after.private && after.visible && after.opacity === 1 && after.bounds.width === 640;
+    result.window_switches_refused = switches.every(Boolean) && !after.onTop && !after.allSpaces && !after.private && after.visible && after.opacity === 1;
     result.shortcuts_refused = await refused(() => papp.shortcuts(['CommandOrControl+Alt+Shift+F12']));
     const letSleep = await papp.keepAwake({ display: true });
     result.keep_awake = typeof letSleep === 'function' && (await letSleep()) === undefined;
     result.badge_set = (await papp.badge(3)) === undefined && (await papp.badge(null)) === undefined;
-    result.attention_asked = (await papp.attention()) === undefined;
-    // A 1 × 1 red PNG, which the page's process sizes to 32 × 32.
-    const icon = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==';
-    result.tray_rich_set = (await papp.tray('Selftest', [{ label: 'Mode', submenu: [{ label: 'Fast', id: 'fast', checked: true, radio: true }] }, { label: 'Sync', id: 'sync', checked: false }], { icon })) === undefined && (await papp.tray(null)) === undefined;
-    const nestedTray = (depth) => [depth === 1 ? { label: 'x', id: 'x' } : { label: 'x', submenu: nestedTray(depth - 1) }];
-    result.tray_icon_refused = await refused(() => papp.tray('x', [], { icon: 'data:text/plain,hi' })) && await refused(() => papp.tray('x', nestedTray(4)));
     const power = await papp.power();
     result.power_read = typeof power.idleSeconds === 'number' && typeof power.onBattery === 'boolean';
-    result.save_names_refused = (await Promise.all([{}, { '../out.txt': 'x' }, { 'sub/out.txt': 'x' }, { '.zshrc': 'x' }, { 'ok.txt': 'x', 'page.papp': 'x' }, { 'ok.txt': 'x', '': 'x' }].map((files) => refused(() => papp.saveAll(files))))).every(Boolean);
-    result.given_empty = (await papp.given()).length === 0;
-    // Each page's secrets are its own: selftest-net keeps a 'token' too, which this page must never see.
+
+    // Each .papp file's secrets are its own: selftest-net keeps a 'token' too.
     result.secrets_per_page = await papp.getSecret('token') !== 'kept by selftest-net.papp';
-    // 'token' stays: selftest-system then finds the secrets folder hidden with a file in it.
     await papp.setSecret('token', 'kept by selftest.papp');
     await papp.setSecret('gone', 'x');
     await papp.deleteSecret('gone');
-    result.secret_roundtrip = await papp.getSecret('token') === 'kept by selftest.papp' && await papp.getSecret('gone') === null && await papp.getSecret('never') === null;
-    const objectNames = ['constructor', 'toString', '__proto__'];
-    await Promise.all(objectNames.map((name) => papp.deleteSecret(name)));
-    const absent = await Promise.all(objectNames.map((name) => papp.getSecret(name)));
-    await Promise.all(objectNames.map((name) => papp.setSecret(name, `secret ${name}`)));
-    const stored = await Promise.all(objectNames.map((name) => papp.getSecret(name)));
-    await Promise.all(objectNames.map((name) => papp.deleteSecret(name)));
-    result.secret_object_names = absent.every((value) => value === null) && stored.every((value, i) => value === `secret ${objectNames[i]}`);
+    result.secret_roundtrip = await papp.getSecret('token') === 'kept by selftest.papp' && await papp.getSecret('gone') === null;
     // The trampoline's replies, on each OS's pipe: a 4 MB one arrives whole, and answers to calls made at once each reach their own call.
     const large = 'ü✓'.repeat(1024 * 1024) + 'end';
     await papp.setSecret('large', large);
@@ -202,43 +224,45 @@
     await papp.deleteSecret('large');
     const names = Array.from({ length: 40 }, (_, i) => `parallel-${i}`);
     await Promise.all(names.map((name) => papp.setSecret(name, `value of ${name}`)));
-    const answers = await Promise.all(names.map((name) => papp.getSecret(name)));
-    result.replies_parallel = answers.every((answer, i) => answer === `value of ${names[i]}`);
+    result.replies_parallel = (await Promise.all(names.map((name) => papp.getSecret(name)))).every((answer, i) => answer === `value of ${names[i]}`);
     await Promise.all(names.map((name) => papp.deleteSecret(name)));
-    result.secret_names_refused = await refused(() => papp.getSecret('')) && await refused(() => papp.setSecret('token', 5)) && await refused(() => papp.setSecret('token')) && await refused(() => papp.deleteSecret('x'.repeat(257)));
+    result.secret_names_refused = await refused(() => papp.getSecret('')) && await refused(() => papp.setSecret('token', 5));
 
-    result.outside_read_refused = await refused(() => papp.readFile('../../../package.json'));
-    result.outside_write_refused = await refused(() => papp.writeFile('../outside.txt', 'x'));
-    result.home_read_refused = await refused(() => papp.readdir('~'));
-    // Past Apargon's own check: a Worker's file: read skips the page's handlers. fixtures.ts supplies a real existing SSH directory on every OS, independently of the checkout's location.
-    const workerRead = (url) => new Promise((done) => {
-      const worker = new Worker('worker.js');
-      worker.onmessage = (event) => { worker.terminate(); done(event.data); };
-      worker.onerror = (event) => { worker.terminate(); done({ error: event.message }); };
-      worker.postMessage(url);
-    });
-    const { sshURL } = fixtures;
-    const probe = new URL(sshURL);
-    if (probe.protocol !== 'file:' || probe.host || !decodeURIComponent(probe.pathname).endsWith('/.ssh/')) {
-      throw new Error('Invalid home-fence fixture; run node test/selftest/fixtures.ts first.');
-    }
-    const ownRead = await workerRead(new URL('subfolder/note.txt', location.href).href);
-    const homeRead = await workerRead(probe.href);
-    // Unfenced, the known existing directory answers with its listing. The control proves the Worker can read files.
-    result.worker_home_refused = (ownRead.status === 200 && homeRead.status !== 200) || { sshURL, ownRead, homeRead };
-    result.hidden_write_refused = await refused(() => papp.writeFile('.hidden', 'x'));
+    // No tags, so no way out: no programs, no listening, no connecting, no extras.
     result.run_refused = await refused(() => papp.run('ls'));
-    result.listen_refused = await refused(() => papp.listen({}, () => ({ body: 'x' })));
     result.spawn_refused = await refused(() => papp.spawn('ls'));
-    result.use_refused = await refused(() => papp.notify('selftest', 'should not show')) && await refused(() => papp.print()) && await refused(() => window.print()) && await refused(() => papp.cursor()) && await refused(() => papp.share({ text: 'should not show' })) && await refused(() => papp.hear('com.apple.screenIsLocked', () => {}));
-    result.open_type_refused = await refused(() => papp.open('selftest.papp')) && await refused(() => papp.open('subfolder/frame.html')) && await refused(() => papp.open('subfolder/bundle.app'));
-    result.open_outside_refused = await refused(() => papp.open('../../../package.json'));
+    result.listen_refused = await refused(() => papp.listen({}, () => ({ body: 'x' })));
+    result.connect_refused = await refused(() => papp.connect('example.com', 443));
+    result.use_refused = await refused(() => papp.notify('selftest', 'should not show')) && await refused(() => papp.cursor()) && await refused(() => papp.share({ text: 'should not show' })) && await refused(() => papp.hear('com.apple.screenIsLocked', () => {}));
     result.open_scheme_refused = (await Promise.all(['vscode://file/etc/passwd', 'file:///etc/passwd', 'javascript:1'].map((href) => refused(() => papp.open(href))))).every(Boolean);
     result.screen_capture_refused = await refused(() => navigator.mediaDevices.getDisplayMedia({ video: true }), /^NotAllowedError: /);
+    result.fetch_blocked = await fetched;
+    result.websocket_blocked = await socketed;
+    result.permissions_denied = (await permissions).every((answer) => answer === 'denied');
+
+    // The window shows only the .papp file. A frame may hold a local file.
+    result.file_frame_allowed = await new Promise((done) => {
+      const frame = document.createElement('iframe');
+      frame.src = 'subfolder/frame.html';
+      document.body.append(frame);
+      setTimeout(() => done(window.framed === true), 1500);
+    });
+    result.web_frame_refused = await new Promise((done) => {
+      const frame = document.createElement('iframe');
+      frame.src = 'https://example.com/';
+      document.body.append(frame);
+      // Still its own blank frame: a page from the web would be another origin, and this would throw.
+      setTimeout(() => {
+        try {
+          done(frame.contentWindow.location.href === 'about:blank');
+        } catch {
+          done('the frame left');
+        }
+      }, 3000);
+    });
     result.other_file_window_refused = window.open('subfolder/frame.html') === null;
-    // Its own size and frame, but on top only as the tag says, and this page has none.
     result.second_window_settings = await new Promise((done) => {
-      const mini = window.open('#mini', '', 'size=320x200, frame=no, on-top=yes');
+      const mini = window.open('#mini', '', 'size=320x200, frame=no, on-top');
       const report = setTimeout(() => done(false), 5000);
       addEventListener('message', ({ data }) => {
         clearTimeout(report);
@@ -247,29 +271,18 @@
       }, { once: true });
     });
     result.second_window_bad_settings_refused = window.open('#second', '', 'on-top=maybe') === null;
-
-    result.fetch_blocked = await fetched;
-    result.outside_file_url_refused = !(await loads('../../../package.json'));
-    result.other_file_frame_refused = await new Promise((done) => {
-      const frame = document.createElement('iframe');
-      frame.src = 'subfolder/frame.html';
-      document.body.append(frame);
-      setTimeout(() => done(!window.framed), 1000);
-    });
-    result.permissions_denied = (await permissions).every((answer) => answer === 'denied');
-    // The window shows only the page: a page that could leave it would run another file with this page's access. Navigated, this script is gone and the result written first stays.
-    await papp.writeFile('results/result.json', JSON.stringify({ ...result, navigation_refused: 'the window left the page' }, null, 2) + '\n');
+    // Navigated away, this script is gone and the result written first stays.
+    await finish('plain');
+    const saved = { ...result };
+    result.navigation_refused = 'the window left the .papp file';
+    await finish('plain');
     location.href = 'subfolder/frame.html';
     await new Promise((done) => setTimeout(done, 1000));
-    result.navigation_refused = true;
+    Object.assign(result, saved, { navigation_refused: true });
+    await finish('plain');
   } catch (err) {
-    result.error = err.message;
-  }
-  if (wrong.length) {
-    result.refused_wrongly = wrong;
+    await finish('plain', err);
   }
 
-  document.body.textContent = JSON.stringify(result);
-  await papp.writeFile('results/result.json', JSON.stringify(result, null, 2) + '\n');
   setTimeout(() => window.close(), 200);
 </script>

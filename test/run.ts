@@ -21,22 +21,20 @@ const steps = [
     [
       [node, 'test/selftest/listen.ts', electron, '.', `${pages}/selftest-win.papp`],
       [node, 'test/selftest/listen.ts', electron, '.', `${pages}/selftest-win-programs.papp`],
-      [electron, '.', `${pages}/selftest-win-system.papp`],
+      [node, 'test/selftest/listen.ts', electron, '.', `${pages}/selftest-system.papp`],
       [electron, '.', `${pages}/selftest-win-devices.papp`],
     ]
   : [
-      [electron, '.', `${pages}/selftest-system.papp`],
+      [node, 'test/selftest/listen.ts', electron, '.', `${pages}/selftest-system.papp`],
       [node, 'test/selftest/listen.ts', electron, '.', `${pages}/selftest-net.papp`],
-      ...(process.platform === 'darwin' ? [[electron, '.', `${pages}/selftest-mac.papp`]] : []),
+      [node, 'test/selftest/listen.ts', electron, '.', `${pages}/selftest-socket.papp`],
+      ...(process.platform === 'darwin' ? [[node, 'test/selftest/listen.ts', electron, '.', `${pages}/selftest-mac.papp`]] : []),
     ]),
   [node, 'test/selftest/check.ts'],
 ];
 const root = path.join(import.meta.dirname, '..');
-fs.readdirSync(path.join(root, pages, 'results'))
-  .filter(name => /^result.*\.json$/.test(name))
-  .forEach(name => fs.rmSync(path.join(root, pages, 'results', name)));
-// fixtures.ts makes the SSH directory and records its real URL; the Windows Documents check needs a real directory too.
 
+// fixtures.ts clears the last run's results. The Windows checks need a real Documents folder.
 if (process.platform === 'win32') {
   fs.mkdirSync(path.join(os.homedir(), 'Documents'), { recursive: true });
 }

@@ -17,13 +17,13 @@ const IMAGE_TYPES: Record<string, string> = {
 };
 
 // Draws the page's favicon as its icon whenever it changes. Returns the icon as last drawn, which notifications show. marked: with Apargon's badge, unless papp-window says mark=no.
-export function followFavicon(win: BrowserWindow, canSee: (file: string) => boolean, madeHere: boolean, marked: boolean) {
+export function followFavicon(win: BrowserWindow, madeHere: boolean, marked: boolean) {
   let faviconUrls: string[] = [];
   let drawn: NativeImage | null = null;
 
   const drawFavicons = async () => {
     const urls = faviconUrls;
-    const read = await Promise.all(urls.map(url => readFavicon(win, url, canSee).catch(() => undefined)));
+    const read = await Promise.all(urls.map(url => readFavicon(win, url).catch(() => undefined)));
     const favicons = read.filter(favicon => favicon !== undefined);
 
     // The page changed its favicon while a web one downloaded: the newer call draws.
@@ -52,7 +52,7 @@ export function followFavicon(win: BrowserWindow, canSee: (file: string) => bool
 }
 
 // As a data: URL, which the sandboxed icon window can load.
-async function readFavicon(win: BrowserWindow, url: string, canSee: (file: string) => boolean) {
+async function readFavicon(win: BrowserWindow, url: string) {
   if (url.startsWith('data:image/')) {
     return url.length <= MAX_FAVICON_BYTES ? url : undefined;
   } else if (/^https?:/.test(url)) {
@@ -86,7 +86,7 @@ async function readFavicon(win: BrowserWindow, url: string, canSee: (file: strin
   const file = realPath(fileURLToPath(url));
   const type = IMAGE_TYPES[path.extname(file).toLowerCase()];
 
-  return type !== undefined && canSee(file) && fs.statSync(file).size <= MAX_FAVICON_BYTES ? `data:${type};base64,${fs.readFileSync(file).toString('base64')}` : undefined;
+  return type !== undefined && fs.statSync(file).size <= MAX_FAVICON_BYTES ? `data:${type};base64,${fs.readFileSync(file).toString('base64')}` : undefined;
 }
 
 async function drawIcon(favicons: string[], marked: boolean) {

@@ -1,5 +1,6 @@
 <!doctype html>
 <meta charset="utf-8">
+<meta name="papp-id" content="1aba9a15-4de1-47d7-9499-c89ad45a6622">
 <meta name="papp-run" content="/bin/ls">
 <title>Made here: a program</title>
 <p>Made on this computer, asks to run <code>ls</code>. The popup had a red line but no checkbox: it is your code.</p>

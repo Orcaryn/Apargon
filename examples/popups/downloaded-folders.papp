@@ -1,5 +1,6 @@
 <!doctype html>
 <meta charset="utf-8">
-<meta name="papp-read" content="../">
+<meta name="papp-id" content="b6fbfe29-4c80-4c65-8fbe-d7cabc347430">
+<meta name="papp-write" content="../">
 <title>Downloaded: folders</title>
 <p>Downloaded, asks to see <code>examples</code>. No way to send files out, so no risk sentence and no checkbox.</p>

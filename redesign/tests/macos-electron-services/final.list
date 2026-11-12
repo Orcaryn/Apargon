@@ -1,0 +1,10 @@
+com.apple.windowserver.active
+com.apple.windowmanager.server
+com.apple.CARenderServer
+com.apple.coreservices.launchservicesd
+com.apple.lsd.mapdb
+com.apple.pasteboard.1
+com.apple.audio.audiohald
+com.apple.MTLCompilerService
+com.apple.coremedia.videoencoder
+com.apple.fonts

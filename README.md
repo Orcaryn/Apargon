@@ -4,7 +4,7 @@ Apargon is a desktop app for macOS, Linux and Windows that runs papps.
 
 A papp is a single `.papp` file: an HTML file with extra `<meta>` tags. It works like a desktop app, without the setup a desktop app needs: no installer, no server, no build step. You double-click it, and Apargon opens it in a sandboxed window.
 
-The sandbox blocks everything the tags don't allow, and a popup shows what they ask for before the page runs.
+Apargon is a reverse browser. A browser gets all of the internet and none of your computer. A `.papp` file gets your files and none of the internet: it reads your local disks, writes only its own folder, and sends nothing off your computer unless you said yes.
 
 A coding agent can write a papp from one prompt.
 
@@ -27,7 +27,7 @@ brew trust --cask orcaryn/tap/apargon
 brew install --cask orcaryn/tap/apargon
 ```
 
-Then double-click a `.papp`, or run `open page.papp` (macOS) or `apargon page.papp` (Linux).
+Then double-click a `.papp`, or run `open notes.papp` (macOS) or `apargon notes.papp` (Linux). On Linux, Apargon runs on GNOME with Wayland. On X11 it asks first: there, any app can type into other windows.
 
 The first time it opens, Apargon offers to install the papp skill, so coding agents can build apps for it (see [Build with an agent](#build-with-an-agent)).
 
@@ -35,51 +35,48 @@ Once a day Apargon asks GitHub for a new version. **Permissions → Check for Up
 
 ## Meta tags
 
-With no tags, a page sees its own folder and nothing else. It asks for more in its `<head>`. A tag that names a file, server, program, variable or socket takes one; `papp-use` and `papp-window` take a list:
+Every `.papp` file names itself with a UUID: `<meta name="papp-id" content="…">`. That's its identity: its data folder (`~/.apargon/<id>`) and its secrets follow it through renames, moves and new versions. A file without one doesn't open.
+
+With no other tags, it reads every local disk, writes only its own folder, and has no network. It opens at once.
+
+It asks for more in its `<head>`. `content` holds the one thing; attributes hold the options:
 
 ```html
-<meta name="papp-read"            content="~/logs/">                  <!-- see a folder -->
-<meta name="papp-write"           content="./notes/*.md">             <!-- change files -->
-<meta name="papp-net"             content="api.example.com">          <!-- one server, port 443 unless you add :port -->
-<meta name="papp-listen"          content="localhost">                <!-- answer programs on this computer; network for devices too -->
-<meta name="papp-open"            content="x.com">                    <!-- its links open without asking -->
-<meta name="papp-run"             content="git">                      <!-- one program, or ./bin/tool for one the page ships -->
-<meta name="papp-env"             content="AWS_PROFILE">              <!-- one variable for it -->
-<meta name="papp-socket"          content="/var/run/docker.sock">     <!-- one socket -->
-<meta name="papp-use"             content="notifications, sound">     <!-- also clipboard, location, camera, microphone, screen, print, usb, serial, hid, midi, background, login -->
+<meta name="papp-id"              content="4f2c9a1e-7b3d-4c58-9e21-0a6d8f3b5c77"> <!-- who it is, always -->
+<meta name="papp-write"           content="~/notes/">                 <!-- change files in one folder; all instead of content for any -->
+<meta name="papp-run"             content="git">                      <!-- one program, with the same limits; add unfenced for none -->
+<meta name="papp-net"             content="api.example.com">          <!-- one site, port 443 unless you add :port; its links open too -->
+<meta name="papp-listen">                                             <!-- answer this computer; add network for your network too -->
+<meta name="papp-socket"          content="/var/run/docker.sock">     <!-- one other program -->
+<meta name="papp-use"             content="notifications">            <!-- one device or extra per tag -->
+<meta name="papp-window"          size="900x600" title-bar="no">      <!-- the window's size and look -->
+<meta name="papp-env"             content="AWS_PROFILE">              <!-- one variable for its programs -->
 <meta name="papp-global-shortcut" content="CommandOrControl+Shift+N"> <!-- a key that works in every app -->
-<meta name="papp-window"          content="size=900x600">             <!-- the window's size and look -->
-<meta name="papp-system"          content="full">                     <!-- full Node -->
+<meta name="papp-system">                                             <!-- everything: Node and the internet -->
 ```
 
-Write each tag as the browser reads it: `name` and `content` quoted, with no spaces around the `=`.
+A popup lists one line per tag, in plain words: "Change files in notes", "Send your files to api.example.com". Your yes belongs to the file's exact bytes and to what the popup showed: any change, even a comment, asks again, and so does a tag that now leads to another folder or program. **Permissions → Files You Said Yes To** takes a yes back.
 
-A popup lists what the tags allow before the page runs. A red line is a way to send data somewhere the tags do not name. When a page could send your data out (a red line, a program, or a server plus files it sees), the popup asks you to tick "I trust this page". A red box at the top says so. **Permissions → Approved Pages** takes an approval back.
+With no tag, a `.papp` file can ask you to pick a file or folder in Apargon's dialog. Pick to read, and it reads it. Pick to write, and Apargon writes it for it. Picks are kept, even after a restart. It can also keep secrets, like an API key: Apargon seals them with your computer's own store.
 
-A page keeps its storage (`localStorage`, IndexedDB) when you move or rename the file, as long as its content is the same as when it was last open. A copy starts empty.
+All its network goes through Apargon's proxy, to the sites its tags name, and nowhere else. **Permissions → Show Egress Log** lists every try.
 
-With no tag, a page can still open a link in your browser, and a file (image, video, audio, PDF, text) or a folder in its app. A link asks first, with the address shown, unless the page names the site with `papp-open`.
+`papp-use background` keeps it running after you close it; quit it from its tray icon. `papp-use login` opens it at login, until you take back your yes.
 
-With no tag, a page can also ask you to pick a file or folder. Apargon's dialog says what the page gets: to see it, or to change it too. A pick is kept until you take the page's approval back, and the popup lists it under "You gave it". A page can also keep secrets, like an API key: Apargon seals them with your computer's own store, where no page can read them.
-
-With `papp-listen`, Apargon answers requests for the page: from programs on this computer, or with `network` from devices on your network, like a phone. The page itself never listens. Both show red.
-
-`papp-use background` keeps a page running after you close it; quit it from its tray icon. `papp-use login` opens a page at login, until you take back its approval.
-
-A `papp-system` page has Node and runs any program, but changes only the files its tags name: open one only if you trust it. [SECURITY.md](SECURITY.md) lists what Apargon enforces and what it does not.
+[SECURITY.md](SECURITY.md) lists what Apargon enforces, and what it tells you but doesn't block.
 
 ## Windows
 
 On Windows, a few things work differently:
 
-- **Programs can leak.** A page's programs, and a `papp-system` page, can send any file they see to the internet. Windows lets them. So you must tick "I trust this page" before such a page opens.
-- **No sockets.** A page with `papp-socket` does not open. `localhost` works through Apargon's proxy, so a program must honour `http_proxy`, as `curl` does.
-- **Only `.exe` and `.com` programs.** `papp-run` does not take `.bat` or `.cmd` files.
-- **Programs see less.** Only the page's folders, their own folder, and folders every app can read, like `C:\Windows` and Program Files.
+- **Windows can leak a name.** A program can make Windows look up a name, as in `\\<data>.example.com\x`. That's Microsoft's to fix, and it has been reported.
+- **No sockets yet.** A `.papp` file with `papp-socket` doesn't open. `localhost` works through Apargon's proxy, so a program must honour `http_proxy`, as `curl` does.
+- **Only `.exe` and `.com` programs.** `papp-run` doesn't take `.bat` or `.cmd` files.
+- **Reads:** the folders at the root of each local drive, and your user folder. OneDrive only with `papp-use cloud`. A folder made at a drive's root after the `.papp` file opens isn't readable until it opens again.
 
 ## Build with an agent
 
-Give it [`skills/papp/SKILL.md`](skills/papp/SKILL.md). Apargon installs it to `~/.claude/skills/papp/` and `~/.agents/skills/papp/` if you say yes: on its first run, each time you open it without a page until the skill is there, and from **Help → Install the papp Skill for Agents…**. Without Apargon:
+Give it [`skills/papp/SKILL.md`](skills/papp/SKILL.md). Apargon installs it to `~/.claude/skills/papp/` and `~/.agents/skills/papp/` if you say yes: on its first run, each time you open it without a `.papp` file until the skill is there, and from **Help → Install the papp Skill for Agents…**. Without Apargon:
 
 ```sh
 for dir in ~/.claude/skills/papp ~/.agents/skills/papp; do

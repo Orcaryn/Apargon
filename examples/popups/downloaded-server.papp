@@ -1,5 +1,6 @@
 <!doctype html>
 <meta charset="utf-8">
+<meta name="papp-id" content="cb8362a8-9099-47d7-b003-a065cc8bed42">
 <meta name="papp-net" content="api.github.com">
 <title>Downloaded: a server</title>
 <p>Downloaded, sees its folder and reaches <code>api.github.com</code>. The popup said it can send the files it sees there, and asked you to trust the site.</p>

@@ -1,5 +1,6 @@
 <!doctype html>
 <meta charset="utf-8">
+<meta name="papp-id" content="ec9966ac-484a-41a4-a825-7a31b5bd252f">
 <meta name="papp-run" content="/bin/ls">
 <title>Downloaded: a program</title>
 <p>Downloaded, asks to run <code>ls</code>. The popup said programs may send your files anywhere, and asked you to trust the site.</p>

@@ -1,17 +1,16 @@
 <!doctype html>
 <meta charset="utf-8">
+<meta name="papp-id" content="6a736bf2-49c7-4783-931b-881e78427e7b">
 <meta name="papp-net" content="api.github.com">
-<meta name="papp-write" content="./electron-latest.json">
 <title>Apargon net</title>
 <style>
   body { font: 15px/1.5 system-ui; max-width: 720px; margin: 40px auto; padding: 0 20px; color: #222; }
   pre { background: #f4f4f4; padding: 12px; overflow: auto; }
 </style>
 
-<h1>A page that talks to one server</h1>
-<p>This page may reach <code>api.github.com:443</code>: the tag is in its head, you
-approved it, and the window title repeats it. It fetches the latest Electron release and
-writes it to <code>electron-latest.json</code>, next to this page.</p>
+<h1>A .papp file that talks to one site</h1>
+<p>It may reach <code>api.github.com</code>: the tag is in its head, and you said yes to it.
+It fetches the latest Electron release and writes it to <code>electron-latest.json</code>, in its own folder.</p>
 <pre id="out">fetching…</pre>
 
 <script>
@@ -19,10 +18,10 @@ writes it to <code>electron-latest.json</code>, next to this page.</p>
     .then((r) => r.json())
     .then(async (release) => {
       const latest = { tag: release.tag_name, published: release.published_at, url: release.html_url };
-      await papp.writeFile('electron-latest.json', JSON.stringify(latest, null, 2) + '\n');
-      out.textContent = JSON.stringify(latest, null, 2) + '\n\nwritten to electron-latest.json';
+      await papp.writeFile(`${papp.folder}/electron-latest.json`, JSON.stringify(latest, null, 2) + '\n');
+      out.textContent = JSON.stringify(latest, null, 2) + `\n\nwritten to ${papp.folder}/electron-latest.json`;
     })
     .catch((err) => { out.textContent = 'failed: ' + err.message; });
 
-  fetch('https://example.com').then(() => console.log('should not happen'), (err) => console.log('undeclared host blocked:', err.message));
+  fetch('https://example.com').then(() => console.log('should not happen'), (err) => console.log('another site blocked:', err.message));
 </script>

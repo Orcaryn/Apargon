@@ -1,27 +1,28 @@
 <!doctype html>
 <meta charset="utf-8">
-<meta name="papp-write" content="./notes.txt">
+<meta name="papp-id" content="f495a55c-779d-4bf4-b670-2d058ec6ac47">
 <title>Apargon hello</title>
 <style>
   body { font: 15px/1.5 system-ui; max-width: 720px; margin: 40px auto; padding: 0 20px; color: #222; }
   textarea { width: 100%; height: 200px; font: 14px/1.4 ui-monospace, monospace; }
 </style>
 
-<h1>A page that edits a file</h1>
-<p>This is <code>notes.txt</code>, next to this page. Type, save, open it in any editor.
-The page may see its own folder, and asks for one tag: to change <code>notes.txt</code>.
-Nothing else.</p>
+<h1>A .papp file that edits a file</h1>
+<p>This is <code>notes.txt</code>, in its own folder, <code id="where"></code>. Type, save, open it in any editor.
+It has no tags: it reads your files, writes only its own folder, and has no network.</p>
 <textarea id="text"></textarea>
 <p><button id="save">Save</button> <span id="saved"></span></p>
 
 <script>
+  const notes = `${papp.folder}/notes.txt`;
+  where.textContent = papp.folder;
   const load = async () => {
-    text.value = await papp.exists('notes.txt') ? await papp.readFile('notes.txt') : '';
+    text.value = await papp.exists(notes) ? await papp.readFile(notes) : '';
   };
   load();
-  papp.watch('notes.txt', load);
+  papp.watch(notes, load);
   save.onclick = async () => {
-    await papp.writeFile('notes.txt', text.value);
+    await papp.writeFile(notes, text.value);
     saved.textContent = 'saved ' + new Date().toLocaleTimeString();
   };
 </script>

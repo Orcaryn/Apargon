@@ -20,19 +20,19 @@ SMB and NFS are ways to use a folder on another computer. When something mounts 
 
 ## Result
 
-| Route | No sandbox | Page | Program |
-| --- | --- | --- | --- |
-| SMB | through | **through** | **through** |
-| NFS | through | **through** | **through** |
-| Disk image over HTTP | through | blocked | blocked |
-| WebDAV | not run | blocked | blocked |
+| Route                | No sandbox | Page        | Program     |
+| -------------------- | ---------- | ----------- | ----------- |
+| SMB                  | through    | **through** | **through** |
+| NFS                  | through    | **through** | **through** |
+| Disk image over HTTP | through    | blocked     | blocked     |
+| WebDAV               | not run    | blocked     | blocked     |
 
 Fixes added to the program profile:
 
-| Rule | SMB | NFS |
-| --- | --- | --- |
-| `deny file-mount` | **through** | blocked |
-| + deny `/dev/nsmb*` | blocked | blocked |
+| Rule                | SMB         | NFS     |
+| ------------------- | ----------- | ------- |
+| `deny file-mount`   | **through** | blocked |
+| + deny `/dev/nsmb*` | blocked     | blocked |
 
 - Control: SMB still got through outside the sandbox.
 - SMB connects through the device `/dev/nsmb` before it mounts.

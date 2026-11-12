@@ -15,11 +15,11 @@ Wayland is meant to stop apps typing into or watching other windows. Some compos
 
 ## Result
 
-| Compositor | `wtype` | Risky features any app gets |
-| --- | --- | --- |
-| sway | **9 keys delivered** | typing, pointer, clipboard reading, screen capture, window list |
-| KDE | refused | **clipboard reading** |
-| GNOME | refused | none |
+| Compositor | `wtype`              | Risky features any app gets                                     |
+| ---------- | -------------------- | --------------------------------------------------------------- |
+| sway       | **9 keys delivered** | typing, pointer, clipboard reading, screen capture, window list |
+| KDE        | refused              | **clipboard reading**                                           |
+| GNOME      | refused              | none                                                            |
 
 - GNOME through D-Bus: **7 keys delivered**.
 - KDE had no positive typing control.

@@ -17,10 +17,10 @@ MXC starts from deny. Can it grant reading everything?
 
 ## Result
 
-| `readonlyPaths` | Result |
-| --- | --- |
-| `C:\` | **nothing readable** |
-| `C:\Users` | user's folder refused |
+| `readonlyPaths`                      | Result                   |
+| ------------------------------------ | ------------------------ |
+| `C:\`                                | **nothing readable**     |
+| `C:\Users`                           | user's folder refused    |
 | 37 top-level folders + user's folder | **all readable** (0.3 s) |
 
 - Writes: only the granted folder.

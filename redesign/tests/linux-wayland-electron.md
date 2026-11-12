@@ -14,12 +14,12 @@ Refusing X11 only works if Electron runs on Wayland alone.
 
 ## Result
 
-| Compositor | Window | Painted |
-| --- | --- | --- |
-| weston | yes | capture failed (window visible) |
-| sway | yes | yes |
-| KDE | yes | yes |
-| GNOME | yes | yes |
+| Compositor | Window | Painted                         |
+| ---------- | ------ | ------------------------------- |
+| weston     | yes    | capture failed (window visible) |
+| sway       | yes    | yes                             |
+| KDE        | yes    | yes                             |
+| GNOME      | yes    | yes                             |
 
 GPU: software everywhere. The runner has no GPU.
 

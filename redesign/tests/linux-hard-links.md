@@ -15,12 +15,12 @@ Same as [macos-hard-links.md](macos-hard-links.md).
 
 ## Result
 
-| Try | Result |
-| --- | --- |
-| Control: write and link outside | works |
-| Write outside directly | denied |
-| New hard link into `own/` | **refused** (cross-device) |
-| Write through `own/prelink` | **allowed: the outside file changed** |
+| Try                             | Result                                |
+| ------------------------------- | ------------------------------------- |
+| Control: write and link outside | works                                 |
+| Write outside directly          | denied                                |
+| New hard link into `own/`       | **refused** (cross-device)            |
+| Write through `own/prelink`     | **allowed: the outside file changed** |
 
 ## So
 

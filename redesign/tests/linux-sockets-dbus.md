@@ -20,13 +20,13 @@ Then the same with empty `/tmp` and `/run`. Control: each one outside the sandbo
 
 ## Result
 
-| Check | read-all + `--unshare-net` | + empty `/tmp`, `/run` |
-| --- | --- | --- |
-| TCP out | refused | n/a |
-| D-Bus | **reached** | refused |
-| systemd | **reached** | refused |
-| Socket file in `/tmp` | **connected** | not run |
-| `docker.sock` | **connected, API answered** | not run |
+| Check                 | read-all + `--unshare-net`  | + empty `/tmp`, `/run` |
+| --------------------- | --------------------------- | ---------------------- |
+| TCP out               | refused                     | n/a                    |
+| D-Bus                 | **reached**                 | refused                |
+| systemd               | **reached**                 | refused                |
+| Socket file in `/tmp` | **connected**               | not run                |
+| `docker.sock`         | **connected, API answered** | not run                |
 
 Controls: all worked outside.
 

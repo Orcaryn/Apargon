@@ -12,12 +12,12 @@ The plan blocks all macOS system services. But Electron can't start without some
 
 Nobody publishes this list. Browsers only lock their small helper processes, not the whole app. Apple's own sandbox allows a long list.
 
-| Source | What it covers | What we took from it |
-| --- | --- | --- |
-| Firefox [SandboxPolicyContent.h](https://kdab.searchfox.org/firefox-main/source/security/sandbox/mac/SandboxPolicyContent.h) | Firefox's web page process | A short list to start from (7) |
-| Chromium [gpu.sb](https://chromium.googlesource.com/chromium/src/+/HEAD/sandbox/policy/mac/gpu.sb) | Chrome's graphics process | The GPU service |
-| `/System/Library/Sandbox/Profiles/application.sb` | Every App Store app | The most an app might need |
-| [Althar PR #539](https://github.com/AltharIDE/althar/pull/539) | Electron in a sandbox | Electron must also register its own port |
+| Source                                                                                                                       | What it covers             | What we took from it                     |
+| ---------------------------------------------------------------------------------------------------------------------------- | -------------------------- | ---------------------------------------- |
+| Firefox [SandboxPolicyContent.h](https://kdab.searchfox.org/firefox-main/source/security/sandbox/mac/SandboxPolicyContent.h) | Firefox's web page process | A short list to start from (7)           |
+| Chromium [gpu.sb](https://chromium.googlesource.com/chromium/src/+/HEAD/sandbox/policy/mac/gpu.sb)                           | Chrome's graphics process  | The GPU service                          |
+| `/System/Library/Sandbox/Profiles/application.sb`                                                                            | Every App Store app        | The most an app might need               |
+| [Althar PR #539](https://github.com/AltharIDE/althar/pull/539)                                                               | Electron in a sandbox      | Electron must also register its own port |
 
 ## How
 
@@ -29,18 +29,18 @@ Nobody publishes this list. Browsers only lock their small helper processes, not
 
 ## Result
 
-| Service | Without it |
-| --- | --- |
-| `com.apple.windowserver.active` | Crashes |
-| `com.apple.coreservices.launchservicesd` | Crashes |
-| `com.apple.windowmanager.server` | No window |
-| `com.apple.CARenderServer` | No window |
-| `com.apple.lsd.mapdb` | No typing |
-| `com.apple.pasteboard.1` | No clipboard |
-| `com.apple.audio.audiohald` | Sound only in a fallback mode |
-| `com.apple.MTLCompilerService` | No GPU: no WebGL, slower video and drawing |
-| `com.apple.coremedia.videoencoder` | No fast video recording |
-| `com.apple.fonts` | No fonts the user installed |
+| Service                                  | Without it                                 |
+| ---------------------------------------- | ------------------------------------------ |
+| `com.apple.windowserver.active`          | Crashes                                    |
+| `com.apple.coreservices.launchservicesd` | Crashes                                    |
+| `com.apple.windowmanager.server`         | No window                                  |
+| `com.apple.CARenderServer`               | No window                                  |
+| `com.apple.lsd.mapdb`                    | No typing                                  |
+| `com.apple.pasteboard.1`                 | No clipboard                               |
+| `com.apple.audio.audiohald`              | Sound only in a fallback mode              |
+| `com.apple.MTLCompilerService`           | No GPU: no WebGL, slower video and drawing |
+| `com.apple.coremedia.videoencoder`       | No fast video recording                    |
+| `com.apple.fonts`                        | No fonts the user installed                |
 
 With these 10, everything works, same as the control.
 

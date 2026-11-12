@@ -15,17 +15,17 @@ A program in the sandbox has no network. Could it ask a Windows helper outside t
 
 ## Result
 
-| Way out | Inside | Control outside | Leak |
-| --- | --- | --- | --- |
-| Task Scheduler (`schtasks`, COM API) | refused | sent | no |
-| Open a link (`start`, `explorer`, `Start-Process`, `ShellExecute`, `rundll32`) | nothing sent | sent | no |
-| Internet Explorer (COM) | error | sent | no |
-| BITS (`bitsadmin`, `Start-BitsTransfer`) | refused | sent | no |
-| `curl`, `ServerXMLHTTP`, `WinHttpRequest` | offline: nothing. Proxy: refused by the proxy | sent | no |
-| `certutil` | refused | refused on ARM too | no (weak) |
-| Named pipes | 4 of 81 open (crash reporter, `epmapper`); none led out | 31 open | no |
-| Your browser reaching a listener inside | nothing arrived | arrived | no |
-| A second drive (VHD as `E:`) | read works, write refused | readable | no |
+| Way out                                                                        | Inside                                                  | Control outside    | Leak      |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------- | ------------------ | --------- |
+| Task Scheduler (`schtasks`, COM API)                                           | refused                                                 | sent               | no        |
+| Open a link (`start`, `explorer`, `Start-Process`, `ShellExecute`, `rundll32`) | nothing sent                                            | sent               | no        |
+| Internet Explorer (COM)                                                        | error                                                   | sent               | no        |
+| BITS (`bitsadmin`, `Start-BitsTransfer`)                                       | refused                                                 | sent               | no        |
+| `curl`, `ServerXMLHTTP`, `WinHttpRequest`                                      | offline: nothing. Proxy: refused by the proxy           | sent               | no        |
+| `certutil`                                                                     | refused                                                 | refused on ARM too | no (weak) |
+| Named pipes                                                                    | 4 of 81 open (crash reporter, `epmapper`); none led out | 31 open            | no        |
+| Your browser reaching a listener inside                                        | nothing arrived                                         | arrived            | no        |
+| A second drive (VHD as `E:`)                                                   | read works, write refused                               | readable           | no        |
 
 The controls sent the name on 13 routes, so the tests could see a leak.
 

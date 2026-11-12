@@ -26,16 +26,16 @@ Controls:
 
 ## Result
 
-| Program | Result |
-| --- | --- |
-| `ls`, `whoami`, `sw_vers` | works |
-| `git` (version, log) | works |
-| `python3`, `node`, `sqlite3` | works |
-| `say -o file` | works |
-| `shortcuts list` | **refused** |
-| `open https://…` | **refused** |
-| AppleScript to Finder | **refused** |
-| `pbcopy` | **refused** |
+| Program                      | Result      |
+| ---------------------------- | ----------- |
+| `ls`, `whoami`, `sw_vers`    | works       |
+| `git` (version, log)         | works       |
+| `python3`, `node`, `sqlite3` | works       |
+| `say -o file`                | works       |
+| `shortcuts list`             | **refused** |
+| `open https://…`             | **refused** |
+| AppleScript to Finder        | **refused** |
+| `pbcopy`                     | **refused** |
 
 Controls:
 

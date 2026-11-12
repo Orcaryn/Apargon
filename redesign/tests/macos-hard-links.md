@@ -23,15 +23,15 @@ A hard link is a second name for a file. Could the app link `~/.zshrc` into its 
 
 ## Result
 
-| Try | Result |
-| --- | --- |
-| Write outside directly | denied |
-| New hard link into `own/` | **refused** |
-| Same, with `(allow file-link)` | refused |
-| Symlink, then write | denied |
-| Move the file in | denied |
-| Clone (`cp -c`) | allowed (a copy) |
-| Write through `own/prelink` | **allowed: the outside file changed** |
+| Try                            | Result                                |
+| ------------------------------ | ------------------------------------- |
+| Write outside directly         | denied                                |
+| New hard link into `own/`      | **refused**                           |
+| Same, with `(allow file-link)` | refused                               |
+| Symlink, then write            | denied                                |
+| Move the file in               | denied                                |
+| Clone (`cp -c`)                | allowed (a copy)                      |
+| Write through `own/prelink`    | **allowed: the outside file changed** |
 
 ## So
 

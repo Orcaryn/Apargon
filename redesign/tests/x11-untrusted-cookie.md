@@ -17,10 +17,10 @@ On X11 any app can type into any window, for example `curl … | sh` into a term
 
 ## Result
 
-| Cookie | Keys reaching the victim |
-| --- | --- |
-| trusted (control) | 3 of 3 |
-| untrusted | **0** |
+| Cookie            | Keys reaching the victim |
+| ----------------- | ------------------------ |
+| trusted (control) | 3 of 3                   |
+| untrusted         | **0**                    |
 
 - Apargon with the untrusted cookie: ran, and all 75 result fields matched.
 - But no GPU: 48 "GLX is not present" errors, against 0 with the trusted cookie.

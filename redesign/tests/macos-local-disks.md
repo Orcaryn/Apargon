@@ -30,13 +30,13 @@ Reading a network drive or an online-only cloud file sends a request.
 
 ## Result
 
-| Read | Result |
-| --- | --- |
-| `aptest-before` | allowed |
+| Read                                          | Result      |
+| --------------------------------------------- | ----------- |
+| `aptest-before`                               | allowed     |
 | `aptest-after`, by path, firmlink and `/.vol` | **refused** |
-| CloudStorage, by path, firmlink and `/.vol` | **refused** |
-| Mobile Documents | **refused** |
-| `~/.zshrc` | allowed |
+| CloudStorage, by path, firmlink and `/.vol`   | **refused** |
+| Mobile Documents                              | **refused** |
+| `~/.zshrc`                                    | allowed     |
 
 Control: everything read fine outside the sandbox.
 

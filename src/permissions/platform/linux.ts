@@ -10,7 +10,7 @@ export const linux: PermissionsPlatform = {
   },
   useLines: { cloud: 'Read your cloud folders' },
   // The socket block can't allow one path, so papp-socket turns it off.
-  allSocketsLine: 'Control any program on this computer',
+  allSocketsLine: 'any program on this computer',
   dock: 'dock',
   programFolders: ['/usr/local/bin'],
   programExtensions: [''],

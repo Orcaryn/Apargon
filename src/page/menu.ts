@@ -54,7 +54,8 @@ function menuTemplate(page: string, lines: Line[], pageMenus: MenuItemConstructo
             dialog.showMessageBox({
               type: 'info',
               message: `${path.basename(page)} can:`,
-              detail: lines.length ? lines.map(line => line.text).join('\n') : 'Read your files and change its own folder. No network.',
+              // As in the popup: each heading once, its lines under it.
+              detail: lines.length ? lines.flatMap((line, i) => (line.heading === null ? [line.text] : line.heading === lines[i - 1]?.heading ? [`  ${line.text}`] : [line.heading, `  ${line.text}`])).join('\n') : 'Read your files and change its own folder. No network.',
             }),
         },
         {

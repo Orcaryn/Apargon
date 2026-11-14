@@ -18,7 +18,7 @@ after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const ID = '4f2c9a1e-7b3d-4c58-9e21-0a6d8f3b5c77';
 const read = (tags: string) => declaredPermissions(page, `<!doctype html><meta name="papp-id" content="${ID}">${tags}<title>x</title>`, [kept]);
-const lines = (tags: string) => describe(read(tags)).map(line => line.text);
+const lines = (tags: string) => describe(read(tags)).map(line => [line.heading, line.text]);
 
 // Refused with Apargon's own error, which names the reason: any other error, or none, fails.
 function refuses(tags: string, reason: string) {
@@ -47,22 +47,29 @@ suite('papp-id', () => {
 });
 
 suite("the plan's table", () => {
-  test('papp-write a folder', () => assert.deepEqual(lines('<meta name="papp-write" content="./notes/">'), ['Change files in notes']));
-  test('papp-write all', () => assert.deepEqual(lines('<meta name="papp-write" all>'), ['Change any file on your computer']));
-  test('papp-run', () => assert.deepEqual(lines('<meta name="papp-run" content="sh">'), ['Use sh']));
-  test('papp-run unfenced', () => assert.deepEqual(lines('<meta name="papp-run" content="sh" unfenced>'), ['Use sh, with full access and the internet']));
-  test('papp-net', () => assert.deepEqual(lines('<meta name="papp-net" content="x.com">'), ['Send your files to x.com']));
-  test('papp-net with a port', () => assert.deepEqual(lines('<meta name="papp-net" content="localhost:8080">'), ['Send your files to localhost:8080']));
-  test('papp-listen', () => assert.deepEqual(lines('<meta name="papp-listen">'), ['Let websites and apps on this computer connect']));
-  test('papp-listen network', () => assert.deepEqual(lines('<meta name="papp-listen" network>'), ['Let phones and computers on your network connect']));
-  test('papp-use', () => assert.deepEqual(lines('<meta name="papp-use" content="notifications">'), ['Show notifications']));
+  test('papp-write a folder', () => assert.deepEqual(lines('<meta name="papp-write" content="./notes/">'), [['Change files in', 'notes']]));
+  test('papp-write all', () => assert.deepEqual(lines('<meta name="papp-write" all>'), [['Change files in', 'every folder on your computer']]));
+  test('papp-run', () => assert.deepEqual(lines('<meta name="papp-run" content="sh">'), [['Use', 'sh']]));
+  test('papp-run unfenced', () => assert.deepEqual(lines('<meta name="papp-run" content="sh" unfenced>'), [['Use', 'sh, with full access and the internet']]));
+  test('papp-net', () => assert.deepEqual(lines('<meta name="papp-net" content="x.com">'), [['Send your files to', 'x.com']]));
+  test('papp-net with a port', () => assert.deepEqual(lines('<meta name="papp-net" content="localhost:8080">'), [['Send your files to', 'localhost:8080']]));
+  test('papp-listen', () => assert.deepEqual(lines('<meta name="papp-listen">'), [['Also', 'Let websites and apps on this computer connect']]));
+  test('papp-listen network', () => assert.deepEqual(lines('<meta name="papp-listen" network>'), [['Also', 'Let phones and computers on your network connect']]));
+  test('papp-use', () => assert.deepEqual(lines('<meta name="papp-use" content="notifications">'), [['Also', 'Show notifications']]));
   test('papp-window, one line per setting', () =>
-    assert.deepEqual(lines('<meta name="papp-window" on-top frame="no" size="320x80">'), ['Open at 320 × 80', 'Hide its window frame', 'Stay on top of other windows']));
+    assert.deepEqual(lines('<meta name="papp-window" on-top frame="no" size="320x80">'), [
+      ['Also', 'Open at 320 × 80'],
+      ['Also', 'Hide its window frame'],
+      ['Also', 'Stay on top of other windows'],
+    ]));
   test('papp-env', () =>
-    assert.deepEqual(lines('<meta name="papp-run" content="sh"><meta name="papp-env" content="AWS_PROFILE">'), ['Use sh', 'Share your AWS_PROFILE setting with its programs']));
+    assert.deepEqual(lines('<meta name="papp-run" content="sh"><meta name="papp-env" content="AWS_PROFILE">'), [
+      ['Use', 'sh'],
+      ['Share with its programs', 'your AWS_PROFILE setting'],
+    ]));
   test('papp-global-shortcut', () =>
-    assert.deepEqual(lines('<meta name="papp-global-shortcut" content="CommandOrControl+Shift+N">'), [`Use ${keyNames('CommandOrControl+Shift+N')} in every app`]));
-  test('papp-system', () => assert.deepEqual(lines('<meta name="papp-system">'), ['Do anything on your computer, with the internet']));
+    assert.deepEqual(lines('<meta name="papp-global-shortcut" content="CommandOrControl+Shift+N">'), [['Also', `Use ${keyNames('CommandOrControl+Shift+N')} in every app`]]));
+  test('papp-system', () => assert.deepEqual(lines('<meta name="papp-system">'), [[null, 'Do anything on your computer, with the internet']]));
 });
 
 suite('papp-write', () => {

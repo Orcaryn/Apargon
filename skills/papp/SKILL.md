@@ -207,27 +207,27 @@ Use it only when tags and `papp` can't do the job. For a Node script the `.papp`
 
 In `<head>` before any `<script>`. `content` holds the one thing. Attributes hold the options. An unknown attribute, an old tag, or an old form refuses the file. Each tag is a line in the popup, so ask for as little as needed.
 
-| It needs to                          | Tag                                                                     | Popup says                                       |
-| ------------------------------------ | ----------------------------------------------------------------------- | ------------------------------------------------ |
-| Exist                                | `<meta name=\"papp-id\" content=\"<uuid>\">`, always                    |                                                  |
-| Read any local file                  | nothing                                                                 |                                                  |
-| Save its own data                    | nothing: write in `papp.folder`                                         |                                                  |
-| Change files in one folder           | `<meta name="papp-write" content="~/notes/">`                           | Change files in notes                            |
-| Change any file                      | `<meta name="papp-write" all>`                                          | Change any file on your computer                 |
-| Change a file the user chooses       | nothing: `papp.pick({ write: true })` or `papp.save()`                  |                                                  |
-| Use a command-line tool              | `<meta name="papp-run" content="git">`                                  | Use git                                          |
-| Run a program it ships               | `<meta name="papp-run" content="./bin/ffmpeg">`                         | Use ffmpeg                                       |
-| Run a program with no limits         | `<meta name="papp-run" content="git" unfenced>`                         | Use git, with full access and the internet       |
-| Pass that tool a variable            | `<meta name="papp-env" content="AWS_PROFILE">`                          | Share your AWS_PROFILE setting with its programs |
-| Call a web API, open its links       | `<meta name="papp-net" content="api.example.com">`                      | Send your files to api.example.com               |
-| Talk to a server on this computer    | `<meta name="papp-net" content="localhost:11434">`                      | Send your files to localhost:11434               |
-| Be reached from this computer        | `<meta name="papp-listen">`                                             | Let websites and apps on this computer connect   |
-| Be reached from the network, a phone | `<meta name="papp-listen" network>`                                     | Let phones and computers on your network connect |
-| Talk to Docker                       | `<meta name="papp-socket" content="/var/run/docker.sock">`              | Control Docker                                   |
-| A device or extra                    | `<meta name="papp-use" content="notifications">`                        | Show notifications                               |
-| Set the window's size and look       | `<meta name="papp-window" size="900x600" title-bar="no">`               | Open at 900 × 600, Hide its title bar            |
-| Answer a key anywhere                | `<meta name="papp-global-shortcut" content="CommandOrControl+Shift+N">` | Use ⌘⇧N in every app                             |
-| Use Node, or what `papp` can't do    | `<meta name="papp-system">`                                             | Do anything on your computer, with the internet  |
+| It needs to                          | Tag                                                                     |
+| ------------------------------------ | ----------------------------------------------------------------------- |
+| Exist                                | `<meta name=\"papp-id\" content=\"<uuid>\">`, always                    |
+| Read any local file                  | nothing                                                                 |
+| Save its own data                    | nothing: write in `papp.folder`                                         |
+| Change files in one folder           | `<meta name="papp-write" content="~/notes/">`                           |
+| Change any file                      | `<meta name="papp-write" all>`                                          |
+| Change a file the user chooses       | nothing: `papp.pick({ write: true })` or `papp.save()`                  |
+| Use a command-line tool              | `<meta name="papp-run" content="git">`                                  |
+| Run a program it ships               | `<meta name="papp-run" content="./bin/ffmpeg">`                         |
+| Run a program with no limits         | `<meta name="papp-run" content="git" unfenced>`                         |
+| Pass that tool a variable            | `<meta name="papp-env" content="AWS_PROFILE">`                          |
+| Call a web API, open its links       | `<meta name="papp-net" content="api.example.com">`                      |
+| Talk to a server on this computer    | `<meta name="papp-net" content="localhost:11434">`                      |
+| Be reached from this computer        | `<meta name="papp-listen">`                                             |
+| Be reached from the network, a phone | `<meta name="papp-listen" network>`                                     |
+| Talk to Docker                       | `<meta name="papp-socket" content="/var/run/docker.sock">`              |
+| A device or extra                    | `<meta name="papp-use" content="notifications">`                        |
+| Set the window's size and look       | `<meta name="papp-window" size="900x600" title-bar="no">`               |
+| Answer a key anywhere                | `<meta name="papp-global-shortcut" content="CommandOrControl+Shift+N">` |
+| Use Node, or what `papp` can't do    | `<meta name="papp-system">`                                             |
 
 - **`papp-id`:** one UUID, lowercase or not. New file, new UUID; new version, same UUID. Never copy another app's.
 - **`papp-write`:** one folder, no `*`. Not your home folder or one that holds it, and not Apargon's own. The `.papp` file and its programs may change everything in it. Code written there can run later, outside Apargon.

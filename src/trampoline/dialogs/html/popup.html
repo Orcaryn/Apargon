@@ -90,13 +90,17 @@
     padding: 2px 22px 16px;
     -webkit-app-region: no-drag;
   }
+  .intro {
+    margin: 0 0 12px 2px;
+    color: var(--muted);
+    font-weight: 600;
+  }
   section + section {
     margin-top: 14px;
   }
   h2 {
     margin: 0 0 6px 2px;
-    color: var(--muted);
-    font-size: 11.5px;
+    font-size: 13px;
     font-weight: 600;
   }
   ol {
@@ -123,38 +127,27 @@
     stroke-linecap: round;
     stroke-linejoin: round;
   }
-  li.red svg {
-    stroke: var(--red);
+  [data-detail] {
+    text-decoration: underline dashed var(--muted);
+    text-underline-offset: 3px;
+    cursor: help;
   }
-  li.yellow svg {
-    stroke: var(--yellow);
+  [data-detail]:focus-visible {
+    outline: 3px solid -webkit-focus-ring-color;
+    outline-offset: 1px;
+    border-radius: 3px;
   }
-  .detail {
-    display: block;
-    color: var(--muted);
+  #tip {
+    position: fixed;
+    max-width: 340px;
+    padding: 5px 8px;
+    border-radius: 6px;
+    background: var(--ink);
+    color: var(--surface);
     font-size: 11.5px;
     line-height: 16px;
-  }
-  .detail:empty {
-    display: none;
-  }
-  .new {
-    display: inline-block;
-    margin-right: 6px;
-    padding: 0 5px;
-    border: 1px solid var(--muted);
-    border-radius: 4px;
-    color: var(--muted);
-    font-size: 10.5px;
-    font-weight: 600;
-    line-height: 14px;
-    vertical-align: 1px;
-  }
-  .note {
-    margin: 12px 2px 0;
-    color: var(--muted);
-    font-size: 11.5px;
-    line-height: 16px;
+    overflow-wrap: anywhere;
+    pointer-events: none;
   }
   details {
     margin-top: 10px;
@@ -190,24 +183,6 @@
     border-top: 1px solid var(--rule);
     background: var(--well);
   }
-  label {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    font-weight: 500;
-    -webkit-app-region: no-drag;
-  }
-  .hint {
-    margin: 1px 0 0 23px;
-    color: var(--muted);
-    font-size: 11px;
-    line-height: 15px;
-  }
-  input {
-    margin: 0;
-    width: 15px;
-    height: 15px;
-  }
   button {
     min-width: 92px;
     height: 30px;
@@ -233,8 +208,7 @@
   button:disabled {
     opacity: 0.35;
   }
-  button:focus-visible,
-  input:focus-visible {
+  button:focus-visible {
     outline: 3px solid -webkit-focus-ring-color;
     outline-offset: 1px;
   }
@@ -251,13 +225,14 @@
   </p>
 </header>
 <main>
-  <h2 id="heading"></h2>
-  <ol id="lines"></ol>
+  <p class="intro" id="intro"></p>
+  <div id="groups"></div>
   <details id="tags">
     <summary>The tags as written</summary>
     <pre id="tagList"></pre>
   </details>
 </main>
+<div id="tip" hidden></div>
 <footer>
   <button id="deny">Don't open</button>
   <button id="allow">Open</button>
@@ -272,15 +247,41 @@
     folder.textContent = popup.folder;
     changedText.textContent = popup.changed;
     changed.hidden = popup.changed === null;
-    heading.textContent = `If you open it, ${popup.name} can:`;
+    intro.textContent = `If you open it, ${popup.name} can:`;
     tagList.textContent = popup.tags.join('\n');
 
-    for (const line of popup.lines) {
-      const item = document.createElement('li');
-      item.innerHTML = `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">${ICONS[line.kind] ?? ICONS.window}</svg><span><span class="text"></span><span class="detail"></span></span>`;
-      item.querySelector('.text').textContent = line.text;
-      item.querySelector('.detail').textContent = line.detail;
-      lines.append(item);
+    // Lines come in heading order: a new heading starts a new list.
+    let list;
+
+    for (const [i, line] of popup.lines.entries()) {
+      if (line.heading !== popup.lines[i - 1]?.heading) {
+        const section = groups.appendChild(document.createElement('section'));
+
+        if (line.heading !== null) {
+          section.append(Object.assign(document.createElement('h2'), { textContent: line.heading }));
+        }
+
+        list = section.appendChild(document.createElement('ol'));
+      }
+
+      const item = list.appendChild(document.createElement('li'));
+      item.innerHTML = `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">${ICONS[line.kind] ?? ICONS.window}</svg><span></span>`;
+      const text = item.lastChild;
+      text.textContent = line.text;
+
+      if (line.detail !== null) {
+        text.dataset.detail = line.detail;
+        text.tabIndex = 0;
+        // Placed in the window, not in the list: the list scrolls, and would cut it off.
+        text.onmouseenter = text.onfocus = () => {
+          const box = text.getBoundingClientRect();
+          tip.textContent = line.detail;
+          tip.style.left = `${box.left - 8}px`;
+          tip.style.bottom = `${innerHeight - box.top + 6}px`;
+          tip.hidden = false;
+        };
+        text.onmouseleave = text.onblur = () => (tip.hidden = true);
+      }
     }
 
     deny.focus();
@@ -313,6 +314,7 @@
   };
   ICONS.write = ICONS.folder;
 
+  document.querySelector('main').onscroll = () => (tip.hidden = true);
   tags.ontoggle = () => (location.hash = tags.open ? 'tags-open' : 'tags-closed');
   deny.onclick = () => (location.hash = 'deny');
   allow.onclick = () => (location.hash = 'allow');

@@ -78,25 +78,23 @@ A tag is the user's yes. The popup says what it allows.
 
 Rule: `content` holds the one thing (a folder, site, program, feature). Attributes hold the options (`all`, `unfenced`, `network`, window settings). An unknown attribute refuses the file.
 
-The popup lines are built from what each tag asks for. The table shows examples.
-
-| Tag                                                                     | Allows                                                             | Popup says                                          |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------- |
-| `<meta name="papp-write" content="~/notes/">`                           | Write to one folder (not your home folder, not Apargon's own)      | Change files in Notes                               |
-| `<meta name="papp-write" all>`                                          | Write anywhere                                                     | Change any file on your computer                    |
-| `<meta name="papp-run" content="git">`                                  | Run a program, with the same limits                                | Use git                                             |
-| `<meta name="papp-run" content="git" unfenced>`                         | One program with no limits                                         | Use git, with full access and the internet          |
-| `<meta name="papp-net" content="x.com">`                                | Talk to this exact site, and open its links (replaces `papp-open`) | Send your files to x.com                            |
-| `<meta name="papp-listen">`                                             | Listen, for this computer only                                     | Let websites and apps on this computer connect      |
-| `<meta name="papp-listen" network>`                                     | Listen, for the whole network                                      | Let phones and computers on your network connect    |
-| `<meta name="papp-socket" content="/var/run/docker.sock">`              | Talk to one other program                                          | Control Docker                                      |
-| `<meta name="papp-use" content="usb">`                                  | Devices and extras (USB, camera, notifications…)                   | Use USB devices (one line per feature)              |
-| `<meta name="papp-use" content="sound">`                                | Play sound                                                         | Play sound                                          |
-| `<meta name="papp-use" content="cloud">`                                | Read cloud folders                                                 | Read your iCloud and Dropbox files                  |
-| `<meta name="papp-window" on-top frame="no" size="320x80">`             | Window settings                                                    | Stay on top of other windows (one line per setting) |
-| `<meta name="papp-env" content="AWS_PROFILE">`                          | Pass a named variable to programs                                  | Share your AWS_PROFILE setting with its programs    |
-| `<meta name="papp-global-shortcut" content="CommandOrControl+Shift+N">` | A key that works in every app                                      | Use ⌘⇧N in every app                                |
-| `<meta name="papp-system">`                                             | Everything (the `.papp` file becomes a Node script)                | Do anything on your computer, with the internet     |
+| Tag                                                                     | Allows                                                             |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `<meta name="papp-write" content="~/notes/">`                           | Write to one folder (not your home folder, not Apargon's own)      |
+| `<meta name="papp-write" all>`                                          | Write anywhere                                                     |
+| `<meta name="papp-run" content="git">`                                  | Run a program, with the same limits                                |
+| `<meta name="papp-run" content="git" unfenced>`                         | One program with no limits                                         |
+| `<meta name="papp-net" content="x.com">`                                | Talk to this exact site, and open its links (replaces `papp-open`) |
+| `<meta name="papp-listen">`                                             | Listen, for this computer only                                     |
+| `<meta name="papp-listen" network>`                                     | Listen, for the whole network                                      |
+| `<meta name="papp-socket" content="/var/run/docker.sock">`              | Talk to one other program                                          |
+| `<meta name="papp-use" content="usb">`                                  | Devices and extras (USB, camera, notifications…)                   |
+| `<meta name="papp-use" content="sound">`                                | Play sound                                                         |
+| `<meta name="papp-use" content="cloud">`                                | Read cloud folders                                                 |
+| `<meta name="papp-window" on-top frame="no" size="320x80">`             | Window settings                                                    |
+| `<meta name="papp-env" content="AWS_PROFILE">`                          | Pass a named variable to programs                                  |
+| `<meta name="papp-global-shortcut" content="CommandOrControl+Shift+N">` | A key that works in every app                                      |
+| `<meta name="papp-system">`                                             | Everything (the `.papp` file becomes a Node script)                |
 
 Old tags not listed here refuse the file.
 

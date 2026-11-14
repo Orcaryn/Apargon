@@ -98,7 +98,7 @@ Every hole found was the same: the app asked **another program** to go online fo
 - Wayland is connected by the trampoline before the block, and handed over as `WAYLAND_SOCKET`.
 - The proxy, the sound server with `papp-use sound` or `microphone`, and on X11 the screen, are reached through one pipe the trampoline gives at start. The trampoline connects only the ones this `.papp` file was given. On X11 the `.papp` file gets `DISPLAY=127.0.0.1:N` and your `XAUTHORITY`; the trampoline connects each X connection to the real screen. The socket filter stays on.
 - The trampoline reads every command to the sound server and passes only a list: connecting, reading what is there, and its own streams on the default device, playing with `sound` and recording with `microphone`. A stream's properties can't name a device. Anything else, like loading a module or moving a stream, closes the connection: those can send sound to any address. Sound goes only this way: the sound card's own files in `/dev` aren't there, only MIDI's with `papp-use midi`.
-- `papp-socket` turns the socket filter off: it can't allow one path. It's the "trust me" tag, and the popup says "Control any program on this computer".
+- `papp-socket` turns the socket filter off: it can't allow one path. It's the "trust me" tag, and the popup says "Control: any program on this computer".
 - Programs: started inside the same sandbox, with the same limits.
 
 ### Windows

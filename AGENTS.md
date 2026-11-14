@@ -23,12 +23,11 @@ Judge everything by one question: **can data leave the computer without the user
 - Popup text: a few plain words, what it can do, with real names. The user approves every line.
 - What differs by OS goes in a `platform/` folder. No other file asks `process.platform` (`test/node/platforms.ts` checks).
 - Every module is a folder with an `index.ts`. A folder used by one module sits inside it; one used by two siblings sits in their parent.
-- A test finds a leak: stop and tell the user. It is fixed by removing a capability, never by a patch.
+- A test finds a leak: stop and tell the user.
 
 ## Never
 
 - Skip the offline check.
-- Add telemetry or a crash reporter.
 
 ## Tests and releases
 

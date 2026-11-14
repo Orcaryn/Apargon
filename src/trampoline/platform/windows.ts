@@ -2,25 +2,26 @@ import { app } from 'electron';
 import { spawnSync } from 'child_process';
 import { EventEmitter } from 'events';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { finished } from 'stream/promises';
 import type { ContainerRequest } from '@microsoft/mxc-sdk/v1';
-import { isInside } from '../../permissions/paths.ts';
+import { HOME, isInside } from '../../permissions/paths.ts';
 import type { Use } from '../../permissions/tags.ts';
-import { APP_ROOT, DATA, OWN_FOLDERS, pageAppId } from '../../shared/data.ts';
+import { APP_ROOT, pageAppId } from '../../shared/data.ts';
 import type { PageProcess, TrampolinePlatform } from '../platform.ts';
 import { startPiped } from './pipes.ts';
 
 const DEVICE_CAPABILITIES: Partial<Record<Use, string>> = { camera: 'webcam', microphone: 'microphone', location: 'location', usb: 'usb', serial: 'serialcommunication', hid: 'humaninterfacedevice' };
-const HOME = fs.realpathSync.native(os.homedir());
 // The root's folders Windows keeps for itself.
 const SKIPPED_ROOTS = ['$recycle.bin', 'system volume information', '$windows.~bt', '$windows.~ws', '$winreagent', 'recovery'];
 
 export const windows: TrampolinePlatform = {
   // Asked of MXC: only its ProcessContainer is tested.
   async unsupported() {
-    loadMxcLibrary();
+    // The installed app keeps the library beside the others in its resources, outside the archive it can't load one from.
+    if (app.isPackaged) {
+      process.env.MXC_FFI_DIR = path.join(process.resourcesPath, 'mxc');
+    }
 
     try {
       const { probe } = await import('@microsoft/mxc-sdk/v1');
@@ -34,12 +35,11 @@ export const windows: TrampolinePlatform = {
   unsafeDesktop: false,
   installed: app.isPackaged ? path.dirname(process.execPath) : null,
   async prepare(sandbox) {
-    const { page, permissions, own, proxyPort } = sandbox;
-    const kept = [DATA, OWN_FOLDERS, windows.installed].filter(folder => folder !== null);
+    const { page, permissions, own, protectedFolders, proxyPort } = sandbox;
     const everything = readableRoots(permissions.use.includes('cloud'));
     const temp = fs.realpathSync(app.getPath('temp'));
     // papp-write all: every folder but Apargon's own, which stay read-only.
-    const writable = [temp, own, ...(permissions.writeAll ? everything.flatMap(root => around(root, kept)) : permissions.write.map(folder => folder.replace(/[\\/]$/, '')))];
+    const writable = [temp, own, ...(permissions.writeAll ? everything.flatMap(root => around(root, protectedFolders)) : permissions.write.map(folder => folder.replace(/[\\/]$/, '')))];
     // The sandbox nests no read-only folder in a writable one: each is named once, with the most it needs.
     const readable = [...everything, path.dirname(process.execPath), APP_ROOT].filter(folder => !writable.some(writableFolder => isInside(folder, writableFolder)));
     const granted = [...readable, ...writable];
@@ -139,17 +139,9 @@ function around(folder: string, kept: string[]): string[] {
   }
 }
 
-function loadMxcLibrary() {
-  // The installed app keeps the library beside the others in its resources, outside the archive it can't load one from.
-  if (app.isPackaged) {
-    process.env.MXC_FFI_DIR = path.join(process.resourcesPath, 'mxc');
-  }
-}
-
 // Through MXC's library, not its wxc-exec.exe: that one hands the process its standard input only once it closes, so no reply could arrive while it runs.
 async function startContained(request: ContainerRequest): Promise<PageProcess> {
-  loadMxcLibrary();
-  // Loaded here: it loads a Windows library, which the other systems' builds leave out.
+  // Loaded here: it loads a Windows library, which the other systems' builds leave out. unsupported() ran first, at start, and said where the library is.
   const { spawn } = await import('@microsoft/mxc-sdk/v1');
   const contained = await spawn(request, { telemetry: { enabled: false } });
   const output = contained.standardOutput!;

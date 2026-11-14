@@ -4,7 +4,7 @@ import http from 'node:http';
 import { PassThrough, Readable } from 'node:stream';
 import { buffer } from 'node:stream/consumers';
 import { test } from 'node:test';
-import type { IncomingRequest } from '../../src/shared/channel.ts';
+import type { IncomingRequest } from '../../src/shared/protocol.ts';
 import { pageListeners } from '../../src/trampoline/requests/listen.ts';
 
 test('unlisten acknowledges closure and the port can immediately be reused', { timeout: 5000 }, async t => {

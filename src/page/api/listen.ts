@@ -1,7 +1,8 @@
 import type { WebContents } from 'electron';
 import type { Readable } from 'stream';
 import { buffer } from 'stream/consumers';
-import { callTrampoline, tellTrampoline, trampolineBytes, type IncomingRequest } from '../../shared/channel.ts';
+import type { IncomingRequest } from '../../shared/protocol.ts';
+import { callTrampoline, tellTrampoline, trampolineBytes } from '../channel.ts';
 
 // Each start promise identifies its listener across reloads, including while the trampoline is still opening it.
 export function listenApi(contents: Pick<WebContents, 'send'>) {
@@ -9,10 +10,6 @@ export function listenApi(contents: Pick<WebContents, 'send'>) {
 
   return {
     async listen(server: string, port: number | null) {
-      if (port !== null && !(Number.isInteger(port) && port >= 1 && port <= 65535)) {
-        throw new Error('Apargon: listen takes a port from 1 to 65535, or none for a free one.');
-      }
-
       const started = callTrampoline('listen', { server, port });
       listeners.set(server, started);
 

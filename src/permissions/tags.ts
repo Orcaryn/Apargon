@@ -16,10 +16,11 @@ export type Permissions = {
   // papp-write all: any file but Apargon's own.
   writeAll: boolean;
   // By the name the .papp file runs it by.
-  run: Record<string, Program>;
+  run: Record<string, { file: string; unfenced: boolean }>;
   // Each host:port it may reach, and open links to.
   net: string[];
-  listen: Listen | null;
+  // Who may connect to what the .papp file serves: this computer, or the network too.
+  listen: 'localhost' | 'network' | null;
   sockets: string[];
   use: Use[];
   window: WindowSettings | null;
@@ -32,17 +33,11 @@ export type Permissions = {
   // Every permission tag as written, for the popup. Not papp-id: it asks for nothing.
   tags: string[];
 };
-export type Program = { file: string; unfenced: boolean };
 export type Use = (typeof USES)[number];
-// Who may connect to what the .papp file serves: this computer, or the network too.
-export type Listen = 'localhost' | 'network';
 // Only the settings the tag names.
 export type WindowSettings = { width?: number; height?: number; minWidth?: number; minHeight?: number; resizable?: boolean; titleBar?: boolean; frame?: boolean; transparent?: boolean; onTop?: boolean; allSpaces?: boolean; clickThrough?: boolean; private?: boolean; dock?: boolean; blur?: boolean; mark?: boolean };
-// Folders no tag may hand over: Apargon's data, the .papp files' own folders, and the app itself. The trampoline names them.
-export type Protected = string[];
 
-export const USES = ['notifications', 'clipboard', 'location', 'sound', 'camera', 'microphone', 'screen', 'background', 'login', 'usb', 'serial', 'hid', 'midi', 'cursor', 'broadcasts', 'share', 'cloud', 'bluetooth'] as const;
-export const TAGS = ['id', 'write', 'run', 'net', 'listen', 'socket', 'use', 'window', 'env', 'global-shortcut', 'system'];
+const USES = ['notifications', 'clipboard', 'location', 'sound', 'camera', 'microphone', 'screen', 'background', 'login', 'usb', 'serial', 'hid', 'midi', 'cursor', 'broadcasts', 'share', 'cloud', 'bluetooth'] as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SIZES = { width: 'width', height: 'height', 'min-width': 'minWidth', 'min-height': 'minHeight' } as const;
 const SWITCHES = { resizable: 'resizable', 'title-bar': 'titleBar', frame: 'frame', transparent: 'transparent', 'on-top': 'onTop', 'all-spaces': 'allSpaces', 'click-through': 'clickThrough', private: 'private', dock: 'dock', blur: 'blur', mark: 'mark' } as const;
@@ -75,7 +70,7 @@ export function noPermissions(id: string): Permissions {
 }
 
 // The tags in the head, as the browser reads them. A tag Apargon can't keep refuses the whole file, and so does a missing papp-id.
-export function declaredPermissions(page: string, html: string, protectedFolders: Protected) {
+export function declaredPermissions(page: string, html: string, protectedFolders: string[]) {
   const dir = path.dirname(page);
   const permissions = noPermissions('');
 
@@ -103,7 +98,7 @@ export function declaredPermissions(page: string, html: string, protectedFolders
     } else if (Object.hasOwn(OLD_TAGS, kind)) {
       throw new Error(OLD_TAGS[kind]);
     } else if (!shape) {
-      throw new Error(`Unknown tag papp-${kind}. The tags are ${TAGS.map(each => `papp-${each}`).join(', ')}.`);
+      throw new Error(`Unknown tag papp-${kind}. The tags are ${Object.keys(SHAPES).map(each => `papp-${each}`).join(', ')}.`);
     } else if (PERMISSIONS_PLATFORM.refusedTags[kind]) {
       throw new Error(PERMISSIONS_PLATFORM.refusedTags[kind]);
     }
@@ -191,7 +186,7 @@ export function declaredPermissions(page: string, html: string, protectedFolders
 }
 
 // What only the tags together decide.
-function checkTogether(permissions: Permissions, protectedFolders: Protected) {
+function checkTogether(permissions: Permissions, protectedFolders: string[]) {
   const { system, writeAll, write, run, net, sockets, listen, env, use, window } = permissions;
   const unfencedRewritable = Object.entries(run).find(([, program]) => program.unfenced && (writeAll || [...write, ...protectedFolders].some(folder => isInside(program.file, folder))));
   const duplicate = [write, net, sockets, use, env, permissions.shortcuts].map(list => list.find((each, i) => list.indexOf(each) !== i)).find(each => each !== undefined);
@@ -236,7 +231,7 @@ function isYes({ value, quoted }: { value: string; quoted: boolean }, tag: strin
 }
 
 // One folder, as on disk. Not the home folder, not one that holds it, and not Apargon's own.
-function writeFolder(value: string, dir: string, protectedFolders: Protected) {
+function writeFolder(value: string, dir: string, protectedFolders: string[]) {
   const absolute = absolutePath(value, dir);
 
   if (!fs.statSync(absolute, { throwIfNoEntry: false })?.isDirectory()) {
@@ -341,7 +336,7 @@ function useName(value: string) {
 }
 
 // Attributes, as <meta name="papp-window" on-top frame="no" size="320x80">. window.open's features take the same, as on-top, frame=no, size=320x80.
-export function windowSettings(attributes: Map<string, { value: string; quoted: boolean }>, tag: string) {
+function windowSettings(attributes: Map<string, { value: string; quoted: boolean }>, tag: string) {
   const settings: WindowSettings = {};
 
   for (const [key, given] of attributes) {

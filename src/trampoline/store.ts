@@ -1,14 +1,12 @@
 import path from 'path';
-import type { MenuState } from '../shared/channel.ts';
 import { DATA, PAGE_RECORDS } from '../shared/data.ts';
-import { readJson, writeJson } from '../shared/json.ts';
+import type { MenuState } from '../shared/protocol.ts';
+import { readJson, writeJson } from './json.ts';
 import { pageRecords } from './records.ts';
 
 // Apargon's own JSON files. Only the trampoline reads or writes them, through here.
 
-export type UpdateState = { automatic?: boolean; checked?: string; noticed?: string };
-
-function single<T extends object>(name: string) {
+function jsonFile<T extends object>(name: string) {
   const file = path.join(DATA, name);
 
   return {
@@ -18,8 +16,8 @@ function single<T extends object>(name: string) {
 }
 
 export const records = pageRecords(PAGE_RECORDS);
-export const updates = single<UpdateState>('update.json');
-export const welcomeState = single<{ welcomed?: true }>('welcome.json');
+export const updates = jsonFile<{ automatic?: boolean; checked?: string; noticed?: string }>('update.json');
+export const welcomeState = jsonFile<{ welcomed?: true }>('welcome.json');
 
 export function menuState(): MenuState {
   return {

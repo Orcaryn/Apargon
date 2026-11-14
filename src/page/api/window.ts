@@ -1,9 +1,9 @@
 import { app, Menu, powerSaveBlocker, screen, type BrowserWindow, type BrowserWindowConstructorOptions, type Rectangle } from 'electron';
 import { Readable } from 'stream';
 import type { Permissions } from '../../permissions/tags.ts';
-import { callTrampoline, trampolineBytes } from '../../shared/channel.ts';
-import type { PageMenus } from '../menu.ts';
 import { pageMenuItems, type PageMenuItem } from '../../shared/menuItems.ts';
+import { callTrampoline, trampolineBytes } from '../channel.ts';
+import type { PageMenus } from '../menu.ts';
 import type { Scope } from './scope.ts';
 
 type Size = { width: number; height: number };

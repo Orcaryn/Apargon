@@ -3,10 +3,11 @@ import fs from 'fs';
 import path from 'path';
 import type { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
+import { TEST_ALLOW } from '../../shared/data.ts';
 
 // The page makes a PDF; the trampoline, which is outside the sandbox, shows the system print panel on it. The sandbox itself never reaches the print server. The panel is the user's yes, as a save dialog is: so printing needs no tag.
 export async function printPdf(data: Readable): Promise<boolean> {
-  if (!app.isPackaged && process.env.APARGON_TEST_ALLOW === '1') {
+  if (TEST_ALLOW) {
     return true;
   }
 

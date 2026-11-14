@@ -1,8 +1,8 @@
 import { once } from 'events';
 import net from 'net';
 import { workerData } from 'worker_threads';
-import type { Relay } from '../shared/channel.ts';
 import { startMux } from '../shared/mux.ts';
+import type { Relay } from '../shared/protocol.ts';
 
 // Linux: each relay listens inside the sandbox and leads, through the mux, to the trampoline. In a thread of its own: on X11, Chromium's main thread waits on the screen's answer, which comes through a relay.
 // ready turns 1 once every relay listens.

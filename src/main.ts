@@ -1,7 +1,7 @@
 import { app } from 'electron';
 import path from 'path';
+import { PAGE_CONFIG, tellTrampoline } from './page/channel.ts';
 import { preparePage, startPage } from './page/start.ts';
-import { PAGE_CONFIG, tellTrampoline } from './shared/channel.ts';
 import { openPage, startTrampoline } from './trampoline/start.ts';
 
 if (PAGE_CONFIG) {

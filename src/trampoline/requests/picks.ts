@@ -5,10 +5,8 @@ import type { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import { isInside, realPath } from '../../permissions/paths.ts';
 import { PERMISSIONS_PLATFORM } from '../../permissions/platform.ts';
-import type { PickOptions, SavedFile } from '../../shared/channel.ts';
-import { PROTECTED } from '../dialogs/approve.ts';
-import { TRAMPOLINE_PLATFORM } from '../platform.ts';
-import type { Pick } from '../records.ts';
+import type { Pick, PickOptions, SavedFile } from '../../shared/protocol.ts';
+import { PROTECTED, TRAMPOLINE_PLATFORM } from '../platform.ts';
 import { records } from '../store.ts';
 
 // The user picks in a system dialog: that's a yes, so no tag is needed, and nothing restarts. The place always comes from the dialog, never from the .papp file, and picks are kept beside the approvals, where no .papp file writes.

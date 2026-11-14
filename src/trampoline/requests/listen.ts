@@ -5,7 +5,7 @@ import type { AddressInfo } from 'net';
 import os from 'os';
 import { pipeline, Readable } from 'stream';
 import type { Permissions } from '../../permissions/tags.ts';
-import type { IncomingRequest } from '../../shared/channel.ts';
+import type { IncomingRequest } from '../../shared/protocol.ts';
 
 const BODY_LIMIT = 16 * 1024 * 1024;
 // Each request waits here whole, up to the limit, until the .papp file answers: so many at once, and the next gets 503.

@@ -1,21 +1,85 @@
-import type { BrowserWindow, BrowserWindowConstructorOptions, NativeImage } from 'electron';
+import { ipcMain, protocol, type BrowserWindow, type BrowserWindowConstructorOptions, type NativeImage } from 'electron';
+import { randomUUID } from 'crypto';
+import { Readable } from 'stream';
 import type { Permissions } from '../../permissions/tags.ts';
+import type { IncomingRequest } from '../../shared/protocol.ts';
 import type { PageMenus } from '../menu.ts';
-import type { pageAccess } from './access.ts';
 import { connectionApi } from './connections.ts';
 import { fileApi, type Picks } from './files.ts';
 import { listenApi } from './listen.ts';
 import { programApi } from './programs.ts';
-import { pageScope } from './scope.ts';
+import { pageScope, type Scope } from './scope.ts';
 import { systemApi } from './system.ts';
 import { windowApi } from './window.ts';
 
-// What every window of the page shares: the menu bar, the icon as drawn, the proxy, if the page has network, and the shortcuts it picked.
-export type PageProcess = { menus: PageMenus; toFront: () => void; pageIcon: () => NativeImage | null; proxy: string | null; pickShortcuts: (keys: string[]) => void; picks: Picks; programsHere: boolean };
+// Bytes between a window and this process go as requests to this scheme, not as messages: Chromium streams a request's body and its answer, and makes the faster side wait. Registered before the app is ready.
+export const BYTES_SCHEME = 'papp-bytes';
 
-// What the .papp file's process does for it: window.papp in the window is a mirror of this object.
-export function pageApi(dir: string, permissions: Permissions, access: ReturnType<typeof pageAccess>, win: BrowserWindow, { menus, toFront, pageIcon, proxy, pickShortcuts, picks, programsHere }: PageProcess, options: BrowserWindowConstructorOptions) {
-  const scope = pageScope(dir, access);
+// What every window of the page shares: the menu bar, the icon as drawn, the proxy, if the page has network, and the shortcuts it picked.
+type PageWide = { menus: PageMenus; toFront: () => void; pageIcon: () => NativeImage | null; proxy: string | null; pickShortcuts: (keys: string[]) => void; picks: Picks; programsHere: boolean };
+
+// Every .papp file gets papp, a papp-system one too.
+export function serveApi(dir: string, own: string, permissions: Permissions, canChange: (file: string) => boolean, pageWide: PageWide) {
+  const scope = pageScope(dir, canChange);
+  // token: what the window's preload shows to use the scheme. A frame in the window has no preload, so no token, and no papp.
+  const pappBySender = new Map<number, { papp: ReturnType<typeof windowPapp>; token: string }>();
+
+  const handlerOf = (papp: ReturnType<typeof windowPapp> | undefined, call: string) => {
+    if (!papp || !Object.hasOwn(papp, call)) {
+      throw new Error(`Apargon: no such call ${call}.`);
+    }
+
+    return papp[call as keyof typeof papp] as (...args: unknown[]) => unknown;
+  };
+
+  ipcMain.on('apargon-dir', event => (event.returnValue = { dir, folder: own, token: pappBySender.get(event.sender.id)!.token }));
+  // papp-bytes://<token>/<call>?args=<JSON list>. A request with a body hands it to the call as a stream, before the arguments. A call that gives a stream answers with its bytes, any other with its value.
+  protocol.handle(BYTES_SCHEME, async request => {
+    const url = new URL(request.url);
+    const call = url.pathname.slice(1);
+    const papp = [...pappBySender.values()].find(({ token }) => token === url.host)?.papp;
+    const body = request.body && Readable.fromWeb(request.body);
+
+    try {
+      const handler = handlerOf(papp, call);
+      const args = JSON.parse(url.searchParams.get('args')!) as unknown[];
+      const value = await (body ? handler(body, ...args) : handler(...args));
+
+      return value instanceof Readable ? new Response(Readable.toWeb(value)) : Response.json({ value });
+    } catch (err) {
+      return Response.json({ error: (err as Error).message, code: (err as NodeJS.ErrnoException).code }, { status: 500 });
+    } finally {
+      // A call that failed before it read the body: the window stops sending.
+      body?.destroy();
+    }
+  });
+  ipcMain.handle('apargon', async (event, call: string, ...args: unknown[]) => {
+    try {
+      return { value: await handlerOf(pappBySender.get(event.sender.id)!.papp, call)(...args) };
+    } catch (err) {
+      return { error: (err as Error).message, code: (err as NodeJS.ErrnoException).code };
+    }
+  });
+
+  return {
+    enable(win: BrowserWindow, options: BrowserWindowConstructorOptions) {
+      const papp = windowPapp(dir, permissions, scope, win, pageWide, options);
+      const id = win.webContents.id;
+      pappBySender.set(id, { papp, token: randomUUID() });
+      win.on('closed', () => {
+        pappBySender.delete(id);
+        void papp.reset().catch((err: Error) => console.error(`Apargon: ${err.message}`));
+      });
+    },
+    // The window whose listener it is answers; the others have no such server.
+    request(incoming: IncomingRequest) {
+      pappBySender.forEach(({ papp }) => papp.request(incoming));
+    },
+  };
+}
+
+// window.papp in the window is a mirror of this object.
+function windowPapp(dir: string, permissions: Permissions, scope: Scope, win: BrowserWindow, { menus, toFront, pageIcon, proxy, pickShortcuts, picks, programsHere }: PageWide, options: BrowserWindowConstructorOptions) {
   const files = fileApi(dir, scope, win, picks);
   const programs = programApi(permissions, programsHere, proxy, scope, win);
   const pageWindow = windowApi(permissions, scope, win, menus, options);

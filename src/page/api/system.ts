@@ -1,9 +1,10 @@
 import { app, nativeImage, powerMonitor, screen, type BrowserWindow, type NativeImage } from 'electron';
 import { Readable } from 'stream';
 import type { Permissions } from '../../permissions/tags.ts';
-import { callTrampoline, tellTrampoline, trampolineBytes, type PageTray, type TrayIcon } from '../../shared/channel.ts';
 import { cleanTrayItems } from '../../shared/menuItems.ts';
 import { NOTICE_ICON_SIDE, showNotice } from '../../shared/notice.ts';
+import type { PageTray, TrayIcon } from '../../shared/protocol.ts';
+import { callTrampoline, tellTrampoline, trampolineBytes } from '../channel.ts';
 import { PAGE_PLATFORM } from '../platform.ts';
 import type { Scope } from './scope.ts';
 

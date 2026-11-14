@@ -1,7 +1,7 @@
 import { Menu, nativeImage, Tray, type Rectangle } from 'electron';
 import path from 'path';
-import type { TrayIcon, TrayItem } from '../../../shared/channel.ts';
 import { cleanTrayItems, trayItems } from '../../../shared/menuItems.ts';
+import type { TrayIcon, TrayItem } from '../../../shared/protocol.ts';
 import { TRAMPOLINE_PLATFORM } from '../../platform.ts';
 
 // As the page's process sizes it: 32 pixels high, at most 64 wide, shown at half that on a sharp screen.

@@ -1,7 +1,8 @@
 import { dialog, Menu, type BrowserWindow, type MenuItemConstructorOptions } from 'electron';
 import path from 'path';
 import type { Line } from '../permissions/describe.ts';
-import { tellTrampoline, type MenuState } from '../shared/channel.ts';
+import type { MenuState } from '../shared/protocol.ts';
+import { tellTrampoline } from './channel.ts';
 import { PAGE_PLATFORM } from './platform.ts';
 
 export type PageMenus = ReturnType<typeof installMenu>;

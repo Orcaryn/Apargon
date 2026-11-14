@@ -5,8 +5,9 @@ import { PassThrough, type Readable, type Writable } from 'stream';
 import { StringDecoder } from 'string_decoder';
 import { programEnv } from '../../permissions/env.ts';
 import type { Permissions } from '../../permissions/tags.ts';
-import { callTrampoline, MUX_FD, REPLY_FD, REQUEST_FD, tellTrampoline, TRAMPOLINE_NETWORK_FD, trampolineBytes, WAYLAND_FD, type ProgramExit } from '../../shared/channel.ts';
+import { MUX_FD, REPLY_FD, REQUEST_FD, TRAMPOLINE_NETWORK_FD, WAYLAND_FD, type ProgramExit } from '../../shared/protocol.ts';
 import { WINDOW } from '../../shared/streams.ts';
+import { callTrampoline, tellTrampoline, trampolineBytes } from '../channel.ts';
 import { PAGE_PLATFORM } from '../platform.ts';
 import type { Scope } from './scope.ts';
 

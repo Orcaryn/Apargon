@@ -2,7 +2,8 @@ import type { Rectangle } from 'electron';
 import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { readJson, writeJson } from '../shared/json.ts';
+import type { Pick } from '../shared/protocol.ts';
+import { readJson, writeJson } from './json.ts';
 
 // No Electron here: the Node tests load it.
 
@@ -19,7 +20,6 @@ export type PageRecord = {
   // Its papp-id, as last opened: its secrets are kept by it.
   id?: string;
 };
-export type Pick = { path: string; write: boolean; folder: boolean };
 
 type SavedPage = PageRecord & { page: string };
 
@@ -46,5 +46,3 @@ export function pageRecords(folder: string) {
         .map(name => readJson<SavedPage>(path.join(folder, name))),
   };
 }
-
-export type PageRecords = ReturnType<typeof pageRecords>;

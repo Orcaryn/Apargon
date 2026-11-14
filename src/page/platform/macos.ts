@@ -2,7 +2,7 @@ import { app, ShareMenu, systemPreferences } from 'electron';
 import { spawnSync } from 'child_process';
 import { randomUUID } from 'crypto';
 import net from 'net';
-import { tellTrampoline } from '../../shared/channel.ts';
+import { tellTrampoline } from '../channel.ts';
 import type { PagePlatform } from '../platform.ts';
 
 export const macos: PagePlatform = {

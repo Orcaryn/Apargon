@@ -3,17 +3,16 @@ import fs from 'fs';
 import path from 'path';
 import type { Readable } from 'stream';
 import { buffer } from 'stream/consumers';
-import { isInside, realPath } from '../../permissions/paths.ts';
+import { pageAccess } from '../../permissions/access.ts';
+import { realPath } from '../../permissions/paths.ts';
 import type { Permissions } from '../../permissions/tags.ts';
-import type { PageTray } from '../../shared/channel.ts';
 import { EGRESS_LOG } from '../../shared/data.ts';
 import { NOTICE_ICON_SIDE, showNotice } from '../../shared/notice.ts';
-import type { CallHandlers, EventHandlers, PageEvents, Tell, TrampolineEvents } from '../../shared/protocol.ts';
-import { PROTECTED, revoke } from '../dialogs/approve.ts';
+import type { CallHandlers, EventHandlers, PageEvents, PageTray, Tell, TrampolineEvents } from '../../shared/protocol.ts';
+import { revoke } from '../dialogs/approve.ts';
 import { offerSkill } from '../dialogs/skill.ts';
-import { TRAMPOLINE_PLATFORM } from '../platform.ts';
+import { PROTECTED, TRAMPOLINE_PLATFORM } from '../platform.ts';
 import { menuState, records, updates } from '../store.ts';
-import { openLink } from './links.ts';
 import type { pageListeners } from './listen.ts';
 import { pickHandlers } from './picks.ts';
 import { printPdf } from './print.ts';
@@ -38,6 +37,7 @@ type Page = {
 // What a .papp file may send, by name. Its process could be hostile, so each handler checks again what the process already checked: the tags, and where it may write.
 export function pageHandlers({ page, permissions, own, listeners, programs, tell, receive, setTray, openPage, refreshMenus }: Page) {
   const picks = pickHandlers(page, receive, latest => tell('picks', latest));
+  const canChange = pageAccess(permissions, own, PROTECTED);
   const events: EventHandlers<PageEvents> = {
     open: openPage,
     // Only approved files, as the menu lists them. Forgetting another file takes its picks and secrets too, so the user confirms.
@@ -91,7 +91,22 @@ export function pageHandlers({ page, permissions, own, listeners, programs, tell
       }
     },
     tray: setTray,
-    openLink: url => openLink(permissions, url),
+    // Only to a site in papp-net, in the user's browser: Apargon passes nothing to other apps without a tag.
+    openLink: href => {
+      const url = URL.parse(href);
+
+      if (!url || !['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
+        return;
+      }
+
+      const port = url.port === '' ? (url.protocol === 'https:' ? '443' : '80') : url.port;
+
+      if (permissions.net.includes(`${url.hostname}:${port}`)) {
+        void shell.openExternal(url.href);
+      } else {
+        console.error(`Apargon: a link to ${url.host} stays closed: it isn't in papp-net.`);
+      }
+    },
     installSkill: () => offerSkill('The papp skill for coding agents', null),
     respond: ({ id, status, headers, body }) => listeners.respond(id, status, headers, receive(body)),
     programKill: programs.kill,
@@ -120,14 +135,10 @@ export function pageHandlers({ page, permissions, own, listeners, programs, tell
 
       return showNotice({ title, body, buttons: buttons.slice(0, 3) }, pixels ? nativeImage.createFromBitmap(pixels, { width: NOTICE_ICON_SIDE, height: NOTICE_ICON_SIDE }) : undefined, () => tell('show'));
     },
-    // Checked again here: only where the .papp file may write. Its own folder, then Apargon's own folders, then its tags.
     trash: async ({ file }) => {
       const target = path.join(realPath(path.dirname(file)), path.basename(file));
-      const inOwn = isInside(target, own);
-      const inProtected = PROTECTED.some(folder => isInside(target, folder));
-      const inWrite = permissions.writeAll || permissions.write.some(folder => isInside(target, folder));
 
-      if (!permissions.system && !inOwn && (inProtected || !inWrite)) {
+      if (!canChange(target)) {
         throw new Error('Apargon: this .papp file may not change that. Ask for it with <meta name="papp-write" content="...">.');
       }
 

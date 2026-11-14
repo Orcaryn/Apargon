@@ -1,7 +1,8 @@
 import { app } from 'electron';
 import fs from 'fs';
-import { tellTrampoline, TRAMPOLINE_NETWORK_FD } from '../../shared/channel.ts';
 import { pageAppId } from '../../shared/data.ts';
+import { TRAMPOLINE_NETWORK_FD } from '../../shared/protocol.ts';
+import { tellTrampoline } from '../channel.ts';
 import type { PagePlatform } from '../platform.ts';
 
 export const linux: PagePlatform = {

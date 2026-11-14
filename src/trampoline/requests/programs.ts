@@ -4,8 +4,7 @@ import { PassThrough, pipeline } from 'stream';
 import { programEnv } from '../../permissions/env.ts';
 import { realPath } from '../../permissions/paths.ts';
 import type { Permissions } from '../../permissions/tags.ts';
-import type { ProgramStart } from '../../shared/channel.ts';
-import type { Tell, TrampolineEvents } from '../../shared/protocol.ts';
+import type { ProgramStart, Tell, TrampolineEvents } from '../../shared/protocol.ts';
 import type { byteStreams } from '../../shared/streams.ts';
 import type { Prepared } from '../platform.ts';
 

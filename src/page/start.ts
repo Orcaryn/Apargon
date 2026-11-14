@@ -3,22 +3,23 @@ import fs from 'fs';
 import path from 'path';
 import { pathToFileURL } from 'url';
 import { Worker } from 'worker_threads';
+import { pageAccess } from '../permissions/access.ts';
 import { describe } from '../permissions/describe.ts';
 import { isInside } from '../permissions/paths.ts';
 import { shortcut, windowFeatures, type WindowSettings } from '../permissions/tags.ts';
-import { onTrampolineEvent, tellTrampoline, type PageConfig } from '../shared/channel.ts';
-import { APP_ROOT, DATA, OWN_FOLDERS, pageStorage } from '../shared/data.ts';
-import { pageAccess } from './api/access.ts';
+import { APP_ROOT, DATA, OWN_FOLDERS } from '../shared/data.ts';
+import type { PageConfig } from '../shared/protocol.ts';
+import { BYTES_SCHEME, serveApi } from './api/api.ts';
 import type { Picks } from './api/files.ts';
-import { BYTES_SCHEME, serveApi } from './api/ipc.ts';
 import { remoteProgramExit } from './api/programs.ts';
+import { onTrampolineEvent, tellTrampoline } from './channel.ts';
 import { followFavicon } from './icon/icon.ts';
 import { installMenu } from './menu.ts';
 import { PAGE_PLATFORM } from './platform.ts';
 import { chooseBluetooth, createPageSession } from './session.ts';
 
 export function preparePage({ page, own, proxy, permissions, relays, muxFd }: PageConfig) {
-  app.setPath('userData', pageStorage(own));
+  app.setPath('userData', path.join(own, '.electron'));
 
   // Linux: the relays listen before Chromium starts, as on X11 it connects to the screen through one. 10 seconds at most. Before ready there is no dialog: the trampoline shows what the process wrote.
   if (muxFd !== null) {
@@ -60,9 +61,9 @@ export async function startPage({ page, permissions, pageHash, own, proxy, bound
   }
 
   const dir = path.dirname(page);
-  const access = pageAccess(permissions, own, [DATA, OWN_FOLDERS, ...(app.isPackaged ? [APP_ROOT] : [])]);
+  const canChange = pageAccess(permissions, own, [DATA, OWN_FOLDERS, ...(app.isPackaged ? [APP_ROOT] : [])]);
   const picks: Picks = { current: firstPicks };
-  const pageSession = createPageSession(page, permissions, pageHash, liveReload(page, access, () => pageWindows().forEach(other => other.webContents.reloadIgnoringCache())));
+  const pageSession = createPageSession(page, permissions, pageHash, liveReload(page, canChange, () => pageWindows().forEach(other => other.webContents.reloadIgnoringCache())));
   const menus = installMenu(page, describe(permissions), menu);
   const icon = app.isPackaged ? undefined : path.join(APP_ROOT, 'build/icon.png');
 
@@ -149,7 +150,7 @@ export async function startPage({ page, permissions, pageHash, own, proxy, bound
     }
   };
 
-  const api = serveApi(dir, own, permissions, access, { menus, toFront, pageIcon, proxy, pickShortcuts, picks, programsHere });
+  const api = serveApi(dir, own, permissions, canChange, { menus, toFront, pageIcon, proxy, pickShortcuts, picks, programsHere });
   const pagePath = decodeURIComponent(pathToFileURL(page).pathname);
 
   const isPage = (href: string) => {
@@ -260,7 +261,7 @@ export async function startPage({ page, permissions, pageHash, own, proxy, bound
 
 // Live reload: an edit to a .papp, .css or .js file the page loaded reloads its windows; a file the page may change itself does not, or every save would reload it.
 // Folders are watched, not files: an editor that saves by replacing a file would end a watch on it.
-function liveReload(page: string, access: ReturnType<typeof pageAccess>, reload: () => void) {
+function liveReload(page: string, canChange: (file: string) => boolean, reload: () => void) {
   const loaded = new Set<string>();
   const watched = new Set<string>();
   let pendingReload: NodeJS.Timeout | undefined = undefined;
@@ -272,7 +273,7 @@ function liveReload(page: string, access: ReturnType<typeof pageAccess>, reload:
   };
 
   return (file: string) => {
-    if (!/\.(papp|css|js)$/.test(file) || (file !== page && access.canChange(file))) {
+    if (!/\.(papp|css|js)$/.test(file) || (file !== page && canChange(file))) {
       return;
     }
 

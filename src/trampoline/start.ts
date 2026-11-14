@@ -4,16 +4,15 @@ import type { AddressInfo } from 'net';
 import path from 'path';
 import readline from 'readline';
 import { PAGE_ENV } from '../permissions/env.ts';
-import type { PageConfig, PageTray } from '../shared/channel.ts';
-import { APP_ROOT, EGRESS_LOG, OWN_FOLDERS, PAGE_RECORDS, pageStorage } from '../shared/data.ts';
+import { APP_ROOT, EGRESS_LOG, OWN_FOLDERS, PAGE_RECORDS } from '../shared/data.ts';
 import { startMux } from '../shared/mux.ts';
-import { handleLine, type Tell, type TrampolineEvents } from '../shared/protocol.ts';
+import { handleLine, type PageConfig, type PageTray, type Tell, type TrampolineEvents } from '../shared/protocol.ts';
 import { byteStreams } from '../shared/streams.ts';
 import { approve, type Approved } from './dialogs/approve.ts';
 import { welcome } from './dialogs/skill.ts';
 import { startProxy } from './network/proxy.ts';
 import { checkForUpdates } from './network/update.ts';
-import { TRAMPOLINE_PLATFORM } from './platform.ts';
+import { PROTECTED, TRAMPOLINE_PLATFORM } from './platform.ts';
 import { pageListeners } from './requests/listen.ts';
 import { programStarter } from './requests/programs.ts';
 import { pageHandlers } from './requests/requests.ts';
@@ -83,13 +82,13 @@ export async function openPage(file: string) {
 async function startPageProcess({ page, permissions, pageHash }: Approved) {
   // Its own folder, by its id: an update, under any name or path, finds its data. The id is kept with the file's record, so a revoke can find its secrets.
   const own = path.join(OWN_FOLDERS, permissions.id);
-  const storage = pageStorage(own);
+  const storage = path.join(own, '.electron');
   fs.mkdirSync(storage, { recursive: true });
   records.change(page, { id: permissions.id });
   // All of its network goes through the proxy. papp-system has no limits, so no proxy either.
   const proxy = permissions.net.length && !permissions.system ? await startProxy(permissions.net, EGRESS_LOG) : null;
   const proxyPort = proxy && (proxy.address() as AddressInfo).port;
-  const prepared = await TRAMPOLINE_PLATFORM.prepare({ page, permissions, own, storage, proxyPort }).catch((err: Error) => {
+  const prepared = await TRAMPOLINE_PLATFORM.prepare({ page, permissions, own, storage, protectedFolders: PROTECTED, proxyPort }).catch((err: Error) => {
     proxy?.close();
 
     throw err;

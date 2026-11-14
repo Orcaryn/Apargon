@@ -5,8 +5,8 @@ import path from 'path';
 import { Readable } from 'stream';
 import { buffer } from 'stream/consumers';
 import { pipeline } from 'stream/promises';
-import { callTrampoline, trampolineBytes } from '../../shared/channel.ts';
-import type { Pick } from '../../trampoline/records.ts';
+import type { Pick } from '../../shared/protocol.ts';
+import { callTrampoline, trampolineBytes } from '../channel.ts';
 import { PAGE_PLATFORM } from '../platform.ts';
 import type { Scope } from './scope.ts';
 

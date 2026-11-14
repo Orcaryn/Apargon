@@ -1,20 +1,16 @@
-import { app } from 'electron';
 import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { describe } from '../../permissions/describe.ts';
 import { HOME } from '../../permissions/paths.ts';
 import { declaredPermissions, type Permissions } from '../../permissions/tags.ts';
-import { DATA, OWN_FOLDERS } from '../../shared/data.ts';
-import { TRAMPOLINE_PLATFORM } from '../platform.ts';
+import { TEST_ALLOW } from '../../shared/data.ts';
+import { PROTECTED, TRAMPOLINE_PLATFORM } from '../platform.ts';
 import { forgetSecrets } from '../requests/secrets.ts';
 import { records } from '../store.ts';
 import { ask } from './ask.ts';
 
 export type Approved = { page: string; permissions: Permissions; pageHash: string | null };
-
-// Folders no tag may hand over: Apargon's data, the .papp files' own folders, and the installed app.
-export const PROTECTED = [DATA, OWN_FOLDERS, TRAMPOLINE_PLATFORM.installed].filter(folder => folder !== null);
 
 // A file with no permission tags opens at once: it reads, writes its own folder, and has no network. A tag is the user's yes, and the yes belongs to the file's exact bytes and to what the popup showed: a change to either asks again. On X11 every file asks first, the same way, once per hash.
 export async function approve(file: string): Promise<Approved | null> {
@@ -25,7 +21,7 @@ export async function approve(file: string): Promise<Approved | null> {
   const record = records.get(page);
 
   if (TRAMPOLINE_PLATFORM.unsafeDesktop && record.unsafeDesktop !== pageHash) {
-    if (!app.isPackaged && process.env.APARGON_TEST_ALLOW === '1') {
+    if (TEST_ALLOW) {
       console.log(`Apargon: opened on X11 for the test: ${path.basename(page)}`);
     } else if (!(await ask('unsafe-desktop.html', {}))) {
       return null;
@@ -58,9 +54,7 @@ export async function approve(file: string): Promise<Approved | null> {
     tags: permissions.tags,
   };
 
-  if (!app.isPackaged && process.env.APARGON_TEST_ALLOW === '1') {
-    console.log(['Apargon: allowed for the test:', popup.name, ...popup.lines.map(line => line.text)].join('\n  '));
-  } else if (!(await ask('popup.html', popup))) {
+  if (!TEST_ALLOW && !(await ask('popup.html', popup))) {
     return null;
   }
 

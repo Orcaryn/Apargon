@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { TrayItem } from '../../src/shared/channel.ts';
+import type { TrayItem } from '../../src/shared/protocol.ts';
 import { cleanTrayItems, pageMenuItems, trayItems, type PageMenuItem } from '../../src/shared/menuItems.ts';
 
 // Keys Electron reads that a page may write beside its label and id: none may reach Electron.

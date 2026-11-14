@@ -8,9 +8,8 @@ import path from 'path';
 export const LOG_CAP = 10 * 1024 * 1024;
 
 // The egress log: one file, appended to by every open .papp file. At the cap it is renamed to .1, the one before it dropped, and a fresh one started: the log is for what went where lately.
-function egressLog(file: string) {
+function egressLog(file: string, onError: () => void) {
   let size = 0;
-  let onError: (() => void) | undefined = undefined;
 
   const open = () => {
     size = fs.statSync(file, { throwIfNoEntry: false })?.size ?? 0;
@@ -25,7 +24,7 @@ function egressLog(file: string) {
       }
     }
 
-    return fs.createWriteStream(file, { flags: 'a' }).on('error', () => onError?.());
+    return fs.createWriteStream(file, { flags: 'a' }).on('error', onError);
   };
 
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -42,14 +41,13 @@ function egressLog(file: string) {
       stream.write(line);
     },
     end: () => stream.end(),
-    onError: (handler: () => void) => (onError = handler),
   };
 }
 
 // All of a .papp file's network goes through here: its window, its programs, papp.connect. The sandbox has no network and no DNS, so this is its only way out.
 // The name is checked first, and only an allowed name is looked up: even a lookup can leak.
 export async function startProxy(sites: string[], logFile: string) {
-  const log = egressLog(logFile);
+  const log = egressLog(logFile, () => server.close());
   const note = (what: string, status: number) => log.write(`${new Date().toISOString()} ${what} ${status}\n`);
 
   // The address to connect to, or null. Not the proxy's own port: it would call itself without end.
@@ -117,7 +115,6 @@ export async function startProxy(sites: string[], logFile: string) {
     socket.on('close', () => upstream.destroy());
   });
 
-  log.onError(() => server.close());
   server.on('close', () => log.end());
   server.listen({ port: 0, host: '127.0.0.1' });
   await once(server, 'listening');

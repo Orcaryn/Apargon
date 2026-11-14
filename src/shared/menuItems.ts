@@ -1,5 +1,5 @@
 import type { MenuItemConstructorOptions } from 'electron';
-import type { TrayItem } from './channel.ts';
+import type { TrayItem } from './protocol.ts';
 
 export type PageMenuItem = { separator: true } | { label: string; id?: string; keys?: string; submenu?: PageMenuItem[] };
 

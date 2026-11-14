@@ -2,13 +2,14 @@ import type { ChildProcess } from 'child_process';
 import type { EventEmitter } from 'events';
 import type { Duplex, Readable, Writable } from 'stream';
 import type { Permissions } from '../permissions/tags.ts';
-import type { Relay } from '../shared/channel.ts';
+import { DATA, OWN_FOLDERS } from '../shared/data.ts';
+import type { Relay } from '../shared/protocol.ts';
 import { linux } from './platform/linux.ts';
 import { macos } from './platform/macos.ts';
 import { windows } from './platform/windows.ts';
 
-// Where a .papp file writes without a tag, and the proxy its network goes through, if it has any.
-export type Sandbox = { page: string; permissions: Permissions; own: string; storage: string; proxyPort: number | null };
+// Where a .papp file writes without a tag, the folders it never writes, and the proxy its network goes through, if it has any.
+export type Sandbox = { page: string; permissions: Permissions; own: string; storage: string; protectedFolders: string[]; proxyPort: number | null };
 
 export type TrampolinePlatform = {
   // Why this computer can't open a .papp file safely, or null. Asked once, at start: old and unsafe systems are refused.
@@ -54,3 +55,6 @@ export type Prepared = {
 
 // Any other OS gets Linux's, which refuses it.
 export const TRAMPOLINE_PLATFORM: TrampolinePlatform = process.platform === 'darwin' ? macos : process.platform === 'win32' ? windows : linux;
+
+// Folders no tag may hand over: Apargon's data, the .papp files' own folders, and the installed app.
+export const PROTECTED = [DATA, OWN_FOLDERS, TRAMPOLINE_PLATFORM.installed].filter(folder => folder !== null);

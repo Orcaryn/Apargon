@@ -2,11 +2,11 @@ import { safeStorage } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import { SECRETS_DATA } from '../../shared/data.ts';
-import { readJson, writeJson } from '../../shared/json.ts';
+import { readJson, writeJson } from '../json.ts';
 
 // One file per app, by its papp-id, each value sealed on its own with the OS's store for this user, in Apargon's data, where no .papp file writes.
 export async function readSecret(id: string, name: string) {
-  const secrets = readJson<Record<string, string>>(fileOf(id));
+  const secrets = readJson<Record<string, string>>(path.join(SECRETS_DATA, `${id}.json`));
 
   if (!Object.hasOwn(secrets, name)) {
     return null;
@@ -24,17 +24,14 @@ export async function readSecret(id: string, name: string) {
 }
 
 export async function writeSecret(id: string, name: string, value: string | null) {
+  const file = path.join(SECRETS_DATA, `${id}.json`);
   fs.mkdirSync(SECRETS_DATA, { recursive: true });
   const sealed = value === null ? null : (await safeStorage.encryptStringAsync(value)).toString('base64');
   // Read after sealing: another write may have landed meanwhile.
-  const { [name]: _dropped, ...kept } = readJson<Record<string, string>>(fileOf(id));
-  writeJson(fileOf(id), sealed === null ? kept : { ...kept, [name]: sealed });
+  const { [name]: _dropped, ...kept } = readJson<Record<string, string>>(file);
+  writeJson(file, sealed === null ? kept : { ...kept, [name]: sealed });
 }
 
 export function forgetSecrets(id: string) {
-  fs.rmSync(fileOf(id), { force: true });
-}
-
-function fileOf(id: string) {
-  return path.join(SECRETS_DATA, `${id}.json`);
+  fs.rmSync(path.join(SECRETS_DATA, `${id}.json`), { force: true });
 }

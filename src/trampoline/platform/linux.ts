@@ -5,8 +5,8 @@ import net from 'net';
 import os from 'os';
 import path from 'path';
 import type { Use } from '../../permissions/tags.ts';
-import { MUX_FD, REPLY_FD, REQUEST_FD, WAYLAND_FD } from '../../shared/channel.ts';
-import { APP_ROOT, DATA, OWN_FOLDERS, pageAppId } from '../../shared/data.ts';
+import { APP_ROOT, DATA, pageAppId } from '../../shared/data.ts';
+import { MUX_FD, REPLY_FD, REQUEST_FD, WAYLAND_FD } from '../../shared/protocol.ts';
 import type { Sandbox, TrampolinePlatform } from '../platform.ts';
 import { startPiped } from './pipes.ts';
 import { filterSound } from './pulse.ts';
@@ -149,7 +149,7 @@ function connectUnix(file: string) {
 }
 
 // Reads: every local disk. Writes: its own folder and papp-write. No network: the relays are its way to the proxy. No socket file: the filter.
-function bwrapArgs({ permissions, own }: Sandbox, filtered: boolean) {
+function bwrapArgs({ permissions, own, protectedFolders }: Sandbox, filtered: boolean) {
   const devicePatterns = Object.entries(DEVICE_FILES).filter(([use]) => permissions.use.includes(use as Use)).map(([, pattern]) => pattern);
   const devices = [
     '/dev/dri',
@@ -157,7 +157,6 @@ function bwrapArgs({ permissions, own }: Sandbox, filtered: boolean) {
     ...(permissions.use.includes('usb') ? ['/dev/bus/usb'] : []),
     ...fs.readdirSync('/dev').filter(name => devicePatterns.some(pattern => pattern.test(name))).map(name => `/dev/${name}`),
   ].filter(file => fs.existsSync(file));
-  const kept = [DATA, OWN_FOLDERS, linux.installed].filter(folder => folder !== null).filter(folder => fs.existsSync(folder));
 
   // Later mounts cover earlier ones.
   return [
@@ -169,7 +168,7 @@ function bwrapArgs({ permissions, own }: Sandbox, filtered: boolean) {
     ...devices.flatMap(file => ['--dev-bind', file, file]),
     ...remoteMounts().flatMap(folder => ['--tmpfs', folder]),
     // Apargon's data holds the approvals, the .papp files' folders hold each other, and the app is the app: read-only, even under papp-write all.
-    ...kept.flatMap(folder => ['--ro-bind', folder, folder]),
+    ...protectedFolders.filter(folder => fs.existsSync(folder)).flatMap(folder => ['--ro-bind', folder, folder]),
     ...[own, ...permissions.write].flatMap(folder => ['--bind', folder, folder]),
     ...(filtered ? ['--seccomp', String(SECCOMP_FD)] : []),
   ];

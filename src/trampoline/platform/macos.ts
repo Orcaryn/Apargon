@@ -4,8 +4,8 @@ import { createHash, randomUUID } from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { REPLY_FD, REQUEST_FD } from '../../shared/channel.ts';
-import { APP_ROOT, DATA, OWN_FOLDERS } from '../../shared/data.ts';
+import { APP_ROOT } from '../../shared/data.ts';
+import { REPLY_FD, REQUEST_FD } from '../../shared/protocol.ts';
 import type { Sandbox, TrampolinePlatform } from '../platform.ts';
 import { startPiped } from './pipes.ts';
 
@@ -115,7 +115,7 @@ function markNewFiles(folders: string[], since: string) {
 }
 
 // Seatbelt takes the last rule that matches. Reads: every local disk. Writes: its own folder and papp-write. No network but the proxy. No mounting, no other devices, no opening other apps.
-export function pageProfile({ permissions, own, storage, proxyPort }: Sandbox, temp: string) {
+function pageProfile({ permissions, own, storage, protectedFolders, proxyPort }: Sandbox, temp: string) {
   const quote = (file: string) => {
     if (/["\\\p{Cc}]/u.test(file)) {
       throw new Error(`${file} has a " or a \\ in its name, which the sandbox can't take. Rename it.`);
@@ -127,7 +127,6 @@ export function pageProfile({ permissions, own, storage, proxyPort }: Sandbox, t
   const { remote, local } = mounts();
   const unread = [...remote, '/Volumes', '/Network', ...(permissions.use.includes('cloud') ? [] : CLOUD)];
   const writable = permissions.writeAll ? null : [own, storage, temp, ...permissions.write];
-  const kept = [DATA, OWN_FOLDERS, macos.installed].filter(folder => folder !== null);
 
   return [
     '(version 1)',
@@ -147,7 +146,7 @@ export function pageProfile({ permissions, own, storage, proxyPort }: Sandbox, t
     '(deny file-write*)',
     writable ? `(allow file-write* ${writable.map(folder => `(subpath ${quote(folder.replace(/[\\/]$/, ''))})`).join(' ')})` : '(allow file-write*)',
     // Apargon's data holds the approvals, the .papp files' folders hold each other, and the app is the app: none is written, even under papp-write all.
-    `(deny file-write* ${kept.map(folder => `(subpath ${quote(folder)})`).join(' ')})`,
+    `(deny file-write* ${protectedFolders.map(folder => `(subpath ${quote(folder)})`).join(' ')})`,
     `(allow file-write* (subpath ${quote(own)}))`,
     // Last: the devices it may open. No terminal, not even by name: through it the .papp file could type into the shell that started Apargon.
     '(deny file-read* file-write* file-ioctl (subpath "/dev"))',

@@ -1,75 +1,82 @@
 import type { Rectangle } from 'electron';
-import type { Pick } from '../trampoline/records.ts';
-import type { IncomingRequest, MenuState, Notice, PageTray, PickOptions, ProgramExit, ProgramStart, SavedFile } from './channel.ts';
+import type { Permissions } from '../permissions/tags.ts';
 import type { StreamLine } from './streams.ts';
 
-// What a .papp file asks the trampoline for, each answered once: args is what it sends, result what it gets back. Bytes never ride in a call or an event: it names a stream of them, by the id streams.ts gave.
+export const REQUEST_FD = 3;
+export const TRAMPOLINE_NETWORK_FD = 4;
+export const REPLY_FD = 5;
+export const MUX_FD = 6;
+export const WAYLAND_FD = 7;
+
+export type Relay = { port: number; target: string };
+export type MenuState = { approved: string[]; automaticUpdates: boolean };
+export type Pick = { path: string; write: boolean; folder: boolean };
+// pageHash: null for a file with no tags. programsHere: whether the page's process starts its fenced programs inside its own sandbox, or the trampoline does.
+export type PageConfig = { page: string; permissions: Permissions; pageHash: string | null; own: string; proxy: string | null; relays: Relay[]; requestFd: number; replyFd: number; muxFd: number | null; bounds: Rectangle | null; menu: MenuState; picks: Pick[]; programsHere: boolean };
+export type TrayItem = { separator: true } | { label: string; id: string; checked?: boolean; radio?: boolean } | { label: string; submenu: TrayItem[] };
+// Raw pixels, decoded and sized in the page's process: the trampoline, which has network, decodes no image a page sends.
+export type TrayIcon = { width: number; height: number; pixels: string };
+export type PageTray = { title: string | null; items: TrayItem[]; icon: TrayIcon | null; click: boolean };
+// data: a stream's id.
+export type SavedFile = { name: string; data: string };
+export type PickOptions = { folder: boolean; multiple: boolean; write: boolean };
+export type ProgramStart = { id: string; name: string; args: string[]; cwd: string; input: string };
+export type ProgramExit = { status: number | null; signal: string | null; error: string | null };
+// Headers by lowercase name, repeats joined with a comma as a browser joins them. body: a stream's id.
+export type IncomingRequest = { server: string; id: string; method: string; url: string; headers: Record<string, string>; body: string };
+// icon: the id of a stream of raw pixels, NOTICE_ICON_SIDE each way.
+export type Notice = { title: string; body: string; buttons: string[]; icon: string | null };
+
+// Bytes never ride in a call or an event: each names a stream of them, by the id streams.ts gave.
 export type Calls = {
-  // The paths saved to.
   saveAll: { args: { files: SavedFile[] }; result: string[] };
-  // The path saved to, or null when the user cancels. Kept as a pick to write.
   save: { args: { file: string; data: string }; result: string | null };
-  // The paths the user picked, kept.
   pick: { args: PickOptions; result: string[] };
-  // What the user picked so far.
   picks: { args: undefined; result: Pick[] };
-  // Writes a picked file, or a file by a plain name in a picked folder: the .papp file may not write there itself.
   writePicked: { args: { file: string; data: string; append: boolean }; result: null };
   getSecret: { args: { name: string }; result: string | null };
   // A null value deletes the secret.
   setSecret: { args: { name: string; value: string | null }; result: null };
-  // The listener's address.
   listen: { args: { server: string; port: number | null }; result: string };
-  // Acknowledged only after the listener and its connections have closed.
+  // Answered only after the listener and its connections have closed.
   unlisten: { args: { server: string }; result: null };
-  // The button the user picked, or null.
   notify: { args: Notice; result: number | null };
   trash: { args: { file: string }; result: null };
-  // A program the trampoline starts: on macOS every fenced one, everywhere an unfenced one. input: the id of the stream it reads. The result names the streams of its output; its exit comes as an event.
   startProgram: { args: ProgramStart; result: { stdout: string; stderr: string } };
-  // The page makes a PDF, the trampoline shows the system print panel on it: the sandbox never reaches the print server. True once the user prints it.
   print: { args: { data: string }; result: boolean };
 };
 
-// What a .papp file tells the trampoline, with no answer.
 export type PageEvents = {
   open: string;
   revoke: string[];
   showEgressLog: undefined;
   automaticUpdates: boolean;
   pageIcon: string;
-  // Where the window was when it closed.
   bounds: Rectangle;
   tray: PageTray;
-  // The answer to a request its listener got. body: a stream's id.
   respond: { id: string; status: number; headers: Record<string, string>; body: string };
   installSkill: undefined;
-  // Opens only a link to a site in papp-net.
   openLink: string;
   programKill: { id: string };
 };
 
-// What the trampoline tells a .papp file, with no answer.
 export type TrampolineEvents = {
   show: undefined;
   quit: undefined;
   refreshMenu: MenuState;
   trayItem: string;
-  // A click on the tray icon, of a .papp file that asked for clicks: where the icon is on the screen.
   trayClick: Rectangle;
-  // A request its listener got. It answers with respond.
   request: IncomingRequest;
   picks: Pick[];
   programExit: { id: string } & ProgramExit;
 };
 
-// On the wire, one JSON line each: { event, args }, { call, id, args }, the call's answer by its id, and a stream's lines.
 export type Answer = { id: string; value: unknown } | { id: string; error: string };
 export type Tell<E> = <K extends keyof E>(event: K, ...args: E[K] extends undefined ? [] : [E[K]]) => void;
 export type EventHandlers<E> = { [K in keyof E]: (args: E[K]) => void };
 export type CallHandlers = { [K in keyof Calls]: (args: Calls[K]['args']) => Promise<Calls[K]['result']> | Calls[K]['result'] };
 
-// The trampoline's side of one line from a page. A papp-system page can write any line, so nothing here trusts its shape: a name is looked up only among the handlers' own keys, never Object's, and every call gets exactly one answer, whatever its handler does.
+// A papp-system page can write any line, so nothing here trusts its shape: a name is looked up only among the handlers' own keys, never Object's, and every call gets exactly one answer.
 // False when the line is no event or call: the page's own output, where requests share standard output.
 export function handleLine(line: Record<string, unknown>, events: EventHandlers<PageEvents>, calls: CallHandlers, answer: (answer: Answer) => void, streamLine: (line: StreamLine) => void) {
   const { event, call, id, args } = line;

@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { TEST_ALLOW } from '../../shared/data.ts';
 import { welcomeState } from '../store.ts';
 import { ask } from './ask.ts';
 
@@ -21,7 +22,7 @@ export async function welcome(withPage: boolean) {
   });
 
   // Dev test runs, like their popup, answer nothing; the installed app's test run writes welcome.json first (AGENTS.md).
-  if (withPage && (installed || welcomeState.get().welcomed || (!app.isPackaged && process.env.APARGON_TEST_ALLOW === '1'))) {
+  if (withPage && (installed || welcomeState.get().welcomed || TEST_ALLOW)) {
     return;
   }
 

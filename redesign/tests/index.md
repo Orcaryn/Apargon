@@ -1,6 +1,6 @@
 # Redesign tests
 
-Run on 2026-11-07 for the [plan](../plan.md). Each test has a control.
+Run on 2026-11-07, before the redesign was built. Each test has a control.
 
 Where:
 

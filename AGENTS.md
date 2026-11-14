@@ -1,6 +1,9 @@
 # AGENTS.md
 
-Apargon runs a `.papp` file, one HTML file, as a desktop app. The design is [redesign/plan.md](redesign/plan.md). The code in `src/` is that design, built. Where the two disagree, ask the user.
+Apargon runs a `.papp` file, one HTML file, as a desktop app. A reverse browser:
+
+- A browser: all of the internet, none of your computer.
+- Apargon: your files, none of the internet.
 
 ## The premise
 
@@ -23,7 +26,20 @@ Judge everything by one question: **can data leave the computer without the user
 - Popup text: a few plain words, what it can do, with real names. The user approves every line.
 - What differs by OS goes in a `platform/` folder. No other file asks `process.platform` (`test/node/platforms.ts` checks).
 - Every module is a folder with an `index.ts`. A folder used by one module sits inside it; one used by two siblings sits in their parent.
-- A test finds a leak: stop and tell the user.
+
+## Building rules
+
+- Block by default: network, mounts, devices, links, and services for programs.
+- The limits are set once, at start.
+- Programs stop when the `.papp` file closes.
+- Refuse old and unsafe systems.
+
+## Release rules
+
+- Tested and passed: supported.
+- Not tested yet: refused. This is for features and desktops, not OS versions.
+- Can't be tested: we don't say it works.
+- **A test finds a leak: it's critical.** Stop and tell the user. That feature or setup doesn't ship until the leak has a proper fix.
 
 ## Never
 

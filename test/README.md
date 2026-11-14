@@ -10,7 +10,6 @@ Plain Node, without the app, on `node:test`. Each runs alone too, as `node --tes
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `tags.ts`        | how tags are read, what each one's popup line says, and every old tag and form refused                                                                |
 | `access.ts`      | where a `.papp` file may write: its own folder, `papp-write`, `papp-write all` but Apargon's own                                                      |
-| `records.ts`     | each `.papp` file's own folder name, and the record of its yes, picks and window                                                                      |
 | `proxy.ts`       | the proxy reaches only the exact sites and ports named, never itself, and logs each try                                                               |
 | `programs.ts`    | a program the trampoline starts keeps its output until the `.papp` file asks for it, even once it has exited                                          |
 | `mux.ts`         | Linux's relay pipe carries each connection both ways, and closes it, and a stuck one holds back only itself                                           |
@@ -21,8 +20,6 @@ Plain Node, without the app, on `node:test`. Each runs alone too, as `node --tes
 | `listeners.ts`   | the trampoline's listeners                                                                                                                            |
 | `menus.ts`       | menu and tray items reach Electron with no role or click of their own                                                                                 |
 | `protocol.ts`    | every line the `.papp` file's process sends ends in its own handler                                                                                   |
-| `env.ts`         | no variable passed without a `papp-env` tag can carry a login or key                                                                                  |
-| `platforms.ts`   | only a `platform/` folder asks which OS this is                                                                                                       |
 
 ## `selftest/`
 

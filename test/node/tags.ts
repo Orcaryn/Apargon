@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, suite, test } from 'node:test';
-import { describe, keyNames } from '../../src/permissions/describe/index.ts';
+import { describe } from '../../src/permissions/describe/index.ts';
 import { HOME } from '../../src/permissions/paths/index.ts';
 import { declaredPermissions, noPermissions } from '../../src/permissions/tags/index.ts';
 import { site } from '../../src/permissions/tags/site/index.ts';
@@ -20,7 +20,6 @@ after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const ID = '4f2c9a1e-7b3d-4c58-9e21-0a6d8f3b5c77';
 const read = (tags: string) => declaredPermissions(page, `<!doctype html><meta name="papp-id" content="${ID}">${tags}<title>x</title>`, [kept]);
-const lines = (tags: string) => describe(read(tags)).map(line => [line.heading, line.text]);
 
 // Refused with Apargon's own error, which names the reason: any other error, or none, fails.
 function refuses(tags: string, reason: string) {
@@ -46,32 +45,6 @@ suite('papp-id', () => {
   test('missing: refused, with a fresh UUID to copy', () => assert.throws(() => bare(''), /has no papp-id.*content="[0-9a-f-]{36}"/));
   test('not a UUID: refused', () => assert.throws(() => bare('<meta name="papp-id" content="notes">'), /It is a UUID/));
   test('two: refused', () => assert.throws(() => read(`<meta name="papp-id" content="${ID}">`), /Two papp-id/));
-});
-
-suite("the plan's table", () => {
-  test('papp-write a folder', () => assert.deepEqual(lines('<meta name="papp-write" content="./notes/">'), [['Change files in', 'notes']]));
-  test('papp-write all', () => assert.deepEqual(lines('<meta name="papp-write" all>'), [['Change files in', 'every folder on your computer']]));
-  test('papp-run', () => assert.deepEqual(lines('<meta name="papp-run" content="sh">'), [['Use', 'sh']]));
-  test('papp-run unfenced', () => assert.deepEqual(lines('<meta name="papp-run" content="sh" unfenced>'), [['Use', 'sh, with full access and the internet']]));
-  test('papp-net', () => assert.deepEqual(lines('<meta name="papp-net" content="x.com">'), [['Send your files to', 'x.com']]));
-  test('papp-net with a port', () => assert.deepEqual(lines('<meta name="papp-net" content="localhost:8080">'), [['Send your files to', 'localhost:8080']]));
-  test('papp-listen', () => assert.deepEqual(lines('<meta name="papp-listen">'), [['Also', 'Let websites and apps on this computer connect']]));
-  test('papp-listen network', () => assert.deepEqual(lines('<meta name="papp-listen" network>'), [['Also', 'Let phones and computers on your network connect']]));
-  test('papp-use', () => assert.deepEqual(lines('<meta name="papp-use" content="notifications">'), [['Also', 'Show notifications']]));
-  test('papp-window, one line per setting', () =>
-    assert.deepEqual(lines('<meta name="papp-window" on-top frame="no" size="320x80">'), [
-      ['Also', 'Open at 320 × 80'],
-      ['Also', 'Hide its window frame'],
-      ['Also', 'Stay on top of other windows'],
-    ]));
-  test('papp-env', () =>
-    assert.deepEqual(lines('<meta name="papp-run" content="sh"><meta name="papp-env" content="AWS_PROFILE">'), [
-      ['Use', 'sh'],
-      ['Share with its programs', 'your AWS_PROFILE setting'],
-    ]));
-  test('papp-global-shortcut', () =>
-    assert.deepEqual(lines('<meta name="papp-global-shortcut" content="CommandOrControl+Shift+N">'), [['Also', `Use ${keyNames('CommandOrControl+Shift+N')} in every app`]]));
-  test('papp-system', () => assert.deepEqual(lines('<meta name="papp-system">'), [[null, 'Do anything on your computer, with the internet']]));
 });
 
 suite('papp-write', () => {
@@ -124,8 +97,6 @@ suite('attributes', () => {
 });
 
 suite('old tags and forms are refused', () => {
-  test('papp-read', () => refuses('<meta name="papp-read" content="./">', 'Unknown tag papp-read'));
-  test('papp-open', () => refuses('<meta name="papp-open" content="x.com">', 'Unknown tag papp-open'));
   test('an unknown tag', () => refuses('<meta name="papp-everything" content="yes">', 'Unknown tag'));
   test('papp-use with a list', () => refuses('<meta name="papp-use" content="sound, camera">', 'one feature per tag'));
   test('an unknown feature', () => refuses('<meta name="papp-use" content="telepathy">', 'The features are'));

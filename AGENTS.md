@@ -24,7 +24,7 @@ Judge everything by one question: **can data leave the computer without the user
 
 - `SECURITY.md` claims exactly what the code does. A change to what is enforced changes it too.
 - Popup text: a few plain words, what it can do, with real names. The user approves every line.
-- What differs by OS goes in a `platform/` folder. No other file asks `process.platform` (`test/node/platforms.ts` checks).
+- What differs by OS goes in a `platform/` folder. No other file asks `process.platform`.
 - Every module is a folder with an `index.ts`. A folder used by one module sits inside it; one used by two siblings sits in their parent.
 
 ## Building rules

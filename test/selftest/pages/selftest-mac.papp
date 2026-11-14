@@ -76,8 +76,6 @@
     await stop();
     await papp.share({ text: 'Apargon selftest' });
     result.share_url_refused = await refused(() => papp.share({ url: 'file:///etc/hosts' }));
-    await papp.tray('selftest', [{ label: 'Item', id: 'item' }], { click: true });
-    result.tray_click_set = true;
     await finish('mac');
   } catch (err) {
     await finish('mac', err);

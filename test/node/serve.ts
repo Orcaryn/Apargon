@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { pathToFileURL } from 'node:url';
-import { fileServer } from '../../src/page/serve.ts';
+import { fileServer } from '../../src/page/session/serve/index.ts';
 
 const dir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'apargon-serve-')));
 const page = path.join(dir, 'page.papp');

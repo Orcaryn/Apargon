@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { test } from 'node:test';
-import { pageAccess } from '../../src/permissions/access.ts';
-import { noPermissions } from '../../src/permissions/tags.ts';
+import { pageAccess } from '../../src/permissions/access/index.ts';
+import { noPermissions } from '../../src/permissions/tags/index.ts';
 
 const root = path.parse(process.cwd()).root;
 const at = (...names: string[]) => path.join(root, ...names);

@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
 import { buffer } from 'node:stream/consumers';
 import { test } from 'node:test';
-import type { Permissions } from '../../src/permissions/tags.ts';
-import type { Prepared } from '../../src/trampoline/platform.ts';
-import { byteStreams } from '../../src/shared/streams.ts';
-import { programStarter } from '../../src/trampoline/requests/programs.ts';
+import type { Permissions } from '../../src/permissions/tags/index.ts';
+import type { Prepared } from '../../src/trampoline/platform/index.ts';
+import { byteStreams } from '../../src/shared/wire/streams/index.ts';
+import { programStarter } from '../../src/trampoline/requests/programs/index.ts';
 
 // The trampoline's side of a program: what it wrote reaches the .papp file even when the program exits before the .papp file asks for its output.
 test("a program's output is kept until the .papp file asks for it", { timeout: 10_000 }, async () => {

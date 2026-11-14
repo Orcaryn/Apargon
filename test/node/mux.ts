@@ -3,7 +3,7 @@ import { once } from 'node:events';
 import net from 'node:net';
 import { Duplex, PassThrough, Writable } from 'node:stream';
 import { test } from 'node:test';
-import { startMux } from '../../src/shared/mux.ts';
+import { startMux } from '../../src/shared/wire/mux/index.ts';
 
 // Two ends of one pipe, as the sandbox's fd 6 and the trampoline's.
 function pipePair() {

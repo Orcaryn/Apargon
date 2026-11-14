@@ -46,6 +46,6 @@ sizes.forEach((size, i) => {
 fs.writeFileSync(out, Buffer.concat([header, ...pngs]));
 JS
 echo "  $out/papp.ico"
-rsvg-convert -w 18 -h 18 assets/tray.svg -o src/trampoline/requests/tray/images/tray.png
-rsvg-convert -w 36 -h 36 assets/tray.svg -o src/trampoline/requests/tray/images/tray@2x.png
-echo "  src/trampoline/requests/tray/images/tray.png  src/trampoline/requests/tray/images/tray@2x.png"
+rsvg-convert -w 18 -h 18 assets/tray.svg -o src/trampoline/requests/desktop/tray/images/tray.png
+rsvg-convert -w 36 -h 36 assets/tray.svg -o src/trampoline/requests/desktop/tray/images/tray@2x.png
+echo "  src/trampoline/requests/desktop/tray/images/tray.png  src/trampoline/requests/desktop/tray/images/tray@2x.png"

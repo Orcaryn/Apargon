@@ -4,7 +4,7 @@ import { once } from 'node:events';
 import { PassThrough, Readable } from 'node:stream';
 import { buffer } from 'node:stream/consumers';
 import { test } from 'node:test';
-import { byteStreams, type StreamLine } from '../../src/shared/streams.ts';
+import { byteStreams, type StreamLine } from '../../src/shared/wire/streams/index.ts';
 
 // Two sides, each handed the other's lines a turn later, as a pipe does. sent: every line, by its sender.
 function pair() {

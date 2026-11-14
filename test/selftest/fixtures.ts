@@ -1,7 +1,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { pageRecords } from '../../src/trampoline/records.ts';
+import { pageRecords } from '../../src/trampoline/records/pageRecords/index.ts';
 
 // Imported by the runner, or executed before the installed app's self-tests. No tests run here.
 const pages = path.join(import.meta.dirname, 'pages');

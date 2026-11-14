@@ -6,7 +6,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
-import { LOG_CAP, startProxy } from '../../src/trampoline/network/proxy.ts';
+import { LOG_CAP, startProxy } from '../../src/trampoline/pageProcess/proxy/index.ts';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apargon-proxy-'));
 const log = path.join(dir, 'egress.log');

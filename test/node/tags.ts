@@ -3,9 +3,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, suite, test } from 'node:test';
-import { describe, keyNames } from '../../src/permissions/describe.ts';
-import { HOME } from '../../src/permissions/paths.ts';
-import { declaredPermissions, noPermissions, site, windowFeatures } from '../../src/permissions/tags.ts';
+import { describe, keyNames } from '../../src/permissions/describe/index.ts';
+import { HOME } from '../../src/permissions/paths/index.ts';
+import { declaredPermissions, noPermissions } from '../../src/permissions/tags/index.ts';
+import { site } from '../../src/permissions/tags/site/index.ts';
+import { windowFeatures } from '../../src/permissions/window/index.ts';
 
 // How tags are read, and the popup line each one makes.
 const dir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'apargon-tags-')));
@@ -105,7 +107,7 @@ suite('attributes', () => {
   test('an unknown attribute refuses the file', () => refuses('<meta name="papp-net" content="x.com" wide>', 'no attribute "wide"'));
   test('content where a tag takes none refuses the file', () => {
     refuses('<meta name="papp-listen" content="localhost">', 'takes no content');
-    refuses('<meta name="papp-window" content="on-top=yes">', 'attributes now');
+    refuses('<meta name="papp-window" content="on-top=yes">', 'takes no content');
     refuses('<meta name="papp-system" content="full">', 'takes no content');
   });
   test('a bare attribute is yes, ="no" is no', () => {
@@ -122,8 +124,8 @@ suite('attributes', () => {
 });
 
 suite('old tags and forms are refused', () => {
-  test('papp-read', () => refuses('<meta name="papp-read" content="./">', 'papp-read is gone'));
-  test('papp-open', () => refuses('<meta name="papp-open" content="x.com">', 'papp-open is gone'));
+  test('papp-read', () => refuses('<meta name="papp-read" content="./">', 'Unknown tag papp-read'));
+  test('papp-open', () => refuses('<meta name="papp-open" content="x.com">', 'Unknown tag papp-open'));
   test('an unknown tag', () => refuses('<meta name="papp-everything" content="yes">', 'Unknown tag'));
   test('papp-use with a list', () => refuses('<meta name="papp-use" content="sound, camera">', 'one feature per tag'));
   test('an unknown feature', () => refuses('<meta name="papp-use" content="telepathy">', 'The features are'));

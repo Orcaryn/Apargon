@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
-import { pageRecords } from '../../src/trampoline/records.ts';
+import { pageRecords } from '../../src/trampoline/records/pageRecords/index.ts';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apargon-records-'));
 fs.mkdirSync(path.join(dir, 'records'));

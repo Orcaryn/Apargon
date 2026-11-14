@@ -22,7 +22,7 @@ Plain Node, without the app, on `node:test`. Each runs alone too, as `node --tes
 | `menus.ts`       | menu and tray items reach Electron with no role or click of their own                                                                                 |
 | `protocol.ts`    | every line the `.papp` file's process sends ends in its own handler                                                                                   |
 | `env.ts`         | no variable passed without a `papp-env` tag can carry a login or key                                                                                  |
-| `platforms.ts`   | only a `platform.ts` or a `platform/` folder asks which OS this is                                                                                    |
+| `platforms.ts`   | only a `platform/` folder asks which OS this is                                                                                                       |
 
 ## `selftest/`
 

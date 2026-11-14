@@ -3,7 +3,7 @@ import fs from 'fs';
 import os from 'os';
 import { createRequire } from 'module';
 import path from 'path';
-import { noPermissions } from '../../src/permissions/tags.ts';
+import { noPermissions } from '../../src/permissions/tags/index.ts';
 
 const electron: string = createRequire(import.meta.url)('electron');
 // Started as a .papp file's process, but outside any sandbox: it must see its network and refuse to open.

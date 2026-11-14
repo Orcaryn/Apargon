@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import net from 'node:net';
 import { test } from 'node:test';
-import type { Use } from '../../src/permissions/tags.ts';
-import { filterSound } from '../../src/trampoline/platform/pulse.ts';
+import type { Use } from '../../src/permissions/tags/index.ts';
+import { filterSound } from '../../src/trampoline/platform/linux/pulse/index.ts';
 
 const u32 = (value: number) => {
   const bytes = Buffer.alloc(5);

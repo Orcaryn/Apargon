@@ -1,0 +1,26 @@
+import { app } from 'electron';
+import path from 'path';
+import { PAGE_CONFIG, tellTrampoline } from './page/channel/index.ts';
+import { preparePage, startPage } from './page/index.ts';
+import { openPage, startTrampoline } from './trampoline/index.ts';
+
+if (PAGE_CONFIG) {
+  preparePage(PAGE_CONFIG);
+}
+
+const PAGE_FILE = /\.papp$/i;
+const pages = process.argv.filter(arg => PAGE_FILE.test(arg)).map(arg => path.resolve(arg));
+app.on('open-file', (event, file) => {
+  const page = path.resolve(file);
+  event.preventDefault();
+
+  if (PAGE_CONFIG) {
+    tellTrampoline('open', page);
+  } else if (app.isReady()) {
+    void openPage(page);
+  } else {
+    pages.push(page);
+  }
+});
+
+void app.whenReady().then(() => (PAGE_CONFIG ? startPage(PAGE_CONFIG) : startTrampoline(pages)));

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { socketFilter } from '../../src/trampoline/platform/seccomp.ts';
+import { socketFilter } from '../../src/trampoline/platform/linux/seccomp/index.ts';
 
 // A tiny BPF interpreter: enough for the filter's own instructions.
 function run(filter: Buffer, data: { arch: number; nr: number; family?: number; type?: number }) {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { handleLine, type Answer, type CallHandlers, type EventHandlers, type PageEvents } from '../../src/shared/protocol.ts';
+import { handleLine, type Answer, type CallHandlers, type EventHandlers, type PageEvents } from '../../src/shared/wire/protocol/index.ts';
 
 // A papp-system page can write any line to the trampoline: each must end in a handler of its own, an answer or an error, never in a function of Object's or in silence.
 const told: string[] = [];

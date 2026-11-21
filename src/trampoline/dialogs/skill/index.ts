@@ -10,17 +10,39 @@ import { ask } from '../ask/index.ts';
 // Inside app.asar, so on macOS the build hash covers it.
 const SKILL = path.join(app.getAppPath(), 'skills/papp/SKILL.md');
 const SKILL_WINDOW = path.join(import.meta.dirname, 'html', 'skill.html');
-const FOLDERS = ['.claude', '.agents'].map(agents => path.join(agents, 'skills/papp'));
+// Where coding agents look for the skill.
+const INSTALLED_SKILLS = ['.claude', '.agents'].map(agents => path.join(os.homedir(), agents, 'skills/papp/SKILL.md'));
 let asking = false;
+
+// 'wx' never follows a link, and the rename replaces a link at SKILL.md rather than the file it leads to.
+function writeSkill(file: string, skill: string) {
+  const temporary = path.join(path.dirname(file), `.SKILL.md.${randomUUID()}`);
+
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(temporary, skill, { flag: 'wx' });
+  fs.renameSync(temporary, file);
+}
 
 // Right after installing, Apargon is opened from the Dock or the app menu, with no page: that is where an installer sees the skill. A first run that opens a page offers it once.
 export async function welcome(withPage: boolean) {
   const skill = fs.readFileSync(SKILL, 'utf8');
-  const installed = FOLDERS.every(folder => {
-    const file = path.join(os.homedir(), folder, 'SKILL.md');
 
-    return fs.existsSync(file) && fs.readFileSync(file, 'utf8') === skill;
-  });
+  // An update ships a new skill, and an agent with the old one writes files this version refuses. So an installed
+  // skill is replaced by this version's, with no dialog: the user said yes to the skill when they installed it. Where
+  // there is none, none is added. Only the installed app does this: a run from the source would install a draft.
+  if (app.isPackaged) {
+    try {
+      for (const file of INSTALLED_SKILLS) {
+        if (fs.existsSync(file) && fs.readFileSync(file, 'utf8') !== skill) {
+          writeSkill(file, skill);
+        }
+      }
+    } catch (err) {
+      dialog.showErrorBox('Apargon', `Could not update the skill: ${(err as Error).message}`);
+    }
+  }
+
+  const installed = INSTALLED_SKILLS.every(file => fs.existsSync(file) && fs.readFileSync(file, 'utf8') === skill);
 
   // Dev test runs, like their popup, answer nothing; the installed app's test run writes welcome.json first (AGENTS.md).
   if (withPage && (installed || welcomeState.get().welcomed || TEST_ALLOW)) {
@@ -51,15 +73,9 @@ export async function offerSkill(title: string, subtitle: string | null) {
       return;
     }
 
-    const skill = fs.readFileSync(SKILL);
+    const skill = fs.readFileSync(SKILL, 'utf8');
 
-    // 'wx' never follows a link, and the rename replaces a link at SKILL.md rather than the file it leads to.
-    for (const folder of FOLDERS.map(folder => path.join(os.homedir(), folder))) {
-      const temporary = path.join(folder, `.SKILL.md.${randomUUID()}`);
-      fs.mkdirSync(folder, { recursive: true });
-      fs.writeFileSync(temporary, skill, { flag: 'wx' });
-      fs.renameSync(temporary, path.join(folder, 'SKILL.md'));
-    }
+    INSTALLED_SKILLS.forEach(file => writeSkill(file, skill));
 
     await ask(SKILL_WINDOW, { title: 'The papp skill is installed.', subtitle: null, installed: true });
   } catch (err) {

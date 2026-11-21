@@ -23,7 +23,7 @@ export function menuState(): MenuState {
   return {
     approved: records
       .all()
-      .filter(saved => saved.approved || saved.picks)
+      .filter(saved => saved.approval || saved.picks)
       .map(saved => saved.page),
     automaticUpdates: updates.get().automatic !== false,
   };

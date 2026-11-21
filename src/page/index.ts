@@ -1,4 +1,4 @@
-import { app, dialog, powerMonitor, protocol } from 'electron';
+import { app, BrowserWindow, dialog, powerMonitor, protocol } from 'electron';
 import path from 'path';
 import { Worker } from 'worker_threads';
 import { pageAccess } from '../permissions/access/index.ts';
@@ -85,6 +85,11 @@ export async function startPage({ page, permissions, pageHash, own, proxy, bound
   onTrampolineEvent({
     show: windows.toFront,
     quit: () => app.quit(),
+    // destroy() skips beforeunload, so no window can stop this quit.
+    forceQuit: () => {
+      BrowserWindow.getAllWindows().forEach(win => win.destroy());
+      app.quit();
+    },
     refreshMenu: state => menus.refresh(state),
     trayItem: id => windows.send('apargon-tray', id),
     // Where the icon is, so the page can put a window under it.

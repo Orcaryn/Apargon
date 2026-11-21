@@ -1,13 +1,43 @@
 import { createHash } from 'crypto';
 import fs from 'fs';
+import path from 'path';
 import { Readable } from 'stream';
 import { fileURLToPath } from 'url';
+import { describe, type Line } from '../../../permissions/describe/index.ts';
 import { realPath } from '../../../permissions/paths/index.ts';
+import { declaredPermissions } from '../../../permissions/tags/index.ts';
 
 const PAGE_FILE = /\.papp$/i;
 
+// Shown in place of the .papp file. The Restart button asks for it again with ?restart.
+function notice(status: number, heading: string, text: string, restartButton: boolean) {
+  const html = `<!doctype html>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light dark">
+<title>Apargon</title>
+<style>
+  html { height: 100%; }
+  body { margin: 0; min-height: 100%; display: grid; place-items: center; background: Canvas; color: CanvasText; font: 14px/1.5 system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  main { max-width: 28rem; padding: 2rem; text-align: center; }
+  h1 { margin: 0 0 0.4rem; font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }
+  p { margin: 0; opacity: 0.7; overflow-wrap: anywhere; }
+  button { margin-top: 1.5rem; padding: 0.45rem 1.4rem; border: 0; border-radius: 7px; background: AccentColor; color: AccentColorText; font: inherit; font-weight: 500; cursor: pointer; }
+  button:focus-visible { outline: 2px solid AccentColor; outline-offset: 2px; }
+</style>
+<main>
+  <h1>${heading}</h1>
+  <p>${text}</p>
+  ${restartButton ? '<form><button name="restart" autofocus>Restart</button></form>' : ''}
+</main>
+`;
+
+  return new Response(html, { status, headers: { 'content-type': 'text/html; charset=utf-8' } });
+}
+
 // fetchFile is Chromium's own file loader. It names each file's type, but ignores Range, which media seeks by.
-export function fileServer(page: string, pageHash: string | null, served: (file: string) => void, fetchFile: (request: Request) => Promise<Response>) {
+export function fileServer(page: string, pageHash: string | null, linesAtOpen: Line[], served: (file: string) => void, fetchFile: (request: Request) => Promise<Response>, restart: () => void) {
+  const name = path.basename(page).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+
   return async (request: Request) => {
     const url = new URL(request.url);
 
@@ -22,13 +52,36 @@ export function fileServer(page: string, pageHash: string | null, served: (file:
     served(file);
 
     if (!fs.statSync(file, { throwIfNoEntry: false })) {
-      return new Response(`Apargon: there is no file at ${file}\n`, { status: 404 });
+      return file === page
+        ? notice(404, `${name} isn't there any more.`, `It was moved, renamed or deleted from ${path.dirname(page).replace(/&/g, '&amp;').replace(/</g, '&lt;')}. Put it back to reload, or open it from its new place.`, false)
+        : new Response(`Apargon: there is no file at ${file}\n`, { status: 404 });
     } else if (PAGE_FILE.test(file)) {
       // Read once: the bytes checked are the bytes the window renders.
       const html = await fs.promises.readFile(file);
 
-      if (file === page && pageHash && createHash('sha256').update(html).digest('hex') !== pageHash) {
-        return new Response('Apargon: this .papp file changed since you said yes. Open it again to be asked again.\n', { status: 409 });
+      if (file === page) {
+        // pageHash is null for a file that opened without a popup, or whose changes the user trusts. It reloads freely until an edit changes what the popup would show.
+        const changedSinceYes = pageHash !== null && createHash('sha256').update(html).digest('hex') !== pageHash;
+        let asksSomethingElse = false;
+
+        if (pageHash === null) {
+          try {
+            asksSomethingElse = JSON.stringify(describe(declaredPermissions(page, html.toString(), []))) !== JSON.stringify(linesAtOpen);
+          } catch {
+            // The sandbox can't see every folder the tags name. The trampoline parses again on restart and shows the real error.
+            asksSomethingElse = true;
+          }
+        }
+
+        if (changedSinceYes || asksSomethingElse) {
+          if (url.searchParams.has('restart')) {
+            restart();
+          }
+
+          return changedSinceYes
+            ? notice(409, `${name} changed since you said yes.`, 'Restart it to be asked again.', true)
+            : notice(409, `${name} now asks for something else.`, 'Restart it to see what it asks for.', true);
+        }
       }
 
       return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } });

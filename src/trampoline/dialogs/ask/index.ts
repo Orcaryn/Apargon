@@ -1,6 +1,6 @@
 import { app, BrowserWindow, nativeTheme, screen } from 'electron';
 
-// file: one of the html/ windows, which fills itself in with render(). True when the user picks #allow.
+// file: one of the html/ windows, which fills itself in with render(). The user's yes: #allow, or #trust from the popup's checkbox. null for no.
 export async function ask(file: string, content: object) {
   const width = 480;
   const win = new BrowserWindow({
@@ -30,15 +30,20 @@ export async function ask(file: string, content: object) {
   win.setAlwaysOnTop(true, 'modal-panel');
   win.show();
 
-  return new Promise<boolean>(resolve => {
+  return new Promise<'allow' | 'trust' | null>(resolve => {
     win.webContents.on('did-navigate-in-page', (_event, url) => {
-      if (url.endsWith('#allow') || url.endsWith('#deny')) {
-        resolve(url.endsWith('#allow'));
+      if (url.endsWith('#allow')) {
+        resolve('allow');
+        win.close();
+      } else if (url.endsWith('#trust')) {
+        resolve('trust');
+        win.close();
+      } else if (url.endsWith('#deny')) {
         win.close();
       } else {
         void fit();
       }
     });
-    win.on('closed', () => resolve(false));
+    win.on('closed', () => resolve(null));
   });
 }

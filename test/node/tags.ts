@@ -38,6 +38,16 @@ test('no permission tags: nothing beyond reading and its own folder', () => {
   assert.deepEqual(describe(noPermissions(ID)), []);
 });
 
+test('tags that ask nothing make no popup line, and show beside one that asks', () => {
+  const quiet = `<meta name="papp-window" on-top size="900x600"><meta name="papp-use" content="notifications"><meta name="papp-use" content="sound"><meta name="papp-run" content="${process.execPath}"><meta name="papp-env" content="HOME">`;
+
+  assert.deepEqual(describe(read(quiet)), []);
+  assert.deepEqual(
+    describe(read(`${quiet}<meta name="papp-use" content="camera">`)).map(line => line.kind),
+    ['run', 'env', 'use:camera']
+  );
+});
+
 suite('papp-id', () => {
   const bare = (tags: string) => declaredPermissions(page, `<!doctype html>${tags}<title>x</title>`, [kept]);
   test('names the app, and makes no popup line', () => assert.deepEqual(bare(`<meta name="papp-id" content="${ID.toUpperCase()}">`).tags, []));

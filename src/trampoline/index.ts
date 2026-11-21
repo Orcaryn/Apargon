@@ -63,6 +63,11 @@ export async function openPage(file: string) {
       running.delete(serving.tell);
       serving.close();
       started.close();
+
+      // The .papp file changed while open: it opens again, and the popup asks again.
+      if (serving.restarting) {
+        void openPage(approved.page);
+      }
     }
   } catch (err) {
     console.error(`Apargon: ${(err as Error).message}`);

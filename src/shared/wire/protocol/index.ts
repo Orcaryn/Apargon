@@ -11,7 +11,7 @@ export const WAYLAND_FD = 7;
 export type Relay = { port: number; target: string };
 export type MenuState = { approved: string[]; automaticUpdates: boolean };
 export type Pick = { path: string; write: boolean; folder: boolean };
-// pageHash: null for a file with no tags. programsHere: whether the page's process starts its fenced programs inside its own sandbox, or the trampoline does.
+// pageHash: null for a file whose tags ask nothing, or whose changes the user trusts. programsHere: whether the page's process starts its fenced programs inside its own sandbox, or the trampoline does.
 export type PageConfig = { page: string; permissions: Permissions; pageHash: string | null; own: string; proxy: string | null; relays: Relay[]; requestFd: number; replyFd: number; muxFd: number | null; bounds: Rectangle | null; menu: MenuState; picks: Pick[]; programsHere: boolean };
 export type TrayItem = { separator: true } | { label: string; id: string; checked?: boolean; radio?: boolean } | { label: string; submenu: TrayItem[] };
 // Raw pixels, decoded and sized in the page's process: the trampoline, which has network, decodes no image a page sends.
@@ -56,11 +56,13 @@ export type PageEvents = {
   installSkill: undefined;
   openLink: string;
   programKill: { id: string };
+  restart: undefined;
 };
 
 export type TrampolineEvents = {
   show: undefined;
   quit: undefined;
+  forceQuit: undefined;
   refreshMenu: MenuState;
   trayItem: string;
   trayClick: Rectangle;

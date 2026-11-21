@@ -60,6 +60,6 @@ function revoke(pages: string[]) {
       fs.rmSync(path.join(SECRETS_DATA, `${id}.json`), { force: true });
     }
 
-    records.change(page, { approved: undefined, unsafeDesktop: undefined, picks: undefined, id: undefined });
+    records.change(page, { approval: undefined, unsafeDesktop: undefined, picks: undefined, id: undefined });
   }
 }

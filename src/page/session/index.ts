@@ -1,13 +1,16 @@
 import { BrowserWindow, desktopCapturer, dialog, net, session } from 'electron';
+import { describe } from '../../permissions/describe/index.ts';
 import type { Permissions, Use } from '../../permissions/tags/index.ts';
+import { tellTrampoline } from '../channel/index.ts';
 import { liveReload } from './liveReload/index.ts';
 import { fileServer } from './serve/index.ts';
 
-export function createPageSession(page: string, { use }: Permissions, pageHash: string | null, canChange: (file: string) => boolean) {
+export function createPageSession(page: string, permissions: Permissions, pageHash: string | null, canChange: (file: string) => boolean) {
+  const { use } = permissions;
   const pageSession = session.defaultSession;
   const reloadWindows = () => BrowserWindow.getAllWindows().filter(win => win.webContents.session === pageSession).forEach(win => win.webContents.reloadIgnoringCache());
 
-  pageSession.protocol.handle('file', fileServer(page, pageHash, liveReload(page, canChange, reloadWindows), request => net.fetch(request, { bypassCustomProtocolHandlers: true })));
+  pageSession.protocol.handle('file', fileServer(page, pageHash, describe(permissions), liveReload(page, canChange, reloadWindows), request => net.fetch(request, { bypassCustomProtocolHandlers: true }), () => tellTrampoline('restart')));
 
   // Chromium asks for system-exclusive MIDI, which can also change an instrument's settings, for any MIDI access.
   const webPermissions: Partial<Record<Use, string[]>> = { clipboard: ['clipboard-read'], location: ['geolocation'], camera: ['media:video'], microphone: ['media:audio'], screen: ['display-capture'], usb: ['usb'], serial: ['serial'], hid: ['hid'], midi: ['midi', 'midiSysex'], bluetooth: ['bluetooth'] };

@@ -19,13 +19,25 @@ export function serveRequests(page: string, permissions: Permissions, { child, p
   const network = networkRequests(permissions, bytes, tell);
   const files = fileRequests(page, permissions, own, bytes.receive, tell);
   const programs = programStarter(page, permissions, prepared, tell, bytes);
-  const events: EventHandlers<PageEvents> = { ...desktop.events, ...network.events, programKill: programs.kill };
+  let restarting = false;
+  const events: EventHandlers<PageEvents> = {
+    ...desktop.events,
+    ...network.events,
+    programKill: programs.kill,
+    restart: () => {
+      restarting = true;
+      tell('forceQuit');
+    },
+  };
   const calls: CallHandlers = { ...desktop.calls, ...network.calls, ...files.calls, startProgram: programs.start };
 
   readLines(page, child, line => handleLine(line, events, calls, sendToPage, bytes.handle));
 
   return {
     tell,
+    get restarting() {
+      return restarting;
+    },
     // The process is gone: its programs stop, and so does everything else it had open.
     close() {
       programs.stopAll();

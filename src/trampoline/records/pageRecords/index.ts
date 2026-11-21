@@ -2,6 +2,7 @@ import type { Rectangle } from 'electron';
 import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import type { Line } from '../../../permissions/describe/index.ts';
 import type { Pick } from '../../../shared/wire/protocol/index.ts';
 import { readJson, writeJson } from '../../json/index.ts';
 
@@ -9,8 +10,8 @@ import { readJson, writeJson } from '../../json/index.ts';
 
 // What Apargon keeps for one .papp file, in one file named after its path: one write changes it whole.
 type PageRecord = {
-  // The hash of the bytes the user said yes to, with the popup lines they saw. A change to either asks again.
-  approved?: string;
+  // hash: of the bytes the user said yes to, with the popup lines they saw: a change to either asks again. For a file whose changes the user trusts, of the lines alone. lines: only to mark the new ones when it asks again.
+  approval?: { hash: string; lines: Line[] };
   // The hash of the bytes the user opened on a desktop where Apargon can't keep its promise, as X11. Any change asks again.
   unsafeDesktop?: string;
   // What the user picked in a dialog: to read, to write, or a folder to write in.

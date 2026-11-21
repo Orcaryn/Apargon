@@ -5,7 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { pathToFileURL } from 'node:url';
+import { describe } from '../../src/permissions/describe/index.ts';
 import { fileServer } from '../../src/page/session/serve/index.ts';
+import { declaredPermissions } from '../../src/permissions/tags/index.ts';
 
 const dir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'apargon-serve-')));
 const page = path.join(dir, 'page.papp');
@@ -20,10 +22,12 @@ const dependencies = new Set<string>();
 const serve = fileServer(
   page,
   pageHash,
+  [],
   file => {
     dependencies.add(file);
   },
-  async () => new Response('from Chromium')
+  async () => new Response('from Chromium'),
+  () => undefined
 );
 const get = (file: string, range?: string) => serve(new Request(pathToFileURL(file), { headers: range ? { range } : {} }));
 
@@ -38,6 +42,52 @@ test('a .papp file changed since approval is refused', async () => {
   const response = await get(page);
   fs.writeFileSync(page, approved);
   assert.equal(response.status, 409);
+});
+
+test('a .papp file opened without a popup reloads after an edit, until a tag asks', async () => {
+  const id = '<meta name="papp-id" content="4f2c9a1e-7b3d-4c58-9e21-0a6d8f3b5c77">';
+  const quiet = path.join(dir, 'quiet.papp');
+  const serveQuiet = fileServer(
+    quiet,
+    null,
+    [],
+    () => undefined,
+    async () => new Response('from Chromium'),
+    () => undefined
+  );
+
+  const status = async (html: string) => {
+    fs.writeFileSync(quiet, html);
+
+    return (await serveQuiet(new Request(pathToFileURL(quiet)))).status;
+  };
+
+  assert.equal(await status(`<!doctype html>${id}<meta name="papp-window" size="900x600"><title>edited</title>`), 200);
+  assert.equal(await status(`<!doctype html>${id}<meta name="papp-net" content="example.com"><title>edited</title>`), 409);
+  assert.equal(await status(`<!doctype html>${id}<meta name="papp-telepathy" content="x"><title>edited</title>`), 409);
+});
+
+test('a .papp file whose changes the user trusts reloads after an edit, until its tags ask for something else', async () => {
+  const withSite = (site: string, title: string) =>
+    `<!doctype html><meta name="papp-id" content="4f2c9a1e-7b3d-4c58-9e21-0a6d8f3b5c77"><meta name="papp-net" content="${site}"><title>${title}</title>`;
+  const trusted = path.join(dir, 'trusted.papp');
+  const serveTrusted = fileServer(
+    trusted,
+    null,
+    describe(declaredPermissions(trusted, withSite('example.com', 'opened'), [])),
+    () => undefined,
+    async () => new Response('from Chromium'),
+    () => undefined
+  );
+
+  const status = async (html: string) => {
+    fs.writeFileSync(trusted, html);
+
+    return (await serveTrusted(new Request(pathToFileURL(trusted)))).status;
+  };
+
+  assert.equal(await status(withSite('example.com', 'edited')), 200);
+  assert.equal(await status(withSite('example.org', 'edited')), 409);
 });
 
 test('any local file is served: every .papp file reads the local disks', async () => {

@@ -11,7 +11,7 @@ import { APP_ROOT, pageAppId, SECRETS_DATA } from '../../../shared/data/index.ts
 import type { PageProcess, TrampolinePlatform } from '../index.ts';
 import { startPiped } from '../pipes/index.ts';
 
-const DEVICE_CAPABILITIES: Partial<Record<Use, string>> = { camera: 'webcam', microphone: 'microphone', location: 'location', usb: 'usb', serial: 'serialcommunication', hid: 'humaninterfacedevice' };
+const DEVICE_CAPABILITIES: Partial<Record<Use, string>> = { camera: 'webcam', microphone: 'microphone', location: 'location', usb: 'usb', serial: 'serialcommunication', hid: 'humaninterfacedevice', bluetooth: 'bluetooth' };
 // The root's folders Windows keeps for itself.
 const SKIPPED_ROOTS = ['$recycle.bin', 'system volume information', '$windows.~bt', '$windows.~ws', '$winreagent', 'recovery'];
 

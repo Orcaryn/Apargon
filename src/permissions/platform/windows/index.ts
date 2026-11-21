@@ -5,7 +5,7 @@ export const windows: PermissionsPlatform = {
   programEnv: 'SYSTEMROOT WINDIR SYSTEMDRIVE USERPROFILE HOMEDRIVE HOMEPATH USERNAME APPDATA LOCALAPPDATA TEMP TMP PROGRAMDATA PROGRAMFILES PATHEXT COMSPEC PROCESSOR_ARCHITECTURE NUMBER_OF_PROCESSORS'.split(' '),
   pageEnv: [],
   refusedTags: { socket: 'On Windows, Apargon can\'t give a .papp file papp-socket yet. Remove the tag to open it there.' },
-  refusedUses: { bluetooth: 'On Windows, Apargon can\'t give a .papp file Bluetooth yet.' },
+  refusedUses: {},
   useLines: { cloud: 'Read your OneDrive files' },
   allSocketsLine: null,
   dock: 'taskbar',

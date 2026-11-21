@@ -20,7 +20,7 @@ const EXPECTED: Record<string, string> =
       'win-programs':
         'curl_declared curl_undeclared_blocked curl_direct_blocked local_port_declared local_port_direct_blocked local_port_undeclared_blocked program_writes_granted program_outside_write_blocked program_reads_home program_installed_runs program_input program_timeout spawn_streams spawn_kill spawn_undeclared_refused program_stdin_own program_env_named program_env_unnamed_left_out undeclared_program_refused options_as_args_refused',
       'win-devices':
-        'webcam_capability microphone_capability location_capability usb_capability serialcommunication_capability humaninterfacedevice_capability usb_api serial_api hid_api midi_api',
+        'webcam_capability microphone_capability location_capability usb_capability serialcommunication_capability humaninterfacedevice_capability bluetooth_capability usb_api serial_api hid_api midi_api',
       system: 'node child_process writes_anywhere network papp_api window_shape_set',
     }
   : {

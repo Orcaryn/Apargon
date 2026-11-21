@@ -8,6 +8,7 @@
 <meta name="papp-use" content="serial">
 <meta name="papp-use" content="hid">
 <meta name="papp-use" content="midi">
+<meta name="papp-use" content="bluetooth">
 <meta name="papp-run" content="tokencaps">
 <title>Apargon selftest for Windows devices</title>
 <script src="lib.js"></script>
@@ -19,7 +20,7 @@
   const seen = {};
 
   try {
-    const capabilities = ['webcam', 'microphone', 'location', 'usb', 'serialcommunication', 'humaninterfacedevice'];
+    const capabilities = ['webcam', 'microphone', 'location', 'usb', 'serialcommunication', 'humaninterfacedevice', 'bluetooth'];
     const output = (await papp.run('tokencaps', capabilities)).stdout;
     const held = [...output.matchAll(/^capability (\S+)/gm)].map(([, sid]) => sid);
     const derived = Object.fromEntries([...output.matchAll(/^derived (\S+) (\S+)/gm)].map(([, name, sid]) => [name, sid]));
@@ -31,6 +32,7 @@
     result.serial_api = Array.isArray(await navigator.serial.getPorts());
     result.hid_api = Array.isArray(await navigator.hid.getDevices());
     result.midi_api = (await navigator.requestMIDIAccess()).inputs !== undefined;
+    seen.bluetooth = await navigator.bluetooth.getAvailability();
     seen.tokencaps = output.trim().split(/\r?\n/);
     seen.devices = (await navigator.mediaDevices.enumerateDevices()).map((device) => device.kind);
     for (const [name, constraints] of Object.entries({ camera: { video: true }, microphone: { audio: true } })) {

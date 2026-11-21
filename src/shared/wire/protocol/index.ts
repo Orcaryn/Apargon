@@ -48,7 +48,6 @@ export type Calls = {
 export type PageEvents = {
   open: string;
   revoke: string[];
-  showEgressLog: undefined;
   automaticUpdates: boolean;
   pageIcon: string;
   bounds: Rectangle;

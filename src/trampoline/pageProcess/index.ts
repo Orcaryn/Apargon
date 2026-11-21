@@ -3,7 +3,7 @@ import fs from 'fs';
 import type { AddressInfo } from 'net';
 import path from 'path';
 import { PAGE_ENV } from '../../permissions/env/index.ts';
-import { APP_ROOT, EGRESS_LOG, OWN_FOLDERS } from '../../shared/data/index.ts';
+import { APP_ROOT, OWN_FOLDERS } from '../../shared/data/index.ts';
 import { startMux } from '../../shared/wire/mux/index.ts';
 import type { PageConfig } from '../../shared/wire/protocol/index.ts';
 import type { Approved } from '../dialogs/approval/index.ts';
@@ -21,7 +21,7 @@ export async function startPageProcess({ page, permissions, pageHash }: Approved
   fs.mkdirSync(storage, { recursive: true });
   records.change(page, { id: permissions.id });
   // All of its network goes through the proxy. papp-system has no limits, so no proxy either.
-  const proxy = permissions.net.length && !permissions.system ? await startProxy(permissions.net, EGRESS_LOG) : null;
+  const proxy = permissions.net.length && !permissions.system ? await startProxy(permissions.net) : null;
   const proxyPort = proxy && (proxy.address() as AddressInfo).port;
   const prepared = await TRAMPOLINE_PLATFORM.prepare({ page, permissions, own, storage, protectedFolders: PROTECTED, proxyPort }).catch((err: Error) => {
     proxy?.close();

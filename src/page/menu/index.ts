@@ -65,8 +65,6 @@ function menuTemplate(page: string, lines: Line[], pageMenus: MenuItemConstructo
         },
         { label: 'Revoke All Approvals', enabled: approved.length > 0, click: () => tellTrampoline('revoke', approved) },
         { type: 'separator' },
-        { label: 'Show Egress Log', click: () => tellTrampoline('showEgressLog') },
-        { type: 'separator' },
         {
           label: 'Check for Updates Automatically',
           type: 'checkbox',

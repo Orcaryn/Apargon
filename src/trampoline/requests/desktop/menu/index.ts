@@ -1,14 +1,14 @@
-import { app, dialog, shell } from 'electron';
+import { app, dialog } from 'electron';
 import fs from 'fs';
 import path from 'path';
-import { EGRESS_LOG, SECRETS_DATA } from '../../../../shared/data/index.ts';
+import { SECRETS_DATA } from '../../../../shared/data/index.ts';
 import type { EventHandlers, PageEvents } from '../../../../shared/wire/protocol/index.ts';
 import { offerSkill } from '../../../dialogs/skill/index.ts';
 import { TRAMPOLINE_PLATFORM } from '../../../platform/index.ts';
 import { menuState, records, updates } from '../../../records/index.ts';
 
 // What the items of Apargon's menu ask for. refreshMenus: sends every running .papp file's menu what is on disk now.
-export function menuEvents(page: string, openPage: (file: string) => void, refreshMenus: () => void): Pick<EventHandlers<PageEvents>, 'open' | 'revoke' | 'automaticUpdates' | 'showEgressLog' | 'installSkill'> {
+export function menuEvents(page: string, openPage: (file: string) => void, refreshMenus: () => void): Pick<EventHandlers<PageEvents>, 'open' | 'revoke' | 'automaticUpdates' | 'installSkill'> {
   return {
     open: openPage,
     // Only approved files, as the menu lists them. Forgetting another file takes its picks and secrets too, so the user confirms.
@@ -44,14 +44,6 @@ export function menuEvents(page: string, openPage: (file: string) => void, refre
 
           refreshMenus();
         });
-      }
-    },
-    showEgressLog: () => {
-      if (fs.existsSync(EGRESS_LOG)) {
-        void shell.openPath(EGRESS_LOG);
-      } else {
-        app.focus({ steal: true });
-        void dialog.showMessageBox({ type: 'info', message: 'Nothing sent yet.', detail: EGRESS_LOG });
       }
     },
     installSkill: () => offerSkill('The papp skill for coding agents', null),

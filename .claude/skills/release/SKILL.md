@@ -15,7 +15,7 @@ Publishing is public and cannot be taken back. Installed copies read the feeds o
 2. **Ask about Linux and Windows.** The script runs neither's checks. Ask the user whether they ran the checks in AGENTS.md's "The installed `.deb`" for this commit. For Windows, ask the user whether its checks passed on this code.
 3. **Report.** List what still blocks the release, each with the failing command's output. Fix what you can and hand the rest to the user, such as `gh auth switch`.
 4. **Propose the version, write the notes and get approval.**
-5. **Commit the notes.** That commit holds only `release-notes/<new-version>.md`. It is the one commit you make without being asked. The script pushes it.
+5. **Leave the notes uncommitted.** The script commits `release-notes/<new-version>.md` with the version, as `Release <version>`.
 6. **Run the release** in the background. Notarization takes several minutes per file.
 7. **Check the download links.** apargon.com's Worker (`../apargon-landing/worker/index.ts`) sends each link to GitHub's `releases/latest/download/<file>`, so a release changes nothing on the site. Each must answer 200 with the new version's file:
 
@@ -48,7 +48,7 @@ The new version is `version` in `package.json`, bumped. Before 1.0: `--minor` fo
 ## Failure recovery
 
 - **The script refuses before the bump:** nothing changed. Relay the whole list, fix what you can, rerun once.
-- **It fails before `Release <version>` is committed:** the trap puts `package.json` back. Fix the cause and rerun.
+- **It fails before `Release <version>` is committed:** the trap puts `package.json` back, and the notes stay uncommitted. Fix the cause and rerun.
 - **It fails after the tag:** never rerun `release.sh`; it would bump again. Run the rest of `publish` by hand, with `VERSION`, `DMGS`, `ZIPS`, `DEB` and `EXES` set as in `main`. The built files are in `dist/`. A release without its `update-*.json` feeds reaches no one.
 - **It fails in `update_cask`:** the release is out; only the cask is stale. Fix the cause and run `update_cask`'s steps by hand with `VERSION`, `REPO` and `TAP` set.
 - **The release is broken:** macOS copies install it on their own, so ship a newer version soon. Don't delete a published release or tag.

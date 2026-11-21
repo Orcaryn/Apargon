@@ -8,9 +8,9 @@ Plain Node, without the app, on `node:test`. Each runs alone too, as `node --tes
 
 | File             | Checks                                                                                                                                                |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tags.ts`        | how tags are read, what each one's popup line says, and every old tag and form refused                                                                |
+| `tags.ts`        | how tags are read, what each one's popup line says, and unknown tags and features refused                                                             |
 | `access.ts`      | where a `.papp` file may write: its own folder, `papp-write`, `papp-write all` but Apargon's own                                                      |
-| `proxy.ts`       | the proxy reaches only the exact sites and ports named, never itself, and logs each try                                                               |
+| `proxy.ts`       | the proxy reaches only the exact sites and ports named, never itself                                                                                  |
 | `programs.ts`    | a program the trampoline starts keeps its output until the `.papp` file asks for it, even once it has exited                                          |
 | `mux.ts`         | Linux's relay pipe carries each connection both ways, and closes it, and a stuck one holds back only itself                                           |
 | `streams.ts`     | bytes between the trampoline and the `.papp` file's process arrive whole, only as fast as the receiver takes them, and stop when either side gives up |

@@ -45,6 +45,10 @@ Judge everything by one question: **can data leave the computer without the user
 
 - Skip the offline check.
 
+## Code review
+
+- Critical: data can leave the computer without the user saying yes.
+
 ## Tests and releases
 
 - `pnpm test` must stay green. It needs Node 22.18+.

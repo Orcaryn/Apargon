@@ -20,8 +20,12 @@ Every hole found was the same: the app asked **another program** to go online fo
 - Reading local files is allowed. A read sends nothing.
 - Other programs are blocked: no services for programs, no sockets, no mounts, no devices beyond the basic ones, no typing into other windows.
 - The sandbox has no network and no DNS. All network goes through Apargon's proxy.
+- Chromium in the sandbox looks up no name itself: every name goes to the proxy. `papp-system` has no sandbox and looks names up as usual.
 - At each start the sandboxed process checks that it is offline, and refuses to open if it is not. `papp-system` has no sandbox and skips the check.
+- These tags ask nothing: `papp-window`, `papp-use` `notifications` and `sound`, a `papp-run` program that isn't `unfenced`, and `papp-env`. A `.papp` file with only those opens with no popup. Every other tag asks.
 - A yes is kept as a hash of the file's bytes and the popup's lines. A change to either asks again.
+- The lines themselves are kept too, only to mark the new ones when it asks again. The hash alone decides.
+- "Trust changes to this file", a checkbox in the popup that asks again, keeps the yes as a hash of the popup's lines alone. Then a change to the file's bytes doesn't ask, and whatever can write the file gets what the user approved: another program, a newer download, a `.papp` file with `papp-write` on its folder.
 - A pick in a system dialog is a yes for that file or folder. So is the system print panel.
 - An unknown tag or attribute refuses the file.
 - `papp-run unfenced` runs the program's real file, past any link. A program the `.papp` file could change is refused.
@@ -39,6 +43,7 @@ Every hole found was the same: the app asked **another program** to go online fo
 - Writes: its own folder, a temp folder of its own and its `papp-write` folders. Never Apargon's data, the other `.papp` files' folders or the app.
 - Network: only the proxy's port, over IPv4 TCP.
 - No mounting (`file-mount`), no opening other apps (`lsopen`), no Apple Events, no writing other apps' settings.
+- No resolver service (`com.apple.dnssd.service`): Network.framework looks names up through it, off the computer. Other lookups go through a socket that `network*` already refuses.
 - Devices: `/dev/null`, `/dev/zero`, `/dev/random`, `/dev/urandom`, `/dev/fd`, `/dev/dtracehelper`, `/dev/autofs_nowait`. With `papp-use serial`, `/dev/cu.*` too. No terminal.
 - Services stay open to the `.papp` file's process: Electron needs them.
 - Programs: the trampoline starts them under the same profile, plus no services (`deny mach-lookup`).
@@ -63,6 +68,7 @@ Every hole found was the same: the app asked **another program** to go online fo
 - Sockets: a seccomp filter covers the `.papp` file and its programs.
   - Allowed: internet and netlink sockets, which reach only the empty network, and `AF_UNIX` pairs that are not datagram.
   - Refused: every other socket, so no D-Bus, no socket file and no vsock. Datagram pairs, which send to any socket file by name. `io_uring`, which opens sockets past seccomp.
+  - Refused too: the keyring calls (`add_key`, `request_key`, `keyctl`). Through `request_key`, the host's helper can look up a name outside the empty network.
 - Wayland: the trampoline connects before the sandbox starts and hands the connection over as `WAYLAND_SOCKET`.
 - One pipe from the trampoline carries the proxy, the sound server (with `papp-use sound` or `microphone`) and, on X11, the screen. The trampoline connects only what this `.papp` file was given.
 - On X11 the `.papp` file gets `DISPLAY=127.0.0.1:N` and your `XAUTHORITY`. The socket filter stays on.
@@ -91,8 +97,7 @@ Every hole found was the same: the app asked **another program** to go online fo
 - One per `.papp` file with `papp-net`, on this computer's loopback, run by the trampoline. A file without `papp-net` has none.
 - Exact host and port only. `localhost` goes through it too.
 - It checks the name first and looks up only allowed names.
-- Every try, allowed or not, goes in the egress log: Permissions > Show Egress Log.
-- A plain HTTP request is logged when its answer ends. One cut short leaves no line.
+- A name that leads to a cloud computer's metadata server is refused: a link-local address, `fd00:ec2::254` or `100.100.100.200`. An address in `papp-net` itself is not.
 
 ## Apargon is careful
 
@@ -100,7 +105,7 @@ The trampoline is the only part with network. It works for a `.papp` file that m
 
 - It writes only where you picked, or where the tags allow.
 - It checks the file it opened, not just the name: no links, a plain file, still in the folder you picked.
-- It keeps approvals, picks and secrets in its own data, which no `.papp` file may write.
+- It keeps approvals, picks and secrets in its own data. No `.papp` file may write there, or read the secrets.
 - It shows the `.papp` file's output as plain text, never as terminal codes.
 - It refuses a `.papp` file whose name or folder has a line break or another control character.
 
@@ -114,7 +119,6 @@ The trampoline is the only part with network. It works for a `.papp` file that m
 - On Linux in a virtual machine, `papp-socket` reaches the machine's host through vsock.
 - On Linux, if your default speakers are on the network, `papp-use sound` plays to them.
 - On Linux with X11, once you say yes, the `.papp` file can type into and read your other windows, a terminal's or a browser's too.
-- On macOS the egress log is in `~/Library/Logs`. A file with `papp-write all`, or with `papp-write` on that folder, can change it.
 - On Windows, your temp folder is shared with other apps.
 - On Windows, a program can make Windows look up a name, as in `\\<data>.example.com\x`. That's Microsoft's to fix; it has been reported.
 
@@ -157,4 +161,4 @@ The trampoline is the only part with network. It works for a `.papp` file that m
 
 ## Reporting
 
-Open an issue if a `.papp` file reaches a site or another program it wasn't allowed, or if the offline check passes outside the sandbox. Include the `.papp` file, the platform and the egress log. Leave out secrets.
+Open an issue if a `.papp` file reaches a site or another program it wasn't allowed, or if the offline check passes outside the sandbox. Include the `.papp` file and the platform. Leave out secrets.

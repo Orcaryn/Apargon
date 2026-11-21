@@ -3,3 +3,4 @@ dist/
 .DS_Store
 examples/notes.txt
 examples/electron-latest.json
+skills/system/run-workflow/SKILL.md

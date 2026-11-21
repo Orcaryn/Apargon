@@ -9,6 +9,8 @@ description: Use when the user wants an app with a window on their own computer,
 
 A `.papp` file is an ordinary HTML page, plus `<meta>` tags that ask for more. Apargon runs it as a desktop app on macOS, Linux or Windows.
 
+Apargon is a reverse browser. A browser gives a page all of the internet and none of your computer. Apargon gives a `.papp` file your files and none of the internet.
+
 Every `.papp` file names itself with a UUID, in `<meta name="papp-id">`. Generate one (`crypto.randomUUID()`) when you create the file, and keep it across versions: it is the app's identity. Its folder and its secrets are kept by it, so an update finds its data. A file without one doesn't open.
 
 Without permission tags, a `.papp` file:
@@ -38,11 +40,12 @@ Further reading and code: [https://github.com/Orcaryn/Apargon](https://github.co
 ```
 
 - Open it with `open notes.papp` (macOS), `apargon notes.papp` (Linux) or a double-click (Windows).
-- No permission tags: it opens at once. With tags: a popup asks first, with one line per tag. The yes belongs to the file's exact bytes and to what the popup showed: any change, even a comment, asks again, and so does a tag that now leads to another folder or program.
+- No permission tags: it opens at once. The same with only tags that ask nothing: `papp-window`, `papp-use` `notifications` and `sound`, a `papp-run` program that isn't `unfenced`, and `papp-env`. With any other tag: a popup asks first. When it asks again after a change, the user can tick "Trust changes to this file", and later edits open without a popup unless the tags ask for something else. The yes belongs to the file's exact bytes and to what the popup showed: any change, even a comment, asks again, and so does a tag that now leads to another folder or program.
 - Saving the `.papp`, or a `.css` or `.js` file it loaded, reloads the window. A `.papp` file with tags that changed doesn't load until it is opened again and approved.
-- The window shows only the `.papp` file. A frame may hold a local file, never a web page. A link opens in the browser only if its site is in `papp-net`; any other is dropped.
+- A `.papp` file has a URL, as a web page does: Apargon runs it in Chromium, with no address bar. The hash, query and history work as on the web, and a reload keeps them; opening the file again starts without them. Use the URL as a web app would.
+- The window shows only the `.papp` file: build it as a single-page app that changes its own view, not as pages that link to each other. A frame may hold a local file, never a web page, and has no `papp`. A link opens in the browser only if its site is in `papp-net`; any other is dropped.
 - `window.open` on its own file opens a second window, such as `window.open('#mini', '', 'size=320x80, frame=no')`. The third argument takes `papp-window` settings for that window; `on-top`, `all-spaces`, `click-through`, `private` and `dock` stay the tag's. A bad setting opens no window.
-- The window opens at 1200×800 with a frame, later where the user left it. `<title>` names it.
+- `<title>` is the window's title.
 - `localStorage` and IndexedDB persist, in its own folder.
 - On Windows, Apargon refuses a path that starts with `\\`, has a `:` after the drive letter, or has a name ending in a dot or a space.
 
@@ -128,6 +131,8 @@ declare const papp: {
   print(): Promise<boolean>;
   // an http(s) link in the browser, only to a site in papp-net; any other is dropped
   open(link: string): Promise<void>;
+  // an environment variable papp-env names; null if it isn't set
+  env(name: string): Promise<string | null>;
   // timeout in ms stops it; encoding null gives bytes; over 64 MB of output it is stopped and run rejects: use spawn
   run(program: string, args?: string[], options?: { cwd?: string; input?: string | Bytes; encoding?: 'utf8' | null; timeout?: number }):
     Promise<Exit & { stdout: string | Bytes; stderr: string | Bytes }>;
@@ -199,72 +204,164 @@ The `.papp` file becomes a Node script with a window, with no limits and the int
 
 - It gets Node (`require`, `process`), as well as `window.papp`. Use `fs`, `net` and `child_process` directly.
 - Any file, any program, all your environment variables, the internet.
+- Without it: no Node, and every limit stays.
 - It can't be combined with `papp-write`, `papp-run`, `papp-net`, `papp-socket`, `papp-listen` or `papp-env`: it already allows all of them.
 
 Use it only when tags and `papp` can't do the job. For a Node script the `.papp` file calls, like a build or a converter, use `papp-run node`.
 
 ## Meta tags
 
-In `<head>` before any `<script>`. `content` holds the one thing. Attributes hold the options. An unknown attribute, an old tag, or an old form refuses the file. Each tag is a line in the popup, so ask for as little as needed.
+Put them in `<head>`, before any `<script>`. Each tag lets the app do one more thing. Most make a popup ask the user, so add only what the app needs.
 
-| It needs to                          | Tag                                                                     |
-| ------------------------------------ | ----------------------------------------------------------------------- |
-| Exist                                | `<meta name=\"papp-id\" content=\"<uuid>\">`, always                    |
-| Read any local file                  | nothing                                                                 |
-| Save its own data                    | nothing: write in `papp.folder`                                         |
-| Change files in one folder           | `<meta name="papp-write" content="~/notes/">`                           |
-| Change any file                      | `<meta name="papp-write" all>`                                          |
-| Change a file the user chooses       | nothing: `papp.pick({ write: true })` or `papp.save()`                  |
-| Use a command-line tool              | `<meta name="papp-run" content="git">`                                  |
-| Run a program it ships               | `<meta name="papp-run" content="./bin/ffmpeg">`                         |
-| Run a program with no limits         | `<meta name="papp-run" content="git" unfenced>`                         |
-| Pass that tool a variable            | `<meta name="papp-env" content="AWS_PROFILE">`                          |
-| Call a web API, open its links       | `<meta name="papp-net" content="api.example.com">`                      |
-| Talk to a server on this computer    | `<meta name="papp-net" content="localhost:11434">`                      |
-| Be reached from this computer        | `<meta name="papp-listen">`                                             |
-| Be reached from the network, a phone | `<meta name="papp-listen" network>`                                     |
-| Talk to Docker                       | `<meta name="papp-socket" content="/var/run/docker.sock">`              |
-| A device or extra                    | `<meta name="papp-use" content="notifications">`                        |
-| Set the window's size and look       | `<meta name="papp-window" size="900x600" title-bar="no">`               |
-| Answer a key anywhere                | `<meta name="papp-global-shortcut" content="CommandOrControl+Shift+N">` |
-| Use Node, or what `papp` can't do    | `<meta name="papp-system">`                                             |
+### `papp-id`
 
-- **`papp-id`:** one UUID, lowercase or not. New file, new UUID; new version, same UUID. Never copy another app's.
-- **`papp-write`:** one folder, no `*`. Not your home folder or one that holds it, and not Apargon's own. The `.papp` file and its programs may change everything in it. Code written there can run later, outside Apargon.
-- **`papp-net`:** a host and an optional port, 443 if none: `api.example.com`, `example.com:8080`, `192.168.1.5:8123`, `localhost:11434`. No scheme, no `*`: one tag per site. All network goes through Apargon's proxy, this computer's too. Scripts, fonts and images from another site need its host in `papp-net`. With any `papp-net` tag, `fetch` to a named site skips CORS.
-- **`papp-use`:** one feature per tag: `notifications`, `clipboard`, `location` (not on Linux), `sound`, `camera`, `microphone`, `screen`, `background`, `login`, `usb`, `serial`, `hid`, `midi`, `cursor`, `broadcasts` (macOS), `share` (macOS), `cloud` (read iCloud, Dropbox or OneDrive files), `bluetooth` (macOS).
-- **Sound:** without `papp-use sound`, it plays muted, with no error.
-- **No tag needed** to write to the clipboard, go fullscreen or lock the pointer.
-- **Programs** (`papp-run`):
-  - Same limits as the `.papp` file: read everything, write its own folder and `papp-write` folders, reach `papp-net` sites through the proxy (`http_proxy` is set), and get only `papp-env` variables.
-  - They get no other program's help: no system services (macOS), no socket files, no mounting.
-  - Traffic that isn't HTTP, like `git` over SSH, works only if the program can tunnel through an HTTP proxy to a site in `papp-net`.
-  - A program shipped with the `.papp` file (`./bin/ffmpeg`) runs as `ffmpeg`.
-  - `unfenced`: no limits at all. Refused if the `.papp` file could change the program.
-  - They stop when the `.papp` file closes.
-  - Windows: only `.exe` and `.com` files, not `.bat` or `.cmd`. Stopping a program doesn't stop what it started.
-  - macOS: a downloaded program must be notarized.
-- **Picks:** `papp.pick` and `papp.save` need no tag. The dialog is Apargon's. A pick to read: the `.papp` file reads it itself. A pick to write: `papp.writeFile` and `papp.appendFile` reach it, and Apargon does the writing. A folder picked to write takes plain file names right inside it: `${picked}/report.txt`, not `${picked}/sub/report.txt` or `.hidden`. Picks are kept, even after a restart, and go when the user takes the approval back.
-- **Secrets:** `papp.getSecret`, `papp.setSecret` and `papp.deleteSecret` need no tag. For keys it shouldn't keep in `localStorage`, which sits on disk in clear. Apargon keeps them sealed with the OS's store, and deletes them with the approval.
-- **Listening:** Apargon listens, not the `.papp` file, and passes each request to the handler as plain data: `new TextDecoder().decode(request.body)` reads a text body, `new URL(request.url)` its path and query. The handler returns a plain answer, or throws for a 500. `url` is `http://127.0.0.1:<port>`, or with `network` this computer's first address. A body over 16 MB gets 413. With 32 requests waiting for an answer, the next gets 503.
-- **Connections:** `papp.connect` goes through Apargon's proxy, so it reaches only what `papp-net` names, with the port: `db.example.com:5432`. `close()` sends what is left and ends the connection. Opening, including the TLS handshake, times out after 30 seconds and is cancelled on reload or close.
-- **Global shortcuts:** two different modifiers, or one modifier with a function key. Media keys work alone. `content="any"` lets `papp.shortcuts` pick them while it runs, by the same rules.
-- **Window:** one `papp-window` tag, settings as attributes. A bare attribute is yes (`on-top`), `="no"` is no (`frame="no"`). Sizes in pixels: `size="900x600"`, `width`, `height`, `min-width`, `min-height`. Yes or no: `resizable`, `title-bar`, `frame`, `transparent`, `on-top`, `all-spaces`, `click-through`, `private`, `dock`, `blur`, `mark`.
-  - `title-bar="no"` keeps the OS window buttons, drawn over the page.
-  - With `on-top` or `all-spaces`, `papp.window` can turn that off and on again. Without, it refuses.
-  - `click-through` lets `papp.window({ clickThrough: true })` pass clicks to the app below. Give the user a way back, such as a tray item or a shortcut.
-  - `private` hides the window from screenshots and screen sharing. macOS and Windows only.
-  - `dock="no"` shows no dock icon or taskbar button. It needs `papp-use background`, which keeps the tray icon.
-  - `blur` blurs what is behind the window through its transparent parts: set `background: transparent` on the body. macOS and Windows 11 only.
-  - `mark="no"` draws the favicon without Apargon's mark.
-  - `papp.window` can also set `resizable` (off only), `minSize`, `maxSize`, `aspectRatio`, and on macOS `file` and `edited`, with no tag. With `frame="no"`, `shape` too, on Windows and Linux. A reload puts them back.
-- **Printing:** `papp.print()` and `window.print()` make a PDF and open the system print panel, where the user picks the printer: that is the yes, so no tag is needed. The sandbox never reaches the print server. Or save `papp.pdf()` with `papp.save()`.
-- **Devices:** `usb`, `serial`, `hid` and `bluetooth` turn on WebUSB, Web Serial, WebHID and Web Bluetooth; the user picks the device. `midi` turns on Web MIDI, sysex included.
-- **Background:** closing the last window hides it. The tray icon shows or quits it.
-- **Login:** stops when the approval is taken back, the tag is removed, or the file is gone.
-- **No tag needed** for menus, the tray, its icon and its clicks, `papp.quit`, `papp.progress`, `papp.badge`, `papp.attention`, `papp.power`, `papp.onSystem`, `papp.displays`, `papp.keepAwake`, or for `papp.window` to move, resize, minimize, maximize, fade or show the window.
-- **Tray popover:** `papp.tray(title, items, { click: true })`, then in `papp.onTrayClick` move the window under the icon and show it. Keep `papp-use background` so the window can hide. On Linux the icon opens the menu instead: give it a Show item.
-- **Linux:** GNOME on Wayland. On X11, Apargon asks first, once per version of the file: there it can't keep data in. `papp-socket` turns off the socket block for the `.papp` file and its programs: any socket file is then reachable.
-- **Windows:** `papp-socket` and `papp-use bluetooth` refuse the file, for now. `localhost` goes through Apargon's proxy: `fetch` works; a program must honour `http_proxy`.
+```html
+<meta name="papp-id" content="<UUID>">
+```
 
-If a dialog says the process can still reach the network, don't work around it: that is the safety check working.
+- `content`: a UUID. Required: without it, the file doesn't open.
+- A new app gets a new UUID. A new version keeps it.
+
+### `papp-write`
+
+```html
+<meta name="papp-write" content="~/notes/">
+<meta name="papp-write" all>
+```
+
+- `content`: a folder the app may change files in. One per tag.
+- `all`, instead of `content`: the app may change any file.
+- Default: it changes only files in `papp.folder` and files the user picks.
+
+### `papp-net`
+
+```html
+<meta name="papp-net" content="api.example.com">
+<meta name="papp-net" content="localhost:11434">
+```
+
+- `content`: a site the app may reach. Add the port if it isn't 443. One site per tag.
+- Default: no network at all.
+
+### `papp-run`
+
+```html
+<meta name="papp-run" content="git">
+<meta name="papp-run" content="./bin/ffmpeg">
+<meta name="papp-run" content="docker" unfenced>
+```
+
+- `content`: a program the app may run, by name or by a path beside the `.papp` file.
+- The program gets the app's limits.
+- Its only way out is Apargon's proxy, which checks each site against `papp-net`. The proxy speaks HTTP, and Apargon points the program at it with `http_proxy`.
+- `unfenced`: the program runs with no limits.
+- Default: no programs.
+
+### `papp-env`
+
+```html
+<meta name="papp-env" content="AWS_PROFILE">
+```
+
+- `content`: an environment variable the app reads with `papp.env` and passes to its programs.
+- Default: the app reads none, and its programs get only basics such as `PATH` and `HOME`.
+
+### `papp-listen`
+
+```html
+<meta name="papp-listen">
+<meta name="papp-listen" network>
+```
+
+- No `content`. Other apps on this computer may send the app HTTP requests, through `papp.listen`.
+- `network`: phones and other computers may too.
+- Default: nothing can reach it.
+
+### `papp-socket`
+
+```html
+<meta name="papp-socket" content="/var/run/docker.sock">
+```
+
+- `content`: a socket file. The app may talk to the program behind it.
+- Default: none. Not on Windows yet.
+
+### `papp-use`
+
+```html
+<meta name="papp-use" content="camera">
+```
+
+- `content`: one feature. One per tag.
+- Default: all off.
+
+| Feature | What it turns on |
+| --- | --- |
+| `notifications` | `papp.notify` |
+| `sound` | sound; without it, sound is muted |
+| `clipboard` | reading the clipboard; writing needs no tag |
+| `camera`, `microphone`, `screen` | recording them |
+| `location` | where the computer is; not on Linux |
+| `usb`, `serial`, `hid`, `midi`, `bluetooth` | a device the user picks; no Bluetooth on Linux |
+| `background` | running in the tray when its windows close |
+| `login` | starting when the user logs in |
+| `cursor` | where the mouse is, anywhere on screen |
+| `cloud` | reading iCloud, Dropbox and OneDrive files |
+| `broadcasts` | hearing what other apps announce; macOS only |
+| `share` | the system share menu; macOS only |
+
+### `papp-window`
+
+```html
+<meta name="papp-window" size="900x600" title-bar="no" on-top>
+```
+
+- No `content`. Attributes set the window's size and look. One tag.
+- A bare attribute means yes. `="no"` means no.
+- Default: 1200×800, resizable, with a frame and title bar.
+
+| Attribute | What it does |
+| --- | --- |
+| `size="900x600"`, `width`, `height` | size in pixels |
+| `min-width`, `min-height` | smallest size |
+| `resizable="no"` | fixed size |
+| `title-bar="no"` | no title bar; the window buttons sit over the page |
+| `frame="no"` | no frame and no buttons |
+| `transparent` | see-through where the page is |
+| `blur` | blurs what is behind the see-through parts; macOS and Windows 11 |
+| `on-top` | stays above other windows |
+| `all-spaces` | shows on every desktop |
+| `click-through` | clicks pass to the app below; give the user a way back |
+| `private` | hidden from screenshots and screen sharing; macOS and Windows |
+| `dock="no"` | no dock icon or taskbar button; needs `papp-use background` |
+| `mark="no"` | the app icon without Apargon's mark |
+
+### `papp-global-shortcut`
+
+```html
+<meta name="papp-global-shortcut" content="CommandOrControl+Shift+N">
+<meta name="papp-global-shortcut" content="any">
+```
+
+- `content`: a key that reaches the app from any other app. Two modifiers, or one with a function key.
+- `content="any"`: `papp.shortcuts` picks the keys while the app runs.
+- Default: none.
+
+### `papp-system`
+
+```html
+<meta name="papp-system">
+```
+
+- No `content`. The app gets Node and no limits at all.
+- Default: off. Use it only when nothing else works.
+
+### No tag needed
+
+- Read any file, and write in `papp.folder`.
+- Open or save a file the user picks: `papp.pick`, `papp.save`.
+- Keep a key or password: `papp.setSecret`.
+- Print, or make a PDF.
+- Menus, the tray, the dock badge, fullscreen, moving and resizing the window.
+
+Linux needs GNOME on Wayland. On X11, Apargon asks first.

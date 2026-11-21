@@ -102,6 +102,14 @@ function windowPapp(dir: string, permissions: Permissions, scope: Scope, win: Br
     notify: notifyApi(permissions, toFront, pageIcon),
     tray,
     shortcuts: pickShortcuts,
+    // The trampoline started this process with the papp-env names.
+    env(name: string) {
+      if (!permissions.env.includes(name)) {
+        throw new Error(`Apargon: this .papp file may not read ${name}. Ask for it with <meta name="papp-env" content="${name}">.`);
+      }
+
+      return process.env[name] ?? null;
+    },
     // On each load of the page, and when its window closes: nothing the page before it started outlives it.
     async reset() {
       files.reset();

@@ -96,15 +96,13 @@ suite('attributes', () => {
     assert.deepEqual(windowFeatures('on-top, frame=no, size=320x80'), { onTop: true, frame: false, width: 320, height: 80 }));
 });
 
-suite('old tags and forms are refused', () => {
+suite('unknown tags and features are refused', () => {
   test('an unknown tag', () => refuses('<meta name="papp-everything" content="yes">', 'Unknown tag'));
-  test('papp-use with a list', () => refuses('<meta name="papp-use" content="sound, camera">', 'one feature per tag'));
   test('an unknown feature', () => refuses('<meta name="papp-use" content="telepathy">', 'The features are'));
 });
 
 suite('together', () => {
   test('papp-system with other ways out is said twice', () => refuses('<meta name="papp-system"><meta name="papp-net" content="x.com">', 'already allows everything'));
-  test('papp-env needs a program', () => refuses('<meta name="papp-env" content="HOME">', 'runs none'));
   test('a duplicate is refused', () => refuses('<meta name="papp-net" content="x.com"><meta name="papp-net" content="x.com:443">', 'Two tags allow x.com:443'));
   test('dock="no" needs background', () => refuses('<meta name="papp-window" dock="no">', 'background'));
   test('an unfenced program the .papp file could change is refused', () => {

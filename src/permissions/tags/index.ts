@@ -97,7 +97,7 @@ export function declaredPermissions(page: string, html: string, protectedFolders
     const content = attributes.get('content');
 
     if (unknown === 'content') {
-      throw new Error(`${tag}: papp-${kind} takes no content.${kind === 'window' ? ' Its settings are attributes, as in <meta name="papp-window" on-top frame="no" size="320x80">.' : kind === 'listen' ? ' Write <meta name="papp-listen"> for this computer, or <meta name="papp-listen" network> for the network too.' : kind === 'system' ? ' Write <meta name="papp-system">.' : ''}`);
+      throw new Error(`${tag}: papp-${kind} takes no content.`);
     } else if (unknown !== undefined) {
       throw new Error(`${tag}: papp-${kind} has no attribute "${unknown}".${shape.options.length ? ` It takes ${shape.options.join(', ')}.` : ''}`);
     } else if (!name.quoted || (content && !content.quoted)) {
@@ -178,9 +178,7 @@ export function declaredPermissions(page: string, html: string, protectedFolders
 function useName(value: string) {
   const name = value.toLowerCase() as Use;
 
-  if (value.includes(',')) {
-    throw new Error(`Bad papp-use "${value}": one feature per tag. Write a tag for each.`);
-  } else if (!USES.includes(name)) {
+  if (!USES.includes(name)) {
     throw new Error(`Bad papp-use "${value}". The features are ${USES.join(', ')}.`);
   } else if (PERMISSIONS_PLATFORM.refusedUses[name]) {
     throw new Error(PERMISSIONS_PLATFORM.refusedUses[name]);
@@ -199,8 +197,6 @@ function checkTogether(permissions: Permissions, protectedFolders: string[]) {
     throw new Error('papp-system already allows everything: every file, every program and the internet. Remove the other papp-write, papp-run, papp-net, papp-socket, papp-listen and papp-env tags.');
   } else if (writeAll && write.length) {
     throw new Error('papp-write all already allows every folder. Remove the other papp-write tags.');
-  } else if (env.length && !Object.keys(run).length) {
-    throw new Error('papp-env passes a variable to the programs a .papp file runs, and this one runs none. Add papp-run, or remove papp-env.');
   } else if (unfencedRewritable) {
     throw new Error(`The .papp file could change ${unfencedRewritable[1].file}, which papp-run unfenced runs with no limits. Keep it where the .papp file can't write.`);
   } else if (duplicate !== undefined) {

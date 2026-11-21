@@ -31,7 +31,7 @@ export async function startPageProcess({ page, permissions, pageHash }: Approved
     throw err;
   });
   TRAMPOLINE_PLATFORM.startAtLogin(page, permissions.use.includes('login'));
-  // By name, as Windows finds Path for PATH. papp-system gets all of it. Its papp-env names too, where it starts its own programs.
+  // By name, as Windows finds Path for PATH. papp-system gets all of it. Its papp-env names too, for papp.env and its programs.
   const passed = permissions.system ? Object.keys(process.env) : [...PAGE_ENV, ...permissions.env];
   const inherited = passed.filter(name => name in process.env).map(name => [name, process.env[name]]);
   const config: PageConfig = {

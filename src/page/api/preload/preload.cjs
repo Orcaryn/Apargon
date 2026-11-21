@@ -145,6 +145,7 @@ const papp = {
   rm: (file, options) => call('rm', file, options),
   rename: (from, to) => call('rename', from, to),
   trash: file => call('trash', file),
+  env: name => call('env', name),
   run: (program, args, options) => call('run', program, args, options),
   spawn: async (program, args, { cwd, onOutput } = {}) => {
     const id = crypto.randomUUID();

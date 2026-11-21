@@ -118,15 +118,9 @@ export function connectionApi(contents: Pick<WebContents, 'send'>, proxy: string
     dataRead(id: string, count: number) {
       onRead.get(id)?.(count);
     },
-    // Flush the input; cut off a peer that does not end its side within five seconds.
+    // What was written is sent first. Nothing more is read from the peer.
     closeConnection(id: string) {
-      const socket = connections.get(id);
-
-      if (socket) {
-        const timeout = setTimeout(() => socket.destroy(), 5000);
-        socket.once('close', () => clearTimeout(timeout));
-        socket.end();
-      }
+      connections.get(id)?.destroySoon();
     },
     reset() {
       pendingConnections.forEach(controller => controller.abort(new Error('Apargon: the .papp file reloaded while it connected.')));

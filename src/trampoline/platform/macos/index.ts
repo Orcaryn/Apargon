@@ -132,6 +132,8 @@ function pageProfile({ permissions, own, storage, protectedFolders, proxyPort }:
     '(version 1)',
     '(allow default)',
     '(deny network*)',
+    // The resolver's service: Network.framework looks names up through it, off this computer, past "no network".
+    '(deny mach-lookup (global-name "com.apple.dnssd.service"))',
     ...(proxyPort === null ? [] : [`(allow network-outbound (remote tcp4 "localhost:${proxyPort}"))`]),
     ...permissions.sockets.map(socket => `(allow network-outbound (literal ${quote(socket)}))`),
     // Network drives and cloud folders: reading one sends a request. /Volumes is refused whole, so a drive attached later is too, and the local ones attached now are put back.

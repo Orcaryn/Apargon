@@ -35,9 +35,9 @@ const [AF_UNIX, AF_INET, AF_INET6, AF_NETLINK, AF_PACKET, AF_BLUETOOTH, AF_VSOCK
 const [SOCK_STREAM, SOCK_DGRAM, SOCK_SEQPACKET] = [1, 2, 5];
 const SOCK_NONBLOCK_CLOEXEC = 0x800 | 0x80000;
 
-for (const [arch, id, socket, socketpair, connect] of [
-  ['x64', 0xc000003e, 41, 53, 42],
-  ['arm64', 0xc00000b7, 198, 199, 203],
+for (const [arch, id, socket, socketpair, connect, keyring] of [
+  ['x64', 0xc000003e, 41, 53, 42, [248, 249, 250]],
+  ['arm64', 0xc00000b7, 198, 199, 203, [217, 218, 219]],
 ] as const) {
   const filter = socketFilter(arch);
 
@@ -59,9 +59,14 @@ for (const [arch, id, socket, socketpair, connect] of [
     assert.equal(run(filter, { arch: id, nr: socketpair, family: AF_VSOCK, type: SOCK_STREAM }), REFUSE);
   });
 
-  test(`${arch}: every other call runs, io_uring and other architectures don't`, () => {
+  test(`${arch}: every other call runs, io_uring, the keyring and other architectures don't`, () => {
     assert.equal(run(filter, { arch: id, nr: connect }), ALLOW);
     assert.equal(run(filter, { arch: id, nr: 425 }), REFUSE, 'io_uring opens sockets past seccomp');
+
+    for (const nr of keyring) {
+      assert.equal(run(filter, { arch: id, nr }), REFUSE, `keyring call ${nr}: request_key can make the host look up a name`);
+    }
+
     assert.equal(run(filter, { arch: 0x40000003, nr: socket, family: AF_UNIX }), KILL, 'another architecture is killed');
   });
 }

@@ -3,6 +3,13 @@ import { once } from 'events';
 import http from 'http';
 import net from 'net';
 
+// Where a cloud computer's metadata server answers: link-local, AWS's IPv6 one and Alibaba's. The user approved a name, not that server: a name may not lead there. Approved by its address, it may.
+const METADATA = new net.BlockList();
+METADATA.addSubnet('169.254.0.0', 16);
+METADATA.addSubnet('fe80::', 10, 'ipv6');
+METADATA.addAddress('fd00:ec2::254', 'ipv6');
+METADATA.addAddress('100.100.100.200');
+
 // All of a .papp file's network goes through here: its window, its programs, papp.connect. The sandbox has no network and no DNS, so this is its only way out.
 // The name is checked first, and only an allowed name is looked up: even a lookup can leak.
 export async function startProxy(sites: string[]) {
@@ -18,7 +25,15 @@ export async function startProxy(sites: string[]) {
     const name = site.slice(0, site.lastIndexOf(':'));
 
     // localhost is this computer, by the address programs listen on.
-    return name === 'localhost' ? '127.0.0.1' : net.isIP(name) ? name : (await dns.promises.lookup(name)).address;
+    if (name === 'localhost') {
+      return '127.0.0.1';
+    } else if (net.isIP(name)) {
+      return name;
+    }
+
+    const { address, family } = await dns.promises.lookup(name);
+
+    return METADATA.check(address, family === 6 ? 'ipv6' : 'ipv4') ? null : address;
   };
 
   const server = http.createServer(async (request, response) => {

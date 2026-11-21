@@ -29,6 +29,11 @@ export function preparePage({ page, own, proxy, permissions, relays, muxFd }: Pa
     }
   }
 
+  // Chromium looks up no name itself: a lookup leaves through the system's resolver, outside the sandbox. Names go only to the proxy.
+  if (!permissions.system) {
+    app.commandLine.appendSwitch('host-resolver-rules', 'MAP * ~NOTFOUND, EXCLUDE 127.0.0.1');
+  }
+
   // All network goes through the proxy, this computer's too.
   if (proxy) {
     app.commandLine.appendSwitch('proxy-server', proxy);

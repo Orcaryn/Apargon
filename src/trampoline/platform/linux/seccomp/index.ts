@@ -2,6 +2,7 @@
 // - socket(): only the kinds the .papp file needs, and its own empty network holds: internet (the relays on loopback) and netlink (Chromium watches the network with it). No AF_UNIX, so no socket file. No other kind: vsock, for one, ignores the network a sandbox has, and reaches virtual machines and their host.
 // - socketpair(): AF_UNIX only, as Chromium talks to its own processes through them. Not datagram: one of those sends to any socket file by name, with no connect().
 // - io_uring opens sockets past seccomp.
+// - The keyring calls: request_key can make the host's helper look up a name, outside the empty network.
 // A classic BPF program, as bwrap --seccomp reads it: 8 bytes per instruction.
 
 const LOAD = 0x20; // BPF_LD | BPF_W | BPF_ABS
@@ -24,9 +25,10 @@ const NR = 0;
 const ARCH = 4;
 const FAMILY = 16;
 const TYPE = 24;
-const ARCHITECTURES: Partial<Record<string, { arch: number; socket: number; socketpair: number; ioUring: number; x32: boolean }>> = {
-  x64: { arch: 0xc000003e, socket: 41, socketpair: 53, ioUring: 425, x32: true },
-  arm64: { arch: 0xc00000b7, socket: 198, socketpair: 199, ioUring: 425, x32: false },
+// refused: io_uring_setup, then the keyring calls add_key, request_key and keyctl.
+const ARCHITECTURES: Partial<Record<string, { arch: number; socket: number; socketpair: number; refused: number[]; x32: boolean }>> = {
+  x64: { arch: 0xc000003e, socket: 41, socketpair: 53, refused: [425, 248, 249, 250], x32: true },
+  arm64: { arch: 0xc00000b7, socket: 198, socketpair: 199, refused: [425, 217, 218, 219], x32: false },
 };
 
 type Instruction = [number, number, number, number];
@@ -47,8 +49,7 @@ export function socketFilter(architecture = process.arch) {
     [LOAD, 0, 0, NR],
     // x32 calls on x64 carry this bit.
     ...(target.x32 ? [[JUMP_IF_AT_LEAST, 0, 1, 0x40000000] as Instruction, [RETURN, 0, 0, REFUSE] as Instruction] : []),
-    [JUMP_IF, 0, 1, target.ioUring],
-    [RETURN, 0, 0, REFUSE],
+    ...target.refused.flatMap(nr => [[JUMP_IF, 0, 1, nr] as Instruction, [RETURN, 0, 0, REFUSE] as Instruction]),
     // To socket(), or to socketpair(). Any other call runs.
     [JUMP_IF, 2, 0, target.socket],
     [JUMP_IF, 6, 0, target.socketpair],

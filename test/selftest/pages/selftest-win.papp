@@ -33,13 +33,14 @@
 
     const connection = new RTCPeerConnection({ iceServers: [{ urls: 'stun:apg-leak-stun.example.com:3478' }] });
     connection.createDataChannel('x');
+    const gathered = new Promise((done) => connection.addEventListener('icegatheringstatechange', () => connection.iceGatheringState === 'complete' && done()));
     await connection.setLocalDescription(await connection.createOffer());
-    await new Promise((done) => setTimeout(done, 3000));
+    await gathered;
     connection.close();
     await finish('win');
   } catch (err) {
     await finish('win', err);
   }
 
-  setTimeout(() => papp.quit(), 200);
+  papp.quit();
 </script>

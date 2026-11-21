@@ -138,5 +138,5 @@
     await finish('net', err);
   }
 
-  setTimeout(() => papp.quit(), 200);
+  papp.quit();
 </script>

@@ -39,15 +39,26 @@
     result.program_installed_runs = (await papp.run('git', ['--version'])).stdout.startsWith('git version');
     result.program_input = lines((await papp.run('findstr', ['^'], { input: 'piped\n' })).stdout) === 'piped\n';
 
-    // ping fails at once in the sandbox, and PowerShell finds no Start-Sleep there: the waits are Node's, from a folder Apargon grants.
+    // ping fails at once in the sandbox, and PowerShell finds no Start-Sleep there: the wait is Node's, from a folder Apargon grants.
     const started = Date.now();
     const timedOut = await papp.run('node', ['-e', 'setTimeout(Object,30000)'], { timeout: 1000 });
     result.program_timeout = (timedOut.signal === 'SIGTERM' && Date.now() - started < 5000) || { ...timedOut, ms: Date.now() - started };
 
-    const chunks = [];
-    const streamed = await papp.spawn('cmd', ['/d', '/c', 'echo one& node -e setTimeout(Object,1000)& echo two'], { onOutput: (_stream, text) => chunks.push(text) });
-    result.spawn_streams = (await streamed.closed).status === 0 && lines(chunks.join('')) === 'one\ntwo\n';
-    const sleeper = await papp.spawn('node', ['-e', 'setTimeout(Object,30000)']);
+    // Its first line comes back while it still runs: it ends only once its input does.
+    let echoed = '';
+    const { promise: firstOutput, resolve: gotOutput } = Promise.withResolvers();
+    const echo = await papp.spawn('node', ['-e', 'process.stdin.pipe(process.stdout)'], {
+      onOutput: (_stream, text) => {
+        echoed += text;
+        gotOutput();
+      },
+    });
+    await echo.write('one\n');
+    await firstOutput;
+    await echo.write('two\n');
+    await echo.end();
+    result.spawn_streams = (await echo.closed).status === 0 && echoed === 'one\ntwo\n';
+    const sleeper = await papp.spawn('node', ['-e', 'process.stdin.resume()']);
     const killedAt = Date.now();
     sleeper.close();
     const stopped = await sleeper.closed;
@@ -72,5 +83,5 @@
     await finish('win-programs', err);
   }
 
-  setTimeout(() => papp.quit(), 200);
+  papp.quit();
 </script>

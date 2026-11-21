@@ -50,23 +50,15 @@ test('a duplicate id cannot overwrite a listener and leak its port', { timeout: 
 
 test("a request's body goes to the .papp file as a stream, and its answer comes back as one", { timeout: 5000 }, async t => {
   const bodies = new Map<string, Readable>();
-  const asked: IncomingRequest[] = [];
-  const listeners = pageListeners(
-    { listen: 'localhost' },
-    request => asked.push(request),
-    source => (bodies.set('sent', source), 'sent')
-  );
+  const asked = Promise.withResolvers<IncomingRequest>();
+  const listeners = pageListeners({ listen: 'localhost' }, asked.resolve, source => (bodies.set('sent', source), 'sent'));
   t.after(() => listeners.closeAll());
   const url = await listeners.listen('echo', null);
   const answered = fetch(url, { method: 'POST', body: 'x'.repeat(100_000) });
-
-  while (!asked.length) {
-    await new Promise(resolve => setTimeout(resolve, 10));
-  }
-
-  assert.equal(asked[0].body, 'sent');
+  const request = await asked.promise;
+  assert.equal(request.body, 'sent');
   assert.equal((await buffer(bodies.get('sent')!)).length, 100_000);
-  listeners.respond(asked[0].id, 201, { 'content-type': 'text/plain' }, Readable.from(Buffer.alloc(3_000_000, 'y'), { objectMode: false }));
+  listeners.respond(request.id, 201, { 'content-type': 'text/plain' }, Readable.from(Buffer.alloc(3_000_000, 'y'), { objectMode: false }));
   const answer = await answered;
   assert.equal(answer.status, 201);
   assert.equal((await answer.arrayBuffer()).byteLength, 3_000_000);
@@ -86,9 +78,14 @@ test('an answer to a request that is gone gives its stream up', { timeout: 5000 
 
 test('past 32 requests waiting for an answer, the next gets 503', { timeout: 5000 }, async t => {
   const asked: IncomingRequest[] = [];
+  const allAsked = Promise.withResolvers<void>();
   const listeners = pageListeners(
     { listen: 'localhost' },
-    request => asked.push(request),
+    request => {
+      if (asked.push(request) === 32) {
+        allAsked.resolve();
+      }
+    },
     () => 'unread'
   );
   t.after(() => listeners.closeAll());
@@ -97,11 +94,7 @@ test('past 32 requests waiting for an answer, the next gets 503', { timeout: 500
   t.after(() => agent.destroy());
   const status = () => new Promise<number>(resolve => http.get(url, { agent }, response => (response.resume(), resolve(response.statusCode!))));
   const held = Array.from({ length: 32 }, status);
-
-  while (asked.length < 32) {
-    await new Promise(resolve => setTimeout(resolve, 10));
-  }
-
+  await allAsked.promise;
   assert.equal(await status(), 503);
   asked.forEach(({ id }) => listeners.respond(id, 200, {}, Readable.from(Buffer.from('ok'), { objectMode: false })));
   assert.deepEqual(new Set(await Promise.all(held)), new Set([200]));

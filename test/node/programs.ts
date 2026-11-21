@@ -19,6 +19,5 @@ test("a program's output is kept until the .papp file asks for it", { timeout: 1
   const input = page.send(Readable.from([]));
   const { stdout } = programs.start({ id: 'p', name: 'node', args: ['-e', 'process.stdout.write("free")'], cwd: '.', input });
   await exited.promise;
-  await new Promise(resolve => setTimeout(resolve, 300));
   assert.equal((await buffer(page.receive(stdout))).toString(), 'free');
 });

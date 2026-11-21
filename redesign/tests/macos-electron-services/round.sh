@@ -25,6 +25,6 @@ for id in ${(k)pids}; do
 done
 sleep 1
 for id in ${(k)pids}; do echo "onscreen=$(/tmp/machprobe/wins $pids[$id])" >> $OUT/$id.txt; done
-for id in ${(k)pids}; do touch $OUT/$id.quit; done
+kill ${(v)pids}
 wait
 for id in ${(ko)pids}; do printf '%-28s %s\n' $id "$(tr '\n' ' ' < $OUT/$id.txt 2>/dev/null || echo CRASH)"; done

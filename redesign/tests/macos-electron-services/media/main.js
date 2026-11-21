@@ -13,12 +13,6 @@ app.whenReady().then(() => {
     const g = app.getGPUFeatureStatus();
     out('gpu', `compositing:${g.gpu_compositing} webgl:${g.webgl} vdec:${g.video_decode} venc:${g.video_encode}`);
     out('done', 'yes');
-    const t = setInterval(() => {
-      if (fs.existsSync(file.replace('.txt', '.quit'))) {
-        clearInterval(t);
-        app.quit();
-      }
-    }, 100);
   });
   w.loadFile(path.join(__dirname, 'index.html'));
   setTimeout(() => app.exit(1), 30000);

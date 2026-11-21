@@ -1,0 +1,9 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="papp-id" content="5133580c-264a-4f15-bd8b-d75a02cfc833">
+<title>Apargon selftest: must not open</title>
+
+<script type="module">
+  // refuse.ts starts this with network: opened, it says so at once.
+  await papp.writeFile(`${papp.folder}/opened`, '');
+</script>

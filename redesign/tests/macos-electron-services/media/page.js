@@ -18,9 +18,13 @@
   } catch (e) {
     r.webgpu = 'ERR';
   }
-  // Video: frames actually decoded from an H.264 file.
+  // Video: the first frame decoded from an H.264 file, or the player's error. Loaded again, so that neither has passed already.
   const v = document.getElementById('v');
-  await new Promise(res => setTimeout(res, 1500));
+  v.load();
+  await new Promise(res => {
+    v.requestVideoFrameCallback(res);
+    v.onerror = res;
+  });
   const q = v.getVideoPlaybackQuality();
   r.video = `t=${v.currentTime.toFixed(1)} frames=${q.totalVideoFrames} err=${v.error ? v.error.code : 0}`;
   // WebCodecs: hardware decoder and encoder for H.264.

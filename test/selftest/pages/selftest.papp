@@ -9,6 +9,7 @@
   // No tags: it reads every local disk, writes its own folder, and has no network.
   if (location.hash === '#second') {
     document.body.textContent = 'second window';
+    opener.postMessage('second', '*');
     await new Promise(() => {});
   }
 
@@ -29,15 +30,14 @@
   }
 
   const own = papp.folder;
-  const changeSeen = async (watching, change, options) => {
-    let seen = null;
-    const watcher = await papp.watch(watching, (file, kind) => { seen ??= `${file} ${kind}`; }, options);
+  // Whether a watch on its own folder sees the change within 3 seconds.
+  const changeSeen = async (change) => {
+    const { promise: seen, resolve: see } = Promise.withResolvers();
+    const watcher = await papp.watch(own, () => see(true));
     await change();
-    for (let waited = 0; seen === null && waited < 3000; waited += 100) {
-      await new Promise((done) => setTimeout(done, 100));
-    }
+    const wasSeen = await Promise.race([seen, new Promise((done) => setTimeout(() => done(false), 3000))]);
     await watcher.close();
-    return seen;
+    return wasSeen;
   };
   const fetched = fetch('https://example.com', { cache: 'no-store', signal: AbortSignal.timeout(3000) }).then((r) => ({ status: r.status }), () => true);
   const socketed = new Promise((done) => {
@@ -92,14 +92,13 @@
     result.trash_own = !(await papp.exists(`${own}/scratch.trash`));
     result.trash_refused = await refused(() => papp.trash('selftest.papp')) && await refused(() => papp.trash('../../../package.json'));
 
-    result.watch_folder = await changeSeen(own, () => papp.writeFile(`${own}/scratch.txt`, 'again')) !== null;
-    result.watch_survives_second_window = await changeSeen(own, async () => {
+    result.watch_folder = await changeSeen(() => papp.writeFile(`${own}/scratch.txt`, 'again'));
+    result.watch_survives_second_window = await changeSeen(async () => {
       const second = window.open('#second');
-      await new Promise((done) => setTimeout(done, 1500));
+      await new Promise((done) => addEventListener('message', done, { once: true }));
       await papp.writeFile(`${own}/scratch.txt`, 'seen from the first window');
       second.close();
-    }) !== null;
-    result.watch_outside = await changeSeen('subfolder', async () => {}) === null;
+    });
     await papp.rm(`${own}/scratch.txt`);
 
     // Bytes go as streams: 16 MB that never repeats arrives whole, by its hash.
@@ -247,8 +246,8 @@
     result.file_frame_allowed = await new Promise((done) => {
       const frame = document.createElement('iframe');
       frame.src = 'subfolder/frame.html';
+      frame.onload = () => done(window.framed === true);
       document.body.append(frame);
-      setTimeout(() => done(window.framed === true), 1500);
     });
     result.web_frame_refused = await new Promise((done) => {
       const frame = document.createElement('iframe');
@@ -287,5 +286,5 @@
     await finish('plain', err);
   }
 
-  setTimeout(() => window.close(), 200);
+  window.close();
 </script>

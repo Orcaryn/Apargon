@@ -7,7 +7,7 @@ import { finished } from 'stream/promises';
 import type { ContainerRequest } from '@microsoft/mxc-sdk/v1';
 import { HOME, isInside } from '../../../permissions/paths/index.ts';
 import type { Use } from '../../../permissions/tags/index.ts';
-import { APP_ROOT, pageAppId } from '../../../shared/data/index.ts';
+import { APP_ROOT, pageAppId, SECRETS_DATA } from '../../../shared/data/index.ts';
 import type { PageProcess, TrampolinePlatform } from '../index.ts';
 import { startPiped } from '../pipes/index.ts';
 
@@ -62,7 +62,7 @@ export const windows: TrampolinePlatform = {
       // Not where Apargon was started from: MXC would grant that folder.
       workingDirectory: path.dirname(page),
       containment: { type: 'processcontainer', config: { filesystem: { enumeratePaths: [...parents] }, capabilities: permissions.use.flatMap(name => DEVICE_CAPABILITIES[name] ?? []) } },
-      filesystem: { readonlyPaths: [...new Set(readable)], readwritePaths: [...new Set(writable)], deniedPaths: [] },
+      filesystem: { readonlyPaths: [...new Set(readable)], readwritePaths: [...new Set(writable)], deniedPaths: [SECRETS_DATA] },
       // Deny for every .papp file. A proxy on this computer's loopback needs both directions allowed; the firewall rules still let it reach only the proxy.
       network: proxyPort === null ? { egress: { default: 'deny' } } : { egress: { default: 'deny' }, ingress: { default: 'allow', hostLoopback: 'allow' }, runtimeConfig: { networkProxy: `http://127.0.0.1:${proxyPort}` } },
       ui: { disable: false, clipboard: 'all' },

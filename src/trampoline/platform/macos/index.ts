@@ -4,7 +4,7 @@ import { createHash, randomUUID } from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { APP_ROOT } from '../../../shared/data/index.ts';
+import { APP_ROOT, SECRETS_DATA } from '../../../shared/data/index.ts';
 import { REPLY_FD, REQUEST_FD } from '../../../shared/wire/protocol/index.ts';
 import type { Sandbox, TrampolinePlatform } from '../index.ts';
 import { startPiped } from '../pipes/index.ts';
@@ -114,7 +114,7 @@ function markNewFiles(folders: string[], since: string) {
   }
 }
 
-// Seatbelt takes the last rule that matches. Reads: every local disk. Writes: its own folder and papp-write. No network but the proxy. No mounting, no other devices, no opening other apps.
+// Seatbelt takes the last rule that matches. Reads: every local disk, but not the secrets. Writes: its own folder and papp-write. No network but the proxy. No mounting, no other devices, no opening other apps.
 function pageProfile({ permissions, own, storage, protectedFolders, proxyPort }: Sandbox, temp: string) {
   const quote = (file: string) => {
     if (/["\\\p{Cc}]/u.test(file)) {
@@ -139,6 +139,7 @@ function pageProfile({ permissions, own, storage, protectedFolders, proxyPort }:
     // Network drives and cloud folders: reading one sends a request. /Volumes is refused whole, so a drive attached later is too, and the local ones attached now are put back.
     `(deny file-read* ${unread.map(folder => `(subpath ${quote(folder)})`).join(' ')})`,
     `(allow file-read* (literal "/Volumes") ${local.map(folder => `(subpath ${quote(folder)})`).join(' ')})`,
+    `(deny file-read* (subpath ${quote(SECRETS_DATA)}))`,
     // The kernel connects for a mount, past "no network".
     '(deny file-mount)',
     // Another app, or an Apple Event to one, would run outside the sandbox. Receiving them stays: Quit, logout, and a .papp file opened while it runs.

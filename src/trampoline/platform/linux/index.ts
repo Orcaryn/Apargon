@@ -5,7 +5,7 @@ import net from 'net';
 import os from 'os';
 import path from 'path';
 import type { Use } from '../../../permissions/tags/index.ts';
-import { pageAppId } from '../../../shared/data/index.ts';
+import { pageAppId, SECRETS_DATA } from '../../../shared/data/index.ts';
 import { MUX_FD, REPLY_FD, REQUEST_FD, WAYLAND_FD } from '../../../shared/wire/protocol/index.ts';
 import type { Sandbox, TrampolinePlatform } from '../index.ts';
 import { startPiped } from '../pipes/index.ts';
@@ -146,7 +146,7 @@ function connectUnix(file: string) {
   });
 }
 
-// Reads: every local disk. Writes: its own folder and papp-write. No network: the relays are its way to the proxy. No socket file: the filter.
+// Reads: every local disk, but not the secrets. Writes: its own folder and papp-write. No network: the relays are its way to the proxy. No socket file: the filter.
 function bwrapArgs({ permissions, own, protectedFolders }: Sandbox, filtered: boolean) {
   const devicePatterns = Object.entries(DEVICE_FILES).filter(([use]) => permissions.use.includes(use as Use)).map(([, pattern]) => pattern);
   const devices = [
@@ -167,6 +167,7 @@ function bwrapArgs({ permissions, own, protectedFolders }: Sandbox, filtered: bo
     ...remoteMounts().flatMap(folder => ['--tmpfs', folder]),
     // Apargon's data holds the approvals, the .papp files' folders hold each other, and the app is the app: read-only, even under papp-write all.
     ...protectedFolders.filter(folder => fs.existsSync(folder)).flatMap(folder => ['--ro-bind', folder, folder]),
+    ...['--tmpfs', SECRETS_DATA],
     ...[own, ...permissions.write].flatMap(folder => ['--bind', folder, folder]),
     ...(filtered ? ['--seccomp', String(SECCOMP_FD)] : []),
   ];

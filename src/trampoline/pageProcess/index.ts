@@ -3,7 +3,7 @@ import fs from 'fs';
 import type { AddressInfo } from 'net';
 import path from 'path';
 import { PAGE_ENV } from '../../permissions/env/index.ts';
-import { APP_ROOT, OWN_FOLDERS } from '../../shared/data/index.ts';
+import { APP_ROOT, OWN_FOLDERS, SECRETS_DATA } from '../../shared/data/index.ts';
 import { startMux } from '../../shared/wire/mux/index.ts';
 import type { PageConfig } from '../../shared/wire/protocol/index.ts';
 import type { Approved } from '../dialogs/approval/index.ts';
@@ -19,6 +19,8 @@ export async function startPageProcess({ page, permissions, pageHash }: Approved
   const own = path.join(OWN_FOLDERS, permissions.id);
   const storage = path.join(own, '.electron');
   fs.mkdirSync(storage, { recursive: true });
+  // There before the sandbox starts: Linux hides it by mounting an empty folder over it.
+  fs.mkdirSync(SECRETS_DATA, { recursive: true });
   records.change(page, { id: permissions.id });
   // All of its network goes through the proxy. papp-system has no limits, so no proxy either.
   const proxy = permissions.net.length && !permissions.system ? await startProxy(permissions.net) : null;

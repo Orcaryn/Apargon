@@ -217,6 +217,9 @@
     await papp.setSecret('gone', 'x');
     await papp.deleteSecret('gone');
     result.secret_roundtrip = await papp.getSecret('token') === 'kept by selftest.papp' && await papp.getSecret('gone') === null;
+    // Apargon's data is read, but not the folder that now holds the sealed 'token'. Linux shows that folder empty.
+    const apargonData = (await Promise.all(['~/Library/Application Support/apargon', '~/.config/apargon', '~/AppData/Roaming/apargon'].map((folder) => papp.readdir(`${folder}/pages`).then(() => folder, () => null)))).find(Boolean);
+    result.secrets_unreadable = apargonData !== undefined && (await papp.readdir(`${apargonData}/secrets`).catch(() => [])).length === 0;
     // The trampoline's replies, on each OS's pipe: a 4 MB one arrives whole, and answers to calls made at once each reach their own call.
     const large = 'ü✓'.repeat(1024 * 1024) + 'end';
     await papp.setSecret('large', large);

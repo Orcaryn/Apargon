@@ -43,7 +43,7 @@ main() {
       open=apargon
       ;;
     *)
-      echo 'apargon: Apargon runs on macOS and Linux.' >&2
+      echo 'apargon: this script installs on macOS and Linux. On Windows, download the .exe from https://github.com/Orcaryn/Apargon/releases/latest' >&2
       exit 1
       ;;
   esac

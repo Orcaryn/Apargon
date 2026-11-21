@@ -18,8 +18,8 @@ Runs the checks, bumps the version, builds a notarized .dmg and .zip for Apple s
 Intel, a .deb for Linux and an .exe installer for each Windows architecture, commits and tags the version,
 pushes, then publishes a GitHub release with the update feeds installed copies read and
 points the Homebrew cask at it.
-Requires main up to date with its remote, a clean working tree, and committed release notes
-at release-notes/<version>.md.
+Requires main up to date with its remote, and a working tree clean but for the release notes
+at release-notes/<version>.md, which it commits with the version.
 EOF
     exit 1
   fi
@@ -52,7 +52,8 @@ EOF
 
   build
 
-  git commit -m "Release $VERSION" -- package.json
+  git add "release-notes/$VERSION.md"
+  git commit -m "Release $VERSION" -- package.json "release-notes/$VERSION.md"
   trap - EXIT
   git tag -a "v$VERSION" -m "Apargon $VERSION"
 
@@ -64,7 +65,7 @@ refuse_unless_ready() {
   local -a problems=()
 
   [[ "$(git rev-parse --abbrev-ref HEAD)" == main ]] || problems+=("Not on main.")
-  [[ -z "$(git status --porcelain)" ]] || problems+=("The working tree is not clean.")
+  [[ -z "$(git status --porcelain -- . ":!release-notes/$VERSION.md")" ]] || problems+=("The working tree is not clean, apart from release-notes/$VERSION.md.")
   git fetch --quiet --tags || problems+=("Cannot fetch from the remote.")
   [[ -z "$(git rev-list "HEAD..@{u}")" ]] || problems+=("main is behind its remote. Pull first.")
   [[ -z "$(git tag --list "v$VERSION")" ]] || problems+=("Tag v$VERSION already exists.")

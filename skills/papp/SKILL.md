@@ -295,20 +295,20 @@ Put them in `<head>`, before any `<script>`. Each tag lets the app do one more t
 - `content`: one feature. One per tag.
 - Default: all off.
 
-| Feature | What it turns on |
-| --- | --- |
-| `notifications` | `papp.notify` |
-| `sound` | sound; without it, sound is muted |
-| `clipboard` | reading the clipboard; writing needs no tag |
-| `camera`, `microphone`, `screen` | recording them |
-| `location` | where the computer is; not on Linux |
+| Feature                                     | What it turns on                               |
+| ------------------------------------------- | ---------------------------------------------- |
+| `notifications`                             | `papp.notify`                                  |
+| `sound`                                     | sound; without it, sound is muted              |
+| `clipboard`                                 | reading the clipboard; writing needs no tag    |
+| `camera`, `microphone`, `screen`            | recording them                                 |
+| `location`                                  | where the computer is; not on Linux            |
 | `usb`, `serial`, `hid`, `midi`, `bluetooth` | a device the user picks; no Bluetooth on Linux |
-| `background` | running in the tray when its windows close |
-| `login` | starting when the user logs in |
-| `cursor` | where the mouse is, anywhere on screen |
-| `cloud` | reading iCloud, Dropbox and OneDrive files |
-| `broadcasts` | hearing what other apps announce; macOS only |
-| `share` | the system share menu; macOS only |
+| `background`                                | running in the tray when its windows close     |
+| `login`                                     | starting when the user logs in                 |
+| `cursor`                                    | where the mouse is, anywhere on screen         |
+| `cloud`                                     | reading iCloud, Dropbox and OneDrive files     |
+| `broadcasts`                                | hearing what other apps announce; macOS only   |
+| `share`                                     | the system share menu; macOS only              |
 
 ### `papp-window`
 
@@ -320,21 +320,21 @@ Put them in `<head>`, before any `<script>`. Each tag lets the app do one more t
 - A bare attribute means yes. `="no"` means no.
 - Default: 1200×800, resizable, with a frame and title bar.
 
-| Attribute | What it does |
-| --- | --- |
-| `size="900x600"`, `width`, `height` | size in pixels |
-| `min-width`, `min-height` | smallest size |
-| `resizable="no"` | fixed size |
-| `title-bar="no"` | no title bar; the window buttons sit over the page |
-| `frame="no"` | no frame and no buttons |
-| `transparent` | see-through where the page is |
-| `blur` | blurs what is behind the see-through parts; macOS and Windows 11 |
-| `on-top` | stays above other windows |
-| `all-spaces` | shows on every desktop |
-| `click-through` | clicks pass to the app below; give the user a way back |
-| `private` | hidden from screenshots and screen sharing; macOS and Windows |
-| `dock="no"` | no dock icon or taskbar button; needs `papp-use background` |
-| `mark="no"` | the app icon without Apargon's mark |
+| Attribute                           | What it does                                                     |
+| ----------------------------------- | ---------------------------------------------------------------- |
+| `size="900x600"`, `width`, `height` | size in pixels                                                   |
+| `min-width`, `min-height`           | smallest size                                                    |
+| `resizable="no"`                    | fixed size                                                       |
+| `title-bar="no"`                    | no title bar; the window buttons sit over the page               |
+| `frame="no"`                        | no frame and no buttons                                          |
+| `transparent`                       | see-through where the page is                                    |
+| `blur`                              | blurs what is behind the see-through parts; macOS and Windows 11 |
+| `on-top`                            | stays above other windows                                        |
+| `all-spaces`                        | shows on every desktop                                           |
+| `click-through`                     | clicks pass to the app below; give the user a way back           |
+| `private`                           | hidden from screenshots and screen sharing; macOS and Windows    |
+| `dock="no"`                         | no dock icon or taskbar button; needs `papp-use background`      |
+| `mark="no"`                         | the app icon without Apargon's mark                              |
 
 ### `papp-global-shortcut`
 

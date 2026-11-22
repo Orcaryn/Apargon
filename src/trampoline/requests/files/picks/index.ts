@@ -5,13 +5,14 @@ import type { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import { isInside, realPath } from '../../../../permissions/paths/index.ts';
 import { PERMISSIONS_PLATFORM } from '../../../../permissions/platform/index.ts';
+import type { Permissions } from '../../../../permissions/tags/index.ts';
 import type { Pick, PickOptions, SavedFile, Tell, TrampolineEvents } from '../../../../shared/wire/protocol/index.ts';
 import { PROTECTED, TRAMPOLINE_PLATFORM } from '../../../platform/index.ts';
 import { records } from '../../../records/index.ts';
 
 // The user picks in a system dialog: that's a yes, so no tag is needed, and nothing restarts. The place always comes from the dialog, never from the .papp file, and picks are kept beside the approvals, where no .papp file writes.
 // receive: the bytes of a stream the .papp file named. Nothing of a file moves before Apargon asks: a dialog the user cancels costs none.
-export function pickHandlers(page: string, receive: (id: string) => Readable, tell: Tell<TrampolineEvents>) {
+export function pickHandlers(page: string, permissions: Permissions, receive: (id: string) => Readable, tell: Tell<TrampolineEvents>) {
   const remember = (added: Pick[]) => {
     // A new pick of the same place replaces the old one: it is the user's latest yes.
     const picks = [...(records.get(page).picks ?? []).filter(old => !added.some(pick => pick.path === old.path)), ...added];
@@ -96,9 +97,13 @@ export function pickHandlers(page: string, receive: (id: string) => Readable, te
       const picks = records.get(page).picks ?? [];
       const asFile = picks.some(pick => pick.write && !pick.folder && pick.path === target);
       const inFolder = picks.find(pick => pick.write && pick.folder && path.dirname(target) === pick.path);
+      // A file beside an unfenced program can change what it runs, as a library it loads.
+      const unfenced = Object.values(permissions.run).find(program => program.unfenced && path.dirname(program.file) === path.dirname(target));
 
       if (!asFile && !inFolder) {
         throw new Error(`Apargon: this .papp file may not change ${target}. Ask the user to pick it with papp.pick({ write: true }), or name its folder in papp-write.`);
+      } else if (unfenced) {
+        throw new Error(`Apargon: this .papp file may not change ${target}, beside ${unfenced.file}, which papp-run unfenced runs with no limits.`);
       } else if (inFolder) {
         checkPlainName(path.basename(target));
       }

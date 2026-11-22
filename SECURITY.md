@@ -19,19 +19,19 @@ Every hole found was the same: the app asked **another program** to go online fo
 
 - Reading local files is allowed. A read sends nothing.
 - Other programs are blocked: no services for programs, no sockets, no mounts, no devices beyond the basic ones, no typing into other windows.
-- The sandbox has no network and no DNS. All network goes through Apargon's proxy.
+- The sandbox has no network and no DNS. All network goes through Apargon's proxy, except a `papp-socket` path.
 - Chromium in the sandbox looks up no name itself: every name goes to the proxy.
 - At each start the sandboxed process checks that it is offline, and refuses to open if it is not.
 - These tags don't trigger a popup on their own: `papp-id`, `papp-window`, `papp-use` `notifications` and `sound`, a sandboxed `papp-run` program, and `papp-env`. A `.papp` file with only those opens right away, unless another file already used its `papp-id` (or on Linux with X11). Every other tag asks, and when the popup shows, sandboxed `papp-run` and `papp-env` are listed there too.
 - When a different file uses a `papp-id` another `.papp` file already opened with, the popup warns and lists the other file before opening.
 - A yes is kept as a hash of the file's bytes and the popup's lines. A change to either asks again.
-- The lines themselves are kept too, only to mark the new ones when it asks again. The hash alone decides.
+- The lines themselves are kept too, only to mark the new ones when it asks again and say whether it asks for more or less. The hash alone decides.
 - "Trust changes to this file", a checkbox in the popup that asks again, keeps the yes as a hash of the popup's lines alone. Then a change to the file's bytes doesn't ask, and whatever can write the file gets what the user approved: another program, a newer download, a `.papp` file with `papp-write` on its folder.
 - If a `.papp` file changes while open, Apargon stops loading it and asks to restart. A file that opened without a popup, or whose changes you trust, reloads until its popup lines change.
 - A pick in a system dialog is a yes for that file or folder. So is the system print panel.
 - An unknown tag or attribute refuses the file.
 - `papp-listen` runs an HTTP server in the trampoline (for this computer, or your network with `network`) and passes requests and answers to the `.papp` file.
-- `papp-run unfenced` runs the program's real file, past any link, with full access to the computer and the internet. A program the `.papp` file could change is refused.
+- `papp-run unfenced` runs the program's real file, past any link, with full access to the computer and the internet. A program the `.papp` file could change is refused, and so is a write to a pick in the program's folder.
 - `papp-system` turns off the sandbox and gives the `.papp` file full access to the computer and the internet (it skips the proxy and the offline check).
 - Nothing is passed to another app without a tag. A link opens only to a site in `papp-net`.
 - The window never shows a web page, in a frame either.
@@ -46,15 +46,15 @@ Every hole found was the same: the app asked **another program** to go online fo
   - Cloud folders: `~/Library/CloudStorage` and `~/Library/Mobile Documents`, unless `papp-use cloud`.
 - Writes: its own folder, a temp folder of its own and its `papp-write` folders. A `papp-write` touching a cloud folder requires `papp-use cloud`. Under `papp-write all`, network drives and cloud folders stay off-limits (unless `papp-use cloud`). Never Apargon's data, other `.papp` files' own folders or the app.
 - Network: blocked, except the proxy's port over IPv4 TCP and any socket path in `papp-socket`.
-- No mounting (`file-mount`, `system-automount`), no opening other apps (`lsopen`), no Apple Events, no posting broadcasts, no fake input (`hid-control`), no launch jobs (`job-creation`), no writing other apps' settings. Camera and microphone stay off unless `papp-use camera` or `microphone`.
+- No mounting (`file-mount`, `system-automount`), no opening other apps (`lsopen`), no Apple Events, no posting broadcasts, no fake input (`hid-control`), no launch jobs (`job-creation`), no writing settings. Camera and microphone stay off unless `papp-use camera` or `microphone`.
 - No resolver service (`com.apple.dnssd.service`): Network.framework looks names up through it, off the computer. Other lookups go through a socket that `network*` already refuses.
 - Devices: `/dev/null`, `/dev/zero`, `/dev/random`, `/dev/urandom`, `/dev/fd`, `/dev/dtracehelper`, `/dev/autofs_nowait`. With `papp-use serial`, `/dev/cu.*` too. No terminal.
-- System services stay open only for Electron's own process. The `.papp` file runs inside a sandboxed renderer with only `papp.*` (no Node, no native code), and every program it starts runs without those services.
+- System services stay open only for Electron's own process. The `.papp` file runs inside a sandboxed renderer with only `papp.*` (no Node, no native code), and every sandboxed program it starts runs without those services.
 - Programs: the trampoline starts them under the same profile, plus no Mach services (`mach-lookup`, `mach-per-user-lookup`, `mach-cross-domain-lookup`, `mach-register`) except `com.apple.MTLCompilerService` (for local GPU shaders), no IOKit property writes (`iokit-set-properties`), no kernel control sockets (`system-socket`) and no NECP (`necp-client-open`).
 - Files marked as downloaded, so the Mac asks before running them:
   - A new file, a copy, or a file you picked or saved: at once.
-  - What its programs wrote in its own folder and its `papp-write` folders: when the `.papp` file closes.
-  - Not marked: a file that `papp.*` writes over directly, and what programs wrote under `papp-write all`.
+  - Every file changed in its own folder and its `papp-write` folders while it ran, whoever wrote it: when the `.papp` file closes.
+  - Not marked: what was written under `papp-write all`.
 
 ### Linux
 
@@ -77,11 +77,11 @@ Every hole found was the same: the app asked **another program** to go online fo
 - One pipe from the trampoline carries the proxy, the sound server (with `papp-use sound` or `microphone`) and, on X11, the screen. The trampoline connects only what this `.papp` file was given.
 - On X11 the `.papp` file gets `DISPLAY=127.0.0.1:N` and your `XAUTHORITY`. The socket filter stays on.
 - Sound: the trampoline reads every command to the sound server.
-  - Passed: connecting, reading what is there, and its own streams on the default device. Playing needs `sound`, recording needs `microphone`.
+  - Passed: connecting, reading what is there, and its own streams on the default device. Playing needs `sound`, and also passes the volume and mute of any app's stream. Recording needs `microphone`, and also passes the microphone's volume.
   - A stream's properties can't name a device.
   - Anything else, like loading a module or moving a stream, closes the connection.
 - Devices: `/dev/dri` for the GPU. With the matching `papp-use` tag: `/dev/bus/usb` (`usb`), `/dev/hidraw*` (`hid`), `/dev/ttyUSB*` and `/dev/ttyACM*` (`serial`), `/dev/video*` (`camera`), and MIDI's files in `/dev/snd` (`midi`). The sound card's other files aren't there.
-- `papp-socket` turns the socket filter off: it can't allow one path. Every kind of socket opens then, vsock too. It's the "trust me" tag, and the popup says "Control: any program on this computer".
+- `papp-socket` turns the whole seccomp filter off: it can't allow one path. Every kind of socket opens then, vsock too, and so do `io_uring` and the keyring calls. It's the "trust me" tag, and the popup says "Control: any program on this computer".
 - Programs: started inside the same sandbox, with the same limits.
 - `papp-use location` and `papp-use bluetooth` are refused.
 
@@ -91,10 +91,10 @@ Every hole found was the same: the app asked **another program** to go online fo
 - Reads: the folders at the root of every local drive, and each item in your user folder, except Apargon's secrets.
   - Network drives are skipped. OneDrive is skipped and denied unless `papp-use cloud`.
   - A folder made at a root after start isn't readable until the next start.
-- Writes: its own folder, your temp folder and its `papp-write` folders. A `papp-write` inside OneDrive requires `papp-use cloud`. Under `papp-write all`, OneDrive stays skipped unless `papp-use cloud`. Never Apargon's data, other `.papp` files' own folders or the app.
+- Writes: its own folder and its `papp-write` folders. A `papp-write` inside OneDrive requires `papp-use cloud`. Under `papp-write all`, OneDrive stays skipped unless `papp-use cloud`. Never Apargon's data, other `.papp` files' own folders or the app.
 - Network: Apargon tells MXC to refuse every address but the proxy's.
 - Devices: `camera`, `microphone`, `location`, `usb`, `serial`, `hid` and `bluetooth` stay off unless the matching `papp-use` tag asks MXC for them.
-- Files you pick or save through Apargon are marked as downloaded (`Zone.Identifier`, `ZoneId=3`). Files written inside `papp-write` folders are not.
+- Files you pick or save through Apargon are marked as downloaded (`Zone.Identifier`, `ZoneId=3`), except on a drive without file streams, like a USB stick. Nothing else the `.papp` file writes is marked.
 - Programs: started inside the same container, with the same limits.
 - `papp-socket` is refused: not tested yet.
 
@@ -111,11 +111,11 @@ The trampoline is the only part with network. It works for a `.papp` file that m
 
 - It writes only where you picked, or where the tags allow.
 - It checks the file it opened, not just the name: no links, a plain file, still in the folder you picked.
-- It keeps approvals, picks and secrets in its own data. No `.papp` file may write there, or read the secrets. Secrets are encrypted with your system's secure store.
+- It keeps approvals, picks and secrets in its own data. No `.papp` file may write there, or read the secrets. Secrets are encrypted with Electron's `safeStorage`: your system's secure store, or on Linux without one, a fixed key.
 - It keeps approval popups above every `.papp` window, even on-top ones, so a `.papp` file can't cover them.
 - It shows the `.papp` file's output as plain text, never as terminal codes.
 - It refuses a `.papp` file whose name or folder has a line break or another control character.
-- Apargon itself uses the network only for a daily GitHub check for new releases, which you can turn off in the menu.
+- Apargon itself uses the network only to check GitHub for a new release, at most once a day when it starts. On macOS it also downloads and installs the update. You can turn it off in the menu.
 
 ## We tell you, but don't block
 
@@ -127,7 +127,6 @@ The trampoline is the only part with network. It works for a `.papp` file that m
 - On Linux in a virtual machine, `papp-socket` reaches the machine's host through vsock.
 - On Linux, if your default speakers are on the network, `papp-use sound` plays to them.
 - On Linux with X11, once you say yes, the `.papp` file can type into and read your other windows, a terminal's or a browser's too.
-- On Windows, your temp folder is shared with other apps.
 - On Windows, a program can make Windows look up a name, as in `\\<data>.example.com\x`. That's Microsoft's to fix; it has been reported.
 
 ## Not our problem
@@ -141,7 +140,7 @@ The trampoline is the only part with network. It works for a `.papp` file that m
 ## Not tested yet, so not supported
 
 - Linux: a real desktop with a user logged in. CI runs headless GNOME.
-- Linux: the sound filter against a real sound server. It is tested against recorded commands.
+- Linux: the sound filter against a real sound server. It is tested against commands the test builds.
 - Linux on X11: a real desktop, and a GPU. It passes under Xvfb.
 - Linux: a real GPU.
 - macOS: a network drive mounted after start outside `/Volumes`. The `.papp` file can't mount one itself.
@@ -159,7 +158,7 @@ The trampoline is the only part with network. It works for a `.papp` file that m
 
 ## Verification
 
-`pnpm test` runs every check in the real app. `test/selftest/check.ts` lists them. The tests behind the design are in [redesign/tests/](redesign/tests/index.md).
+`pnpm test` runs the Node tests and every check in the real app. `test/selftest/check.ts` lists the app's checks. The tests behind the design are in [redesign/tests/](redesign/tests/index.md).
 
 | Platform | Last verified                                                                                                                                                                                                                                                                          |
 | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

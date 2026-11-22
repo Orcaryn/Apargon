@@ -125,7 +125,7 @@ function pageProfile({ permissions, own, storage, protectedFolders, proxyPort }:
   };
 
   const { remote, local } = mounts();
-  const blockedFolders = [...remote, '/Volumes', '/Network', ...(permissions.use.includes('cloud') ? [] : PERMISSIONS_PLATFORM.cloudFolders(HOME))].map(folder => `(subpath ${quote(folder)})`).join(' ');
+  const offLimits = [...remote, '/Network', ...(permissions.use.includes('cloud') ? [] : PERMISSIONS_PLATFORM.cloudFolders(HOME))].map(folder => `(subpath ${quote(folder)})`).join(' ');
   const localVolumes = local.map(folder => `(subpath ${quote(folder)})`).join(' ');
 
   return [
@@ -136,9 +136,10 @@ function pageProfile({ permissions, own, storage, protectedFolders, proxyPort }:
     '(deny mach-lookup (global-name "com.apple.dnssd.service"))',
     ...(proxyPort === null ? [] : [`(allow network-outbound (remote tcp4 "localhost:${proxyPort}"))`]),
     ...permissions.sockets.map(socket => `(allow network-outbound (literal ${quote(socket)}))`),
-    // Network drives and cloud folders: reading one sends a request. /Volumes is refused whole, so a drive attached later is too, and the local ones attached now are put back.
-    `(deny file-read* ${blockedFolders})`,
+    // Network drives and cloud folders: reading one sends a request. /Volumes is refused whole, so a drive attached later is too, and the local ones attached now are put back. Seatbelt keeps the last rule that matches, so the rest are refused after them.
+    '(deny file-read* (subpath "/Volumes"))',
     `(allow file-read* (literal "/Volumes") ${localVolumes})`,
+    `(deny file-read* ${offLimits})`,
     `(deny file-read* (subpath ${quote(SECRETS_DATA)}))`,
     // The kernel connects for a mount or automount, past "no network".
     '(deny file-mount system-automount)',
@@ -147,7 +148,7 @@ function pageProfile({ permissions, own, storage, protectedFolders, proxyPort }:
     ...(permissions.use.includes('camera') ? [] : ['(deny device-camera)']),
     ...(permissions.use.includes('microphone') ? [] : ['(deny device-microphone)']),
     ...(permissions.writeAll ?
-      [`(deny file-write* ${blockedFolders})`, ...(local.length ? [`(allow file-write* ${localVolumes})`] : [])]
+      ['(deny file-write* (subpath "/Volumes"))', ...(local.length ? [`(allow file-write* ${localVolumes})`] : []), `(deny file-write* ${offLimits})`]
     : ['(deny file-write*)', `(allow file-write* ${[own, storage, temp, ...permissions.write].map(folder => `(subpath ${quote(folder.replace(/[\\/]$/, ''))})`).join(' ')})`]),
     // Apargon's data holds the approvals, the .papp files' folders hold each other, and the app is the app: none is written, even under papp-write all.
     `(deny file-write* ${protectedFolders.map(folder => `(subpath ${quote(folder)})`).join(' ')})`,

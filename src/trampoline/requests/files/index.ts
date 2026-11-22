@@ -13,7 +13,7 @@ import { printPdf } from './print/index.ts';
 export function fileRequests(page: string, permissions: Permissions, own: string, receive: (id: string) => Readable, tell: Tell<TrampolineEvents>) {
   return {
     calls: {
-      ...pickHandlers(page, receive, tell),
+      ...pickHandlers(page, permissions, receive, tell),
       trash: trashHandler(pageAccess(permissions, own, PROTECTED)),
       print: ({ data }: { data: string }) => printPdf(receive(data)),
     },

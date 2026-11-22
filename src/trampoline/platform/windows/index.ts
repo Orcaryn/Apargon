@@ -40,9 +40,8 @@ export const windows: TrampolinePlatform = {
     const { page, permissions, own, protectedFolders, proxyPort } = sandbox;
     const cloudFolders = permissions.use.includes('cloud') ? [] : PERMISSIONS_PLATFORM.cloudFolders(HOME);
     const everything = readableRoots(cloudFolders);
-    const temp = fs.realpathSync(app.getPath('temp'));
     // papp-write all: every folder but Apargon's own and OneDrive (unless papp-use cloud).
-    const writable = [temp, own, ...(permissions.writeAll ? everything.flatMap(root => around(root, [...protectedFolders, ...cloudFolders])) : permissions.write.map(folder => folder.replace(/[\\/]$/, '')))];
+    const writable = [own, ...(permissions.writeAll ? everything.flatMap(root => around(root, [...protectedFolders, ...cloudFolders])) : permissions.write.map(folder => folder.replace(/[\\/]$/, '')))];
     // The sandbox nests no read-only folder in a writable one: each is named once, with the most it needs.
     const readable = [...everything, path.dirname(process.execPath), APP_ROOT].filter(folder => !writable.some(writableFolder => isInside(folder, writableFolder)));
     const granted = [...readable, ...writable];

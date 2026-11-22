@@ -8,8 +8,10 @@ import { startProxy } from '../../src/trampoline/pageProcess/proxy/index.ts';
 const target = http.createServer((_request, response) => response.end('reached')).listen(0, '127.0.0.1');
 await once(target, 'listening');
 const port = (target.address() as net.AddressInfo).port;
-const proxy = await startProxy([`127.0.0.1:${port}`, `localhost:${port}`, 'never.invalid:443']);
+const sites = [`127.0.0.1:${port}`, `localhost:${port}`, 'never.invalid:443'];
+const proxy = await startProxy(sites);
 const proxyPort = (proxy.address() as net.AddressInfo).port;
+sites.push(`localhost:${proxyPort}`, `127.0.0.1:${proxyPort}`);
 after(() => {
   proxy.close();
   target.close();
@@ -29,7 +31,11 @@ test('an allowed site and port is reached', async () => assert.equal(await conne
 test('localhost is reached when named', async () => assert.equal(await connect(`localhost:${port}`), 'HTTP/1.1 200 Connection Established'));
 test('another port of an allowed site is refused', async () => assert.equal(await connect('127.0.0.1:1'), 'HTTP/1.1 403 Forbidden'));
 test('another site is refused', async () => assert.equal(await connect('example.org:443'), 'HTTP/1.1 403 Forbidden'));
-test('the proxy never reaches itself', async () => assert.equal(await connect(`127.0.0.1:${proxyPort}`), 'HTTP/1.1 403 Forbidden'));
+test('the proxy never reaches itself', async () => {
+  assert.equal(await connect(`127.0.0.1:${proxyPort}`), 'HTTP/1.1 403 Forbidden');
+  assert.equal(await connect(`LOCALHOST:${proxyPort}`), 'HTTP/1.1 403 Forbidden');
+  assert.equal(await connect(`localhost.:${proxyPort}`), 'HTTP/1.1 403 Forbidden');
+});
 
 test('plain http goes through only to an allowed site', async () => {
   const get = (url: string) =>

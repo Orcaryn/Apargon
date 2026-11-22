@@ -15,17 +15,13 @@ METADATA.addAddress('100.100.100.200');
 export async function startProxy(sites: string[]) {
   // The address to connect to, or null. Not the proxy's own port: it would call itself without end.
   const addressIfAllowed = async (host: string, port: string) => {
-    const site = `${host.toLowerCase().replace(/\.$/, '')}:${port}`;
+    const name = host.toLowerCase().replace(/\.$/, '');
     const ownPort = (server.address() as net.AddressInfo).port;
 
-    if (!sites.includes(site) || (ownPort === +port && ['localhost', '127.0.0.1'].includes(host))) {
+    if (!sites.includes(`${name}:${port}`) || (ownPort === +port && ['localhost', '127.0.0.1'].includes(name))) {
       return null;
-    }
-
-    const name = site.slice(0, site.lastIndexOf(':'));
-
-    // localhost is this computer, by the address programs listen on.
-    if (name === 'localhost') {
+    } else if (name === 'localhost') {
+      // localhost is this computer, by the address programs listen on.
       return '127.0.0.1';
     } else if (net.isIP(name)) {
       return name;

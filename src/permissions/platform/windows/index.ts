@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import type { PermissionsPlatform } from '../index.ts';
 
 export const windows: PermissionsPlatform = {
@@ -14,6 +16,11 @@ export const windows: PermissionsPlatform = {
   programExtensions: ['.com', '.exe'],
   // Windows looks up the server of a network path itself, outside the sandbox. A colon after the drive names a stream of a file, and Windows drops a name's trailing dots and spaces: either reaches a file under a name the checks do not see.
   refusePath: file => (/^[\\/]{2}/.test(file) || file.includes(':', 2) || /[. ]([\\/]|$)/.test(file) ? `Apargon: Windows reads ${file} as a network path or as another file's name, so Apargon never opens it.` : null),
+  cloudFolders: home =>
+    fs
+      .readdirSync(home, { withFileTypes: true })
+      .filter(entry => !entry.isSymbolicLink() && /^onedrive/i.test(entry.name))
+      .map(entry => path.join(home, entry.name)),
   sameKey: { CommandOrControl: 'Control' },
   typingModifiers: ['AltGr', 'Shift'],
   keyNames: { Control: 'Ctrl', Super: 'Win' },

@@ -192,6 +192,8 @@ function checkTogether(permissions: Permissions, protectedFolders: string[]) {
   const { system, writeAll, write, run, net, sockets, listen, env, use, window } = permissions;
   const unfencedRewritable = Object.entries(run).find(([, program]) => program.unfenced && (writeAll || [...write, ...protectedFolders].some(folder => isInside(program.file, folder))));
   const duplicate = [write, net, sockets, use, env, permissions.shortcuts].map(list => list.find((each, i) => list.indexOf(each) !== i)).find(each => each !== undefined);
+  const cloudFolders = use.includes('cloud') || !write.length ? [] : PERMISSIONS_PLATFORM.cloudFolders(HOME);
+  const cloudWrite = write.find(folder => cloudFolders.some(cloud => isInside(folder, cloud) || isInside(cloud, folder)));
 
   if (system && (writeAll || write.length || Object.keys(run).length || net.length || sockets.length || listen || env.length)) {
     throw new Error('papp-system already allows everything: every file, every program and the internet. Remove the other papp-write, papp-run, papp-net, papp-socket, papp-listen and papp-env tags.');
@@ -203,6 +205,8 @@ function checkTogether(permissions: Permissions, protectedFolders: string[]) {
     throw new Error(`Two tags allow ${duplicate}. Keep one.`);
   } else if (window?.dock === false && !use.includes('background')) {
     throw new Error('papp-window dock="no" leaves no icon to find the .papp file by. Add <meta name="papp-use" content="background">, which keeps its tray icon.');
+  } else if (cloudWrite) {
+    throw new Error(`papp-write ${cloudWrite} touches a cloud folder. Add <meta name="papp-use" content="cloud"> too.`);
   }
 }
 

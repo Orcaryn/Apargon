@@ -24,6 +24,8 @@ export type PermissionsPlatform = {
   programExtensions: string[];
   // A path the OS reads as a server or as another file's name: the reason, or null.
   refusePath(file: string): string | null;
+  // Cloud-synced folders under home, which stay off-limits without papp-use cloud.
+  cloudFolders(home: string): string[];
   // Modifiers that are one key here, the ones held for typing, and how the popup writes each.
   sameKey: Partial<Record<string, string>>;
   typingModifiers: string[];

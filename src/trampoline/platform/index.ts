@@ -12,6 +12,8 @@ import { windows } from './windows/index.ts';
 export type Sandbox = { page: string; permissions: Permissions; own: string; storage: string; protectedFolders: string[]; proxyPort: number | null };
 
 export type TrampolinePlatform = {
+  // The OS name in the update feed's file name.
+  os: 'darwin' | 'linux' | 'win32';
   // Why this computer can't open a .papp file safely, or null. Asked once, at start: old and unsafe systems are refused.
   unsupported(): Promise<string | null>;
   // Whether Apargon can't keep its promise on this desktop, as on X11: then the user is asked first, once per hash of the .papp file's bytes.

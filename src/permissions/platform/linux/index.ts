@@ -15,6 +15,7 @@ export const linux: PermissionsPlatform = {
   programFolders: ['/usr/local/bin'],
   programExtensions: [''],
   refusePath: () => null,
+  cloudFolders: () => [],
   sameKey: { CommandOrControl: 'Control' },
   typingModifiers: ['AltGr', 'Shift'],
   keyNames: { Control: 'Ctrl' },

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { after, suite, test } from 'node:test';
 import { describe } from '../../src/permissions/describe/index.ts';
 import { HOME } from '../../src/permissions/paths/index.ts';
+import { PERMISSIONS_PLATFORM } from '../../src/permissions/platform/index.ts';
 import { declaredPermissions, noPermissions } from '../../src/permissions/tags/index.ts';
 import { site } from '../../src/permissions/tags/site/index.ts';
 import { windowFeatures } from '../../src/permissions/window/index.ts';
@@ -126,6 +127,11 @@ suite('together', () => {
     fs.writeFileSync(path.join(dir, 'notes', 'linked'), '#!/bin/sh\n', { mode: 0o755 });
     fs.symlinkSync(path.join(dir, 'notes', 'linked'), path.join(dir, 'linked'));
     refuses('<meta name="papp-write" content="./notes/"><meta name="papp-run" content="./linked" unfenced>', 'could change');
+  });
+  const cloud = PERMISSIONS_PLATFORM.cloudFolders(HOME).find(folder => fs.statSync(folder, { throwIfNoEntry: false })?.isDirectory());
+  test('papp-write in a cloud folder needs papp-use cloud', { skip: !cloud && 'no cloud folder on this computer' }, () => {
+    refuses(`<meta name="papp-write" content="${cloud}">`, 'papp-use');
+    assert.ok(read(`<meta name="papp-write" content="${cloud}"><meta name="papp-use" content="cloud">`).use.includes('cloud'));
   });
 });
 

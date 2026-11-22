@@ -3,7 +3,7 @@ import { TRAMPOLINE_PLATFORM } from '../platform/index.ts';
 import { updates } from '../records/index.ts';
 
 const REPO = 'Orcaryn/Apargon';
-const FEED = `https://github.com/${REPO}/releases/latest/download/update-${process.platform}-${process.arch}.json`;
+const FEED = `https://github.com/${REPO}/releases/latest/download/update-${TRAMPOLINE_PLATFORM.os}-${process.arch}.json`;
 const DAY = 24 * 60 * 60 * 1000;
 
 export function checkForUpdates() {

@@ -4,6 +4,7 @@ import fs from 'fs';
 import net from 'net';
 import os from 'os';
 import path from 'path';
+import { isInside } from '../../../permissions/paths/index.ts';
 import type { Use } from '../../../permissions/tags/index.ts';
 import { pageAppId, SECRETS_DATA } from '../../../shared/data/index.ts';
 import { MUX_FD, REPLY_FD, REQUEST_FD, WAYLAND_FD } from '../../../shared/wire/protocol/index.ts';
@@ -28,10 +29,11 @@ const X11_DISPLAY = WAYLAND ? null : (/^(?:unix)?:(\d+)(?:\.\d+)?$/.exec(process
 const DEVICE_FILES: Partial<Record<Use, RegExp>> = { hid: /^hidraw\d+$/, serial: /^tty(?:USB|ACM)\d+$/, camera: /^video\d+$/ };
 // MIDI's own files in /dev/snd: the rest play and record past the sound server's filter.
 const MIDI_FILES = /^(?:seq|timer|controlC\d+|midiC\d+D\d+)$/;
-// Disks on this computer, and the kernel's own. Any other kind, a network drive or a FUSE one, is hidden: reading one could send a request.
-const LOCAL_TYPES = new Set('ext2 ext3 ext4 xfs btrfs f2fs vfat exfat ntfs ntfs3 fuseblk hfsplus zfs jfs reiserfs erofs squashfs iso9660 udf tmpfs ramfs devtmpfs devpts proc sysfs cgroup cgroup2 overlay nsfs bpf tracefs debugfs securityfs pstore efivarfs configfs fusectl mqueue hugetlbfs binfmt_misc autofs fuse.portal fuse.snapfuse fuse.lxcfs'.split(' '));
+// Disks on this computer, and the kernel's own. Any other kind, a network drive, autofs or a FUSE one, is hidden: reading one could send a request or wake the host automounter.
+const LOCAL_TYPES = new Set('ext2 ext3 ext4 xfs btrfs f2fs vfat exfat ntfs ntfs3 fuseblk hfsplus zfs jfs reiserfs erofs squashfs iso9660 udf tmpfs ramfs devtmpfs devpts proc sysfs cgroup cgroup2 overlay nsfs bpf tracefs debugfs securityfs pstore efivarfs configfs fusectl mqueue hugetlbfs binfmt_misc fuse.portal fuse.snapfuse fuse.lxcfs'.split(' '));
 
 export const linux: TrampolinePlatform = {
+  os: 'linux',
   async unsupported() {
     const desktops = (process.env.XDG_CURRENT_DESKTOP ?? '').split(':');
 
@@ -173,7 +175,7 @@ function bwrapArgs({ permissions, own, protectedFolders }: Sandbox, filtered: bo
   ];
 }
 
-// Where a disk that is not on this computer is mounted now.
+// Where a disk that is not on this computer is mounted now. Skips /proc, /dev and /tmp, which bwrap replaces whole (e.g. systemd's binfmt_misc autofs in /proc).
 function remoteMounts() {
   return fs
     .readFileSync('/proc/self/mountinfo', 'utf8')
@@ -185,6 +187,6 @@ function remoteMounts() {
       // The kernel writes a space in a name as \040.
       return { where: before.split(' ')[4].replace(/\\(\d{3})/g, (_match, code: string) => String.fromCharCode(parseInt(code, 8))), type: after.split(' ')[0] };
     })
-    .filter(mount => !LOCAL_TYPES.has(mount.type) && fs.statSync(mount.where, { throwIfNoEntry: false })?.isDirectory())
+    .filter(mount => !LOCAL_TYPES.has(mount.type) && !['/proc', '/dev', '/tmp'].some(folder => isInside(mount.where, folder)) && (mount.type === 'autofs' || fs.statSync(mount.where, { throwIfNoEntry: false })?.isDirectory()))
     .map(mount => mount.where);
 }

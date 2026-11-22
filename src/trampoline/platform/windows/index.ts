@@ -6,6 +6,7 @@ import path from 'path';
 import { finished } from 'stream/promises';
 import type { ContainerRequest } from '@microsoft/mxc-sdk/v1';
 import { HOME, isInside } from '../../../permissions/paths/index.ts';
+import { PERMISSIONS_PLATFORM } from '../../../permissions/platform/index.ts';
 import type { Use } from '../../../permissions/tags/index.ts';
 import { APP_ROOT, pageAppId, SECRETS_DATA } from '../../../shared/data/index.ts';
 import type { PageProcess, TrampolinePlatform } from '../index.ts';
@@ -16,6 +17,7 @@ const DEVICE_CAPABILITIES: Partial<Record<Use, string>> = { camera: 'webcam', mi
 const SKIPPED_ROOTS = ['$recycle.bin', 'system volume information', '$windows.~bt', '$windows.~ws', '$winreagent', 'recovery'];
 
 export const windows: TrampolinePlatform = {
+  os: 'win32',
   // Asked of MXC: only its ProcessContainer is tested.
   async unsupported() {
     // The installed app keeps the library beside the others in its resources, outside the archive it can't load one from.
@@ -36,10 +38,11 @@ export const windows: TrampolinePlatform = {
   installed: app.isPackaged ? path.dirname(process.execPath) : null,
   async prepare(sandbox) {
     const { page, permissions, own, protectedFolders, proxyPort } = sandbox;
-    const everything = readableRoots(permissions.use.includes('cloud'));
+    const cloudFolders = permissions.use.includes('cloud') ? [] : PERMISSIONS_PLATFORM.cloudFolders(HOME);
+    const everything = readableRoots(cloudFolders);
     const temp = fs.realpathSync(app.getPath('temp'));
-    // papp-write all: every folder but Apargon's own, which stay read-only.
-    const writable = [temp, own, ...(permissions.writeAll ? everything.flatMap(root => around(root, protectedFolders)) : permissions.write.map(folder => folder.replace(/[\\/]$/, '')))];
+    // papp-write all: every folder but Apargon's own and OneDrive (unless papp-use cloud).
+    const writable = [temp, own, ...(permissions.writeAll ? everything.flatMap(root => around(root, [...protectedFolders, ...cloudFolders])) : permissions.write.map(folder => folder.replace(/[\\/]$/, '')))];
     // The sandbox nests no read-only folder in a writable one: each is named once, with the most it needs.
     const readable = [...everything, path.dirname(process.execPath), APP_ROOT].filter(folder => !writable.some(writableFolder => isInside(folder, writableFolder)));
     const granted = [...readable, ...writable];
@@ -62,7 +65,7 @@ export const windows: TrampolinePlatform = {
       // Not where Apargon was started from: MXC would grant that folder.
       workingDirectory: path.dirname(page),
       containment: { type: 'processcontainer', config: { filesystem: { enumeratePaths: [...parents] }, capabilities: permissions.use.flatMap(name => DEVICE_CAPABILITIES[name] ?? []) } },
-      filesystem: { readonlyPaths: [...new Set(readable)], readwritePaths: [...new Set(writable)], deniedPaths: [SECRETS_DATA] },
+      filesystem: { readonlyPaths: [...new Set(readable)], readwritePaths: [...new Set(writable)], deniedPaths: [SECRETS_DATA, ...cloudFolders] },
       // Deny for every .papp file. A proxy on this computer's loopback needs both directions allowed; the firewall rules still let it reach only the proxy.
       network: proxyPort === null ? { egress: { default: 'deny' } } : { egress: { default: 'deny' }, ingress: { default: 'allow', hostLoopback: 'allow' }, runtimeConfig: { networkProxy: `http://127.0.0.1:${proxyPort}` } },
       ui: { disable: false, clipboard: 'all' },
@@ -106,15 +109,23 @@ export const windows: TrampolinePlatform = {
 };
 
 // What a .papp file reads: the folders at the root of every local drive, and each item in the user's folder. MXC can't grant a drive whole. Network drives are skipped, and OneDrive unless papp-use cloud. A folder made at a root after start isn't readable until the next start.
-function readableRoots(cloud: boolean) {
+function readableRoots(excluded: string[]) {
   const drives = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', "[System.IO.DriveInfo]::GetDrives() | Where-Object { $_.IsReady -and $_.DriveType -in 'Fixed','Removable','CDRom' } | ForEach-Object { $_.RootDirectory.FullName }"], { encoding: 'utf8', windowsHide: true })
     .stdout.split(/\r?\n/)
     .map(line => line.trim())
     .filter(line => /^[A-Z]:\\$/i.test(line));
-  const entries = (folder: string) => fs.readdirSync(folder, { withFileTypes: true }).filter(entry => !entry.isSymbolicLink());
-  const rootFolders = drives.flatMap(drive => entries(drive).filter(entry => entry.isDirectory() && !SKIPPED_ROOTS.includes(entry.name.toLowerCase())).map(entry => path.join(drive, entry.name)));
+  const rootFolders = drives.flatMap(drive =>
+    fs
+      .readdirSync(drive, { withFileTypes: true })
+      .filter(entry => !entry.isSymbolicLink() && entry.isDirectory() && !SKIPPED_ROOTS.includes(entry.name.toLowerCase()))
+      .map(entry => path.join(drive, entry.name))
+  );
   // Not the registry's own files: Windows holds them open, and MXC can't grant one in use.
-  const homeItems = entries(HOME).filter(entry => !/^ntuser\./i.test(entry.name) && (cloud || !/^onedrive/i.test(entry.name))).map(entry => path.join(HOME, entry.name));
+  const homeItems = fs
+    .readdirSync(HOME, { withFileTypes: true })
+    .filter(entry => !entry.isSymbolicLink() && !/^ntuser\./i.test(entry.name))
+    .map(entry => path.join(HOME, entry.name))
+    .filter(item => !excluded.includes(item));
 
   return [...rootFolders, ...homeItems];
 }

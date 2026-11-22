@@ -4,19 +4,19 @@ import { createHash, randomUUID } from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { HOME } from '../../../permissions/paths/index.ts';
+import { PERMISSIONS_PLATFORM } from '../../../permissions/platform/index.ts';
 import { APP_ROOT, SECRETS_DATA } from '../../../shared/data/index.ts';
 import { REPLY_FD, REQUEST_FD } from '../../../shared/wire/protocol/index.ts';
 import type { Sandbox, TrampolinePlatform } from '../index.ts';
 import { startPiped } from '../pipes/index.ts';
 
 const USER_TEMP = fs.realpathSync(app.getPath('temp'));
-const HOME = fs.realpathSync(os.homedir());
-// Where macOS keeps iCloud Drive, Dropbox, OneDrive and Google Drive. Reading an online-only file there downloads it.
-const CLOUD = ['Library/CloudStorage', 'Library/Mobile Documents'].map(name => path.join(HOME, name));
 // The devices every .papp file gets. Any other, like the SMB device or BPF, could reach past "no network".
 const DEVICES = ['(literal "/dev/null")', '(literal "/dev/zero")', '(literal "/dev/random")', '(literal "/dev/urandom")', '(literal "/dev/dtracehelper")', '(subpath "/dev/fd")', '(literal "/dev/autofs_nowait")'];
 
 export const macos: TrampolinePlatform = {
+  os: 'darwin',
   // Electron itself refuses a macOS older than it supports, and every macOS has sandbox-exec.
   unsupported: async () => null,
   unsafeDesktop: false,
@@ -30,7 +30,7 @@ export const macos: TrampolinePlatform = {
     // Files its programs write are marked when it closes: the ones newer than this.
     const started = path.join(temp, '.started');
     fs.writeFileSync(started, '');
-    const programProfile = permissions.system ? null : `${profile}\n; Programs get no services: through one, a program could ask another to go online for it.\n(deny mach-lookup)\n`;
+    const programProfile = permissions.system ? null : `${profile}\n; Programs get no Mach services (except the offline Metal shader compiler), IOKit property writes, kernel control sockets or NECP.\n(deny mach-lookup mach-per-user-lookup mach-cross-domain-lookup mach-register iokit-set-properties system-socket necp-client-open)\n(allow mach-lookup (xpc-service-name "com.apple.MTLCompilerService"))\n`;
 
     return {
       start: (apargon, env) => startPiped([...(profile ? ['/usr/bin/sandbox-exec', '-p', profile] : []), ...apargon], ['ignore', 'pipe', 'pipe', 'pipe', 'ignore', 'pipe'], { ...env, TMPDIR: temp, MAC_CHROMIUM_TMPDIR: temp }),
@@ -125,8 +125,8 @@ function pageProfile({ permissions, own, storage, protectedFolders, proxyPort }:
   };
 
   const { remote, local } = mounts();
-  const unread = [...remote, '/Volumes', '/Network', ...(permissions.use.includes('cloud') ? [] : CLOUD)];
-  const writable = permissions.writeAll ? null : [own, storage, temp, ...permissions.write];
+  const blockedFolders = [...remote, '/Volumes', '/Network', ...(permissions.use.includes('cloud') ? [] : PERMISSIONS_PLATFORM.cloudFolders(HOME))].map(folder => `(subpath ${quote(folder)})`).join(' ');
+  const localVolumes = local.map(folder => `(subpath ${quote(folder)})`).join(' ');
 
   return [
     '(version 1)',
@@ -137,17 +137,18 @@ function pageProfile({ permissions, own, storage, protectedFolders, proxyPort }:
     ...(proxyPort === null ? [] : [`(allow network-outbound (remote tcp4 "localhost:${proxyPort}"))`]),
     ...permissions.sockets.map(socket => `(allow network-outbound (literal ${quote(socket)}))`),
     // Network drives and cloud folders: reading one sends a request. /Volumes is refused whole, so a drive attached later is too, and the local ones attached now are put back.
-    `(deny file-read* ${unread.map(folder => `(subpath ${quote(folder)})`).join(' ')})`,
-    `(allow file-read* (literal "/Volumes") ${local.map(folder => `(subpath ${quote(folder)})`).join(' ')})`,
+    `(deny file-read* ${blockedFolders})`,
+    `(allow file-read* (literal "/Volumes") ${localVolumes})`,
     `(deny file-read* (subpath ${quote(SECRETS_DATA)}))`,
-    // The kernel connects for a mount, past "no network".
-    '(deny file-mount)',
-    // Another app, or an Apple Event to one, would run outside the sandbox. Receiving them stays: Quit, logout, and a .papp file opened while it runs.
-    '(deny lsopen)',
-    '(deny appleevent-send)',
-    '(deny user-preference-write)',
-    '(deny file-write*)',
-    writable ? `(allow file-write* ${writable.map(folder => `(subpath ${quote(folder.replace(/[\\/]$/, ''))})`).join(' ')})` : '(allow file-write*)',
+    // The kernel connects for a mount or automount, past "no network".
+    '(deny file-mount system-automount)',
+    // Another app, an Apple Event, a broadcast, a background job or fake input would reach outside the sandbox. Receiving Apple Events stays: Quit, logout, and a .papp file opened while it runs.
+    '(deny lsopen appleevent-send distributed-notification-post hid-control job-creation user-preference-write)',
+    ...(permissions.use.includes('camera') ? [] : ['(deny device-camera)']),
+    ...(permissions.use.includes('microphone') ? [] : ['(deny device-microphone)']),
+    ...(permissions.writeAll ?
+      [`(deny file-write* ${blockedFolders})`, ...(local.length ? [`(allow file-write* ${localVolumes})`] : [])]
+    : ['(deny file-write*)', `(allow file-write* ${[own, storage, temp, ...permissions.write].map(folder => `(subpath ${quote(folder.replace(/[\\/]$/, ''))})`).join(' ')})`]),
     // Apargon's data holds the approvals, the .papp files' folders hold each other, and the app is the app: none is written, even under papp-write all.
     `(deny file-write* ${protectedFolders.map(folder => `(subpath ${quote(folder)})`).join(' ')})`,
     `(allow file-write* (subpath ${quote(own)}))`,

@@ -16,6 +16,7 @@ const leak = path.join(import.meta.dirname, 'pages', 'results', 'leak');
 execFileSync('swiftc', ['-O', path.join(import.meta.dirname, 'swift', 'leak.swift'), '-o', leak], { stdio: 'inherit' });
 const answers = [
   ...['download', 'webkit'].map(mode => ({ mode, answered: execFileSync(leak, [mode, 'https://example.com/'], { encoding: 'utf8' }).trim() === 'answered' })),
+  { mode: 'sysocket', answered: execFileSync(leak, ['sysocket'], { encoding: 'utf8' }).trim() === 'answered' },
   { mode: 'trust', answered: await trustFetches() },
 ];
 

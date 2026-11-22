@@ -46,6 +46,8 @@
     for (const mode of ['download', 'webkit']) {
       result[`program_${mode}_service_blocked`] = (await ran('leak', [mode, 'https://example.com/'])).out !== 'answered';
     }
+    result.program_sysocket_blocked = (await ran('leak', ['sysocket'])).out === 'blocked';
+    result.program_gpu_works = (await ran('leak', ['gpu'])).out === 'answered';
     result.program_open_url_blocked = (await ran('open', ['https://example.com/'])).status !== 0;
     result.program_open_app_blocked = (await ran('open', ['-g', '-a', 'Finder'])).status !== 0;
     // activate, not a query: AppleScript answers some queries itself, without an event.

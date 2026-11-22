@@ -1,6 +1,6 @@
 {
   "name": "apargon",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "A reverse browser: a .papp file reads your files, writes its own folder, and sends nothing off your computer unless you allow it in a <meta> tag.",
   "type": "module",
   "main": "src/index.ts",

@@ -30,8 +30,9 @@ export async function approve(file: string): Promise<Approved | null> {
   }
 
   const lines = describe(permissions);
+  const sameId = record.id === permissions.id ? [] : records.all().filter(saved => saved.id === permissions.id).map(saved => saved.page);
 
-  if (!lines.length) {
+  if (!lines.length && !sameId.length) {
     return { page, permissions, pageHash: null };
   }
 
@@ -39,16 +40,16 @@ export async function approve(file: string): Promise<Approved | null> {
   const yesToBytes = createHash('sha256').update(pageHash + JSON.stringify(lines)).digest('hex');
   const yesToChanges = createHash('sha256').update(JSON.stringify(lines)).digest('hex');
 
-  if (record.approval?.hash === yesToBytes) {
+  if (!sameId.length && record.approval?.hash === yesToBytes) {
     return { page, permissions, pageHash };
-  } else if (record.approval?.hash === yesToChanges) {
+  } else if (!sameId.length && record.approval?.hash === yesToChanges) {
     return { page, permissions, pageHash: null };
   }
 
   const linesNow = lines.map(line => JSON.stringify(line));
   const linesBefore = record.approval ? record.approval.lines.map(line => JSON.stringify(line)) : linesNow;
   const changed =
-    record.approval === undefined ? null
+    record.approval === undefined || !lines.length ? null
     : linesNow.some(line => !linesBefore.includes(line)) ? 'It asks for more than when you said yes. The new lines are marked.'
     : linesBefore.some(line => !linesNow.includes(line)) ? 'It asks for less than when you said yes.'
     : 'This file changed since you said yes. It asks for the same things.';
@@ -60,6 +61,7 @@ export async function approve(file: string): Promise<Approved | null> {
     source: site === null ? 'Made on this computer' : `Downloaded from ${site === '' ? 'another computer' : site}`,
     downloaded: site !== null,
     changed,
+    sameId: sameId.map(other => ({ name: path.basename(other), detail: other.startsWith(HOME + path.sep) ? `~${other.slice(HOME.length)}` : other })),
     lines: lines.map((line, i) => ({ ...line, isNew: !linesBefore.includes(linesNow[i]) })),
     tags: permissions.tags,
   };
@@ -67,9 +69,9 @@ export async function approve(file: string): Promise<Approved | null> {
 
   if (answer === null) {
     return null;
+  } else if (lines.length) {
+    records.change(page, { approval: { hash: answer === 'trust' ? yesToChanges : yesToBytes, lines } });
   }
 
-  records.change(page, { approval: { hash: answer === 'trust' ? yesToChanges : yesToBytes, lines } });
-
-  return { page, permissions, pageHash: answer === 'trust' ? null : pageHash };
+  return { page, permissions, pageHash: !lines.length || answer === 'trust' ? null : pageHash };
 }

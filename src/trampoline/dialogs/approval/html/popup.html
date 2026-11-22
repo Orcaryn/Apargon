@@ -74,6 +74,7 @@
     border-radius: 9px;
     background: color-mix(in srgb, var(--red) 8%, transparent);
     font-weight: 500;
+    overflow-wrap: anywhere;
   }
   .callout svg {
     flex: none;
@@ -83,6 +84,30 @@
     stroke-width: 1.4;
     stroke-linecap: round;
     stroke-linejoin: round;
+  }
+  .callout.same-id {
+    background: #111111;
+    color: #f5f5f7;
+    -webkit-app-region: no-drag;
+  }
+  @media (prefers-color-scheme: dark) {
+    .callout.same-id {
+      background: #000000;
+      border: 1px solid var(--rule);
+    }
+  }
+  .callout.same-id svg {
+    stroke: var(--yellow);
+  }
+  .callout.same-id .files {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    margin-top: 4px;
+    font-weight: 400;
+  }
+  .callout.same-id [data-detail] {
+    text-decoration-color: #98989d;
   }
   main {
     min-height: 0;
@@ -239,6 +264,16 @@
       <path d="M8 6.6v3M8 11.4h.01" /></svg
     ><span id="changedText"></span>
   </p>
+  <div class="callout same-id" id="sameId" hidden>
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <path d="M8 2.2l6.2 11H1.8z" />
+      <path d="M8 6.6v3M8 11.4h.01" />
+    </svg>
+    <div>
+      <p>This papp-id is already used. Open only if you moved or updated it.</p>
+      <p class="files" id="sameIdFiles"></p>
+    </div>
+  </div>
 </header>
 <main>
   <p class="intro" id="intro"></p>
@@ -265,6 +300,15 @@
     changedText.textContent = popup.changed;
     changed.hidden = popup.changed === null;
     trust.hidden = popup.changed === null;
+    sameId.hidden = !popup.sameId.length;
+
+    for (const file of popup.sameId) {
+      const span = sameIdFiles.appendChild(document.createElement('span'));
+      span.textContent = file.name;
+      withDetail(span, file.detail);
+    }
+
+    document.querySelector('main').hidden = !popup.lines.length;
     intro.textContent = `If you open it, ${popup.name} can:`;
     tagList.textContent = popup.tags.join('\n');
 
@@ -292,21 +336,25 @@
       }
 
       if (line.detail !== null) {
-        text.dataset.detail = line.detail;
-        text.tabIndex = 0;
-        // Placed in the window, not in the list: the list scrolls, and would cut it off.
-        text.onmouseenter = text.onfocus = () => {
-          const box = text.getBoundingClientRect();
-          tip.textContent = line.detail;
-          tip.style.left = `${box.left - 8}px`;
-          tip.style.bottom = `${innerHeight - box.top + 6}px`;
-          tip.hidden = false;
-        };
-        text.onmouseleave = text.onblur = () => (tip.hidden = true);
+        withDetail(text, line.detail);
       }
     }
 
     deny.focus();
+  }
+
+  function withDetail(element, detail) {
+    element.dataset.detail = detail;
+    element.tabIndex = 0;
+    // Placed in the window, not in the list: the list scrolls, and would cut it off.
+    element.onmouseenter = element.onfocus = () => {
+      const box = element.getBoundingClientRect();
+      tip.textContent = detail;
+      tip.style.left = `${box.left - 8}px`;
+      tip.style.bottom = `${innerHeight - box.top + 6}px`;
+      tip.hidden = false;
+    };
+    element.onmouseleave = element.onblur = () => (tip.hidden = true);
   }
 
   const ICONS = {

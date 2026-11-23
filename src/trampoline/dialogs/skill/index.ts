@@ -4,7 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { TEST_ALLOW } from '../../../shared/data/index.ts';
-import { welcomeState } from '../../records/index.ts';
+import { settings } from '../../records/index.ts';
 import { ask } from '../ask/index.ts';
 
 // Inside app.asar, so on macOS the build hash covers it.
@@ -44,12 +44,12 @@ export async function welcome(withPapp: boolean) {
 
   const installed = INSTALLED_SKILLS.every(file => fs.existsSync(file) && fs.readFileSync(file, 'utf8') === skill);
 
-  // Dev test runs, like their popup, answer nothing; the installed app's test run writes welcome.json first (AGENTS.md).
-  if (withPapp && (installed || welcomeState.get().welcomed || TEST_ALLOW)) {
+  // Dev test runs, like their popup, answer nothing; the installed app's test run writes welcomed in settings.json first (AGENTS.md).
+  if (withPapp && (installed || settings.get().welcomed || TEST_ALLOW)) {
     return;
   }
 
-  welcomeState.set({ welcomed: true });
+  settings.set({ welcomed: true });
   const title = withPapp ? 'Welcome to Apargon.' : 'Apargon is ready.';
   const subtitle = withPapp ? null : 'Double-click a .papp file to open it.';
 

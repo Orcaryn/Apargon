@@ -1,20 +1,20 @@
 import { app, autoUpdater, dialog, net, shell } from 'electron';
 import { TRAMPOLINE_PLATFORM } from '../platform/index.ts';
-import { updates } from '../records/index.ts';
+import { settings } from '../records/index.ts';
 
 const REPO = 'Orcaryn/Apargon';
 const FEED = `https://github.com/${REPO}/releases/latest/download/update-${TRAMPOLINE_PLATFORM.os}-${process.arch}.json`;
 const DAY = 24 * 60 * 60 * 1000;
 
 export function checkForUpdates() {
-  const state = updates.get();
+  const state = settings.get();
   const checkedToday = state.checked !== undefined && Date.now() - Date.parse(state.checked) < DAY;
 
   if (!app.isPackaged || state.automatic === false || checkedToday) {
     return;
   }
 
-  updates.set({ checked: new Date().toISOString() });
+  settings.set({ checked: new Date().toISOString() });
 
   if (TRAMPOLINE_PLATFORM.autoUpdates) {
     autoUpdater.on('error', err => console.error(`Apargon: update failed: ${err.message}`));
@@ -27,13 +27,13 @@ export function checkForUpdates() {
 
 async function noticeNewVersion() {
   const { currentRelease: latest } = (await net.fetch(FEED).then(response => response.json())) as { currentRelease: string };
-  const state = updates.get();
+  const state = settings.get();
 
   if (latest === app.getVersion() || latest === state.noticed) {
     return;
   }
 
-  updates.set({ noticed: latest });
+  settings.set({ noticed: latest });
   const { response } = await dialog.showMessageBox({
     type: 'info',
     message: `Apargon ${latest} is out.`,

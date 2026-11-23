@@ -6,18 +6,14 @@ import { pappRecords } from './pappRecords/index.ts';
 
 // Apargon's own JSON files. Only the trampoline reads or writes them, through here.
 
-function jsonFile<T extends object>(name: string) {
-  const file = path.join(DATA, name);
-
-  return {
-    get: () => readJson<T>(file),
-    set: (change: T) => writeJson(file, { ...readJson<T>(file), ...change }),
-  };
-}
+type Settings = { automatic?: boolean; checked?: string; noticed?: string; welcomed?: true };
+const SETTINGS = path.join(DATA, 'settings.json');
 
 export const records = pappRecords(PAPP_RECORDS);
-export const updates = jsonFile<{ automatic?: boolean; checked?: string; noticed?: string }>('update.json');
-export const welcomeState = jsonFile<{ welcomed?: true }>('welcome.json');
+export const settings = {
+  get: () => readJson<Settings>(SETTINGS),
+  set: (change: Settings) => writeJson(SETTINGS, { ...readJson<Settings>(SETTINGS), ...change }),
+};
 
 export function menuState(): MenuState {
   return {
@@ -25,6 +21,6 @@ export function menuState(): MenuState {
       .all()
       .filter(saved => saved.approval || saved.picks)
       .map(saved => saved.path),
-    automaticUpdates: updates.get().automatic !== false,
+    automaticUpdates: settings.get().automatic !== false,
   };
 }

@@ -5,7 +5,7 @@ import { SECRETS_DATA } from '../../../../shared/data/index.ts';
 import type { EventHandlers, PappEvents } from '../../../../shared/wire/protocol/index.ts';
 import { offerSkill } from '../../../dialogs/skill/index.ts';
 import { TRAMPOLINE_PLATFORM } from '../../../platform/index.ts';
-import { menuState, records, updates } from '../../../records/index.ts';
+import { menuState, records, settings } from '../../../records/index.ts';
 
 // What the items of Apargon's menu ask for. refreshMenus: sends every running .papp file's menu what is on disk now.
 export function menuEvents(papp: string, openPapp: (file: string) => void, refreshMenus: () => void): Pick<EventHandlers<PappEvents>, 'open' | 'revoke' | 'automaticUpdates' | 'installSkill'> {
@@ -33,13 +33,13 @@ export function menuEvents(papp: string, openPapp: (file: string) => void, refre
     // Off stops the check for security fixes, so the user confirms.
     automaticUpdates: automatic => {
       if (automatic) {
-        updates.set({ automatic: true });
+        settings.set({ automatic: true });
         refreshMenus();
       } else {
         app.focus({ steal: true });
         void dialog.showMessageBox({ type: 'warning', message: 'Turn off the update check?', detail: 'Apargon will no longer look for security fixes.', buttons: ['Turn Off', 'Cancel'], defaultId: 1, cancelId: 1 }).then(({ response }) => {
           if (response === 0) {
-            updates.set({ automatic: false });
+            settings.set({ automatic: false });
           }
 
           refreshMenus();

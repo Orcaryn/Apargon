@@ -19,7 +19,7 @@ export function menuState(): MenuState {
   return {
     approved: records
       .all()
-      .filter(saved => saved.approval || saved.picks)
+      .filter(saved => saved.approval)
       .map(saved => saved.path),
     automaticUpdates: settings.get().automatic !== false,
   };

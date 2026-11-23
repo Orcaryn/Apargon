@@ -46,7 +46,6 @@ export async function startPappProcess({ papp, permissions, pappHash }: Approved
     muxFd: prepared.muxFd,
     bounds: records.get(papp).window ?? null,
     menu: menuState(),
-    picks: records.get(papp).picks ?? [],
     programsHere: prepared.programsHere,
   };
   const env: NodeJS.ProcessEnv = { ...Object.fromEntries(inherited), APARGON: JSON.stringify(config) };

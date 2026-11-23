@@ -3,7 +3,7 @@ import fs from 'fs';
 import { createRequire } from 'module';
 import os from 'os';
 import path from 'path';
-import './selftest/fixtures.ts';
+import { TEST_PICKS } from './selftest/fixtures.ts';
 
 // pnpm test, on macOS, Linux and Windows: each step in turn, from the repo's root. The first that fails, or still runs after 5 minutes, stops the run.
 // listen.ts serves the ports and socket files a .papp file declares, and ones it does not, while the .papp file runs.
@@ -40,6 +40,6 @@ if (process.platform === 'win32') {
 }
 
 for (const [command, ...args] of steps) {
-  // APARGON_TEST_ALLOW answers the popup, in dev builds only.
-  execFileSync(command, args, { cwd: root, stdio: 'inherit', timeout: 5 * 60 * 1000, env: { ...process.env, APARGON_TEST_ALLOW: '1', APARGON_TEST_ENV: 'passed' } });
+  // APARGON_TEST_ALLOW answers the popups and the pick dialog, in dev builds only.
+  execFileSync(command, args, { cwd: root, stdio: 'inherit', timeout: 5 * 60 * 1000, env: { ...process.env, ...TEST_PICKS, APARGON_TEST_ALLOW: '1', APARGON_TEST_ENV: 'passed' } });
 }

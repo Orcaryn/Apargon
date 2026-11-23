@@ -4,7 +4,7 @@ import { Worker } from 'worker_threads';
 import { pappAccess } from '../permissions/access/index.ts';
 import { describe } from '../permissions/describe/index.ts';
 import { APP_ROOT, OWN_FOLDERS } from '../shared/data/index.ts';
-import type { PappConfig } from '../shared/wire/protocol/index.ts';
+import type { PappConfig, Pick } from '../shared/wire/protocol/index.ts';
 import { BYTES_SCHEME, serveApi } from './api/index.ts';
 import { onTrampolineEvent } from './channel/index.ts';
 import { followFavicon } from './icon/index.ts';
@@ -50,7 +50,7 @@ export function preparePapp({ papp, own, proxy, permissions, relays, muxFd }: Pa
   app.on('window-all-closed', () => app.quit());
 }
 
-export async function startPapp({ papp, permissions, pappHash, own, proxy, bounds, menu, picks: firstPicks, programsHere }: PappConfig) {
+export async function startPapp({ papp, permissions, pappHash, own, proxy, bounds, menu, programsHere }: PappConfig) {
   // The offline check: a .papp file never opens with network it wasn't given. papp-system has the internet.
   if (!permissions.system && !(await PAPP_PLATFORM.isOffline())) {
     const refusal = 'This process can still reach the network, so it is not in the sandbox. Refusing to open the .papp file. If APARGON is set in your environment, unset it.';
@@ -63,8 +63,8 @@ export async function startPapp({ papp, permissions, pappHash, own, proxy, bound
 
   const dir = path.dirname(papp);
   const canChange = pappAccess(permissions, own, [OWN_FOLDERS, ...(app.isPackaged ? [APP_ROOT] : [])]);
-  // The user's picks: as at start, then as the trampoline sends them after each pick.
-  let picks = firstPicks;
+  // The user's picks to write, as the trampoline sends them after each pick.
+  let picks: Pick[] = [];
   const pappSession = createPappSession(papp, permissions, pappHash, canChange);
   const menus = installMenu(papp, describe(permissions), menu);
   const windows = openWindows(papp, permissions, pappSession, bounds);

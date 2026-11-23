@@ -110,18 +110,16 @@ declare const papp: {
   readdir(path: string, options: { stats: true }): Promise<({ name: string } & Stat)[]>;
   stat(path: string): Promise<Stat>;
   exists(path: string): Promise<boolean>;
-  // the user picks in a dialog; no tag needed, nothing restarts; kept, even after a restart; [] if cancelled
-  // write: true lets writeFile and appendFile change that file, or files by plain name right inside that folder: Apargon writes them
+  // the user picks in a dialog; no tag needed, nothing restarts; [] if cancelled
+  // write: true lets writeFile and appendFile change that file, or files by plain name right inside that folder, until the app closes: Apargon writes them; to keep it, use papp-write
   pick(options?: { folder?: boolean; multiple?: boolean; write?: boolean }): Promise<string[]>;
-  // every pick so far
-  picks(): Promise<{ path: string; write: boolean; folder: boolean }[]>;
   // kept by Apargon, sealed with the OS's store; null if none
   getSecret(name: string): Promise<string | null>;
   setSecret(name: string, value: string): Promise<void>;
   deleteSecret(name: string): Promise<void>;
   // needs papp-listen; Apargon listens and passes each request to the handler; url is where to reach it; a free port unless one is given
   listen(options: { port?: number }, handler: (request: Incoming) => Answer | Promise<Answer>): Promise<Handle<null> & { url: string }>;
-  // one file; file is only a suggested name; the user picks; may replace a file, after the OS asks; kept as a pick to write; null if cancelled
+  // one file; file is only a suggested name; the user picks; may replace a file, after the OS asks; writable like a pick to write; null if cancelled
   save(file: string, data: string | Bytes): Promise<string | null>;
   // several files; the user picks a folder; never replaces a file: a taken name becomes "name (2)"; [] if cancelled
   saveAll(files: Record<string, string | Bytes>): Promise<string[]>;

@@ -186,7 +186,6 @@ const papp = {
     };
   },
   pick: options => call('pick', options),
-  picks: () => call('picks'),
   getSecret: name => call('getSecret', name),
   setSecret: (name, value) => call('setSecret', name, value),
   deleteSecret: name => call('deleteSecret', name),

@@ -22,9 +22,9 @@
 
   // A second window that starts two big writes, one through the trampoline, and is closed under them.
   if (location.hash === '#cut') {
-    const [folder] = await papp.picks();
+    const [folder] = await papp.pick({ folder: true, write: true });
     papp.writeFile(`${papp.folder}/cut.bin`, new Uint8Array(32 * 1024 * 1024));
-    papp.writeFile(`${folder.path}/cut.bin`, new Uint8Array(32 * 1024 * 1024));
+    papp.writeFile(`${folder}/cut.bin`, new Uint8Array(32 * 1024 * 1024));
     opener.postMessage('writing', '*');
     await new Promise(() => {});
   }
@@ -147,10 +147,10 @@
     result.odd_names = (await Promise.all(odd.map((name) => papp.readFile(`${own}/${name}`)))).every((content, i) => content === odd[i]);
     await Promise.all([...['data.bin', 'copy.bin', 'edge.bin', 'text.txt', 'appends.txt', ...odd].map((name) => `${own}/${name}`), ...many.map(([file]) => file)].map((file) => papp.rm(file)));
 
-    // Picks: fixtures.ts picked a folder to write in and a file, as the user would. Apargon writes there, not the .papp file.
-    const [folderPick, filePick] = await papp.picks();
-    result.picks_seeded = folderPick.folder && folderPick.write && folderPick.path.endsWith('picked') && !filePick.folder && filePick.path.endsWith('picked-file.txt');
-    const folder = folderPick.path;
+    // Picks: the dialog gives the folder and the file fixtures.ts named, as the user would. Apargon writes there, not the .papp file.
+    const [folder] = await papp.pick({ folder: true, write: true });
+    const [file] = await papp.pick({ write: true });
+    result.picks_given = folder.endsWith('picked') && file.endsWith('picked-file.txt');
     await papp.writeFile(`${folder}/data.bin`, data);
     result.picked_roundtrip = await hash(await papp.readFile(`${folder}/data.bin`, { encoding: null })) === dataHash;
     await papp.writeFile(`${folder}/data.bin`, 'tiny');
@@ -160,11 +160,11 @@
     result.picked_copy = await hash(await papp.readFile(`${folder}/copy.bin`, { encoding: null })) === dataHash;
     // Emptied: the .papp file may not remove what it wrote there.
     await papp.writeFile(`${folder}/copy.bin`, '');
-    await papp.writeFile(filePick.path, 'one');
-    await papp.appendFile(filePick.path, ',two');
+    await papp.writeFile(file, 'one');
+    await papp.appendFile(file, ',two');
     await papp.appendFile(`${folder}/log.txt`, 'one');
     await papp.appendFile(`${folder}/log.txt`, ',two');
-    result.picked_append = await papp.readFile(filePick.path) === 'one,two' && await papp.readFile(`${folder}/log.txt`) === 'one,two';
+    result.picked_append = await papp.readFile(file) === 'one,two' && await papp.readFile(`${folder}/log.txt`) === 'one,two';
     result.picked_names_refused = await refused(() => papp.writeFile(`${folder}/sub/x.txt`, 'x')) && await refused(() => papp.writeFile(`${folder}/.hidden`, 'x')) && await refused(() => papp.rm(`${folder}/copy.bin`));
     // Writes cut short by a closed window leave Apargon writing the next ones, here and through the trampoline.
     const cut = window.open('#cut');

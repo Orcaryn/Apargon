@@ -1,7 +1,6 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { pappRecords } from '../../src/trampoline/records/pappRecords/index.ts';
 
 // Imported by the runner, or executed before the installed app's self-tests. No tests run here.
 const papps = path.join(import.meta.dirname, 'papps');
@@ -10,20 +9,13 @@ fs.mkdirSync(path.join(fs.realpathSync.native(os.homedir()), '.ssh'), { recursiv
 fs.mkdirSync(results, { recursive: true });
 fs.mkdirSync(path.join(papps, 'touched'), { recursive: true });
 
-// selftest.papp's picks, as if the user picked them: a folder to write in, emptied each run, and a file, written into Apargon's records.
+// selftest.papp's picks, as if the user picked them: a folder to write in, emptied each run, and a file. Under APARGON_TEST_ALLOW, Apargon's pick dialog gives these.
 const picked = path.join(results, 'picked');
 const pickedFile = path.join(results, 'picked-file.txt');
 fs.rmSync(picked, { recursive: true, force: true });
 fs.mkdirSync(picked);
 fs.writeFileSync(pickedFile, '');
-const records = path.join(os.homedir(), '.apargon', '.data', 'papps');
-fs.mkdirSync(records, { recursive: true });
-pappRecords(records).change(fs.realpathSync.native(path.join(papps, 'selftest.papp')), {
-  picks: [
-    { path: fs.realpathSync.native(picked), write: true, folder: true },
-    { path: fs.realpathSync.native(pickedFile), write: true, folder: false },
-  ],
-});
+export const TEST_PICKS = { APARGON_TEST_PICK_FOLDER: fs.realpathSync.native(picked), APARGON_TEST_PICK_FILE: fs.realpathSync.native(pickedFile) };
 
 // Each .papp file writes its result in its own folder: the last run's go first.
 const own = path.join(os.homedir(), '.apargon');

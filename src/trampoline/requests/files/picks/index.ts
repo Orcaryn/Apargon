@@ -7,16 +7,17 @@ import { isInside, realPath } from '../../../../permissions/paths/index.ts';
 import { PERMISSIONS_PLATFORM } from '../../../../permissions/platform/index.ts';
 import type { Permissions } from '../../../../permissions/tags/index.ts';
 import type { Pick, PickOptions, SavedFile, Tell, TrampolineEvents } from '../../../../shared/wire/protocol/index.ts';
+import { TEST_ALLOW } from '../../../../shared/data/index.ts';
 import { PROTECTED, TRAMPOLINE_PLATFORM } from '../../../platform/index.ts';
-import { records } from '../../../records/index.ts';
 
-// The user picks in a system dialog: that's a yes, so no tag is needed, and nothing restarts. The place always comes from the dialog, never from the .papp file, and picks are kept beside the approvals, where no .papp file writes.
+// The user picks in a system dialog: that's a yes, so no tag is needed, and nothing restarts. The place always comes from the dialog, never from the .papp file. A pick to write lasts until the .papp file closes: to keep one, the user names its folder in papp-write.
 // receive: the bytes of a stream the .papp file named. Nothing of a file moves before Apargon asks: a dialog the user cancels costs none.
 export function pickHandlers(papp: string, permissions: Permissions, receive: (id: string) => Readable, tell: Tell<TrampolineEvents>) {
+  let picks: Pick[] = [];
+
   const remember = (added: Pick[]) => {
     // A new pick of the same place replaces the old one: it is the user's latest yes.
-    const picks = [...(records.get(papp).picks ?? []).filter(old => !added.some(pick => pick.path === old.path)), ...added];
-    records.change(papp, { picks });
+    picks = [...picks.filter(old => !added.some(pick => pick.path === old.path)), ...added];
     tell('picks', picks);
   };
 
@@ -25,7 +26,10 @@ export function pickHandlers(papp: string, permissions: Permissions, receive: (i
     async pick({ folder, multiple, write }: PickOptions) {
       // This process has no window of its own: without this, its dialog opens behind the .papp file's.
       app.focus({ steal: true });
-      const { canceled, filePaths } = await dialog.showOpenDialog({
+      const { canceled, filePaths } =
+        TEST_ALLOW ?
+          { canceled: false, filePaths: [process.env[folder ? 'APARGON_TEST_PICK_FOLDER' : 'APARGON_TEST_PICK_FILE']!] }
+        : await dialog.showOpenDialog({
         message: `${path.basename(papp)} will ${write ? 'change' : 'read'} ${folder ? `${write ? 'files in ' : ''}the folder` : 'the file'}${multiple ? 's' : ''} you pick.`,
         buttonLabel: write ? 'Allow Changes' : 'Choose',
         properties: [folder ? 'openDirectory' : 'openFile', 'createDirectory', 'noResolveAliases', ...(multiple ? ['multiSelections' as const] : [])],
@@ -36,11 +40,14 @@ export function pickHandlers(papp: string, permissions: Permissions, receive: (i
       }
 
       const picked = filePaths.map(file => realPick(file, write));
-      remember(picked.map(file => ({ path: file, write: write === true, folder: folder === true })));
+
+      if (write) {
+        remember(picked.map(file => ({ path: file, folder })));
+      }
 
       return picked;
     },
-    // The .papp file suggests a name, the user picks the name and folder, and the dialog asks before it replaces one. Kept as a pick to write.
+    // The .papp file suggests a name, the user picks the name and folder, and the dialog asks before it replaces one. Kept as a pick to write, until the .papp file closes.
     async save({ file: suggested, data }: { file: string; data: string }) {
       app.focus({ steal: true });
       const { canceled, filePath } = await dialog.showSaveDialog({ defaultPath: path.join(app.getPath('downloads'), path.basename(suggested)), properties: ['createDirectory', 'showOverwriteConfirmation'] });
@@ -51,7 +58,7 @@ export function pickHandlers(papp: string, permissions: Permissions, receive: (i
 
       const file = path.join(realPick(path.dirname(filePath), true), path.basename(filePath));
       await writeChecked(file, receive(data), false, path.dirname(file));
-      remember([{ path: file, write: true, folder: false }]);
+      remember([{ path: file, folder: false }]);
 
       return file;
     },
@@ -94,9 +101,8 @@ export function pickHandlers(papp: string, permissions: Permissions, receive: (i
     // Writes for the .papp file where the user picked: a picked file, or a plain name in a picked folder.
     async writePicked({ file, data, append }: { file: string; data: string; append: boolean }) {
       const target = path.resolve(file);
-      const picks = records.get(papp).picks ?? [];
-      const asFile = picks.some(pick => pick.write && !pick.folder && pick.path === target);
-      const inFolder = picks.find(pick => pick.write && pick.folder && path.dirname(target) === pick.path);
+      const asFile = picks.some(pick => !pick.folder && pick.path === target);
+      const inFolder = picks.find(pick => pick.folder && path.dirname(target) === pick.path);
       // A file beside an unfenced program can change what it runs, as a library it loads.
       const unfenced = Object.values(permissions.run).find(program => program.unfenced && path.dirname(program.file) === path.dirname(target));
 

@@ -10,11 +10,11 @@ import { callTrampoline, trampolineBytes } from '../../channel/index.ts';
 import { PAPP_PLATFORM } from '../../platform/index.ts';
 import type { Scope } from '../scope/index.ts';
 
-// picks: the user's picks, as the trampoline last sent them.
+// picks: the user's picks to write, as the trampoline last sent them.
 export function fileApi(dir: string, { where, entry, canChange, needChange }: Scope, win: BrowserWindow, picks: () => Pick[]) {
   const watchers = new Map<string, fs.FSWatcher>();
   // Apargon writes where the user picked: a picked file, or a plain name in a picked folder. The .papp file may not write there itself.
-  const picked = (file: string) => !canChange(file) && picks().some(pick => pick.write && (pick.folder ? path.dirname(file) === pick.path : pick.path === file));
+  const picked = (file: string) => !canChange(file) && picks().some(pick => (pick.folder ? path.dirname(file) === pick.path : pick.path === file));
 
   // data: the bytes as they come. Neither this process nor the trampoline holds the file whole.
   const write = async (file: string, data: Readable, append: boolean) => {
@@ -175,7 +175,7 @@ export function fileApi(dir: string, { where, entry, canChange, needChange }: Sc
 
       return callTrampoline('saveAll', { files: files.map(({ name }, index) => ({ name, data: trampolineBytes.send(parts[index]) })) }).finally(() => parts.forEach(part => part.destroy()));
     },
-    // A suggestion is only a name. The file the user picks is kept as a pick to write.
+    // A suggestion is only a name. The file the user picks is a pick to write, until the .papp file closes.
     save(body: Readable, file: string) {
       return callTrampoline('save', { file, data: trampolineBytes.send(body) });
     },
@@ -183,7 +183,6 @@ export function fileApi(dir: string, { where, entry, canChange, needChange }: Sc
     pick({ folder = false, multiple = false, write: writable = false }: { folder?: boolean; multiple?: boolean; write?: boolean } = {}) {
       return callTrampoline('pick', { folder, multiple, write: writable });
     },
-    picks,
     reset() {
       watchers.forEach(watcher => watcher.close());
       watchers.clear();

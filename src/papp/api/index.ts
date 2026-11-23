@@ -18,7 +18,7 @@ import { pappScope, type Scope } from './scope/index.ts';
 // Bytes between a window and this process go as requests to this scheme, not as messages: Chromium streams a request's body and its answer, and makes the faster side wait. Registered before the app is ready.
 export const BYTES_SCHEME = 'papp-bytes';
 
-// What every window of the .papp file shares: the menu bar, the icon as drawn, the proxy, if the .papp file has network, the shortcuts it picked, and the user's picks.
+// What every window of the .papp file shares: the menu bar, the icon as drawn, the proxy, if the .papp file has network, the shortcuts it picked, and the user's picks to write.
 type PappWide = { menus: PappMenus; toFront: () => void; pappIcon: () => NativeImage | null; proxy: string | null; pickShortcuts: (keys: string[]) => void; picks: () => Pick[]; programsHere: boolean };
 
 // Every .papp file gets papp, a papp-system one too.

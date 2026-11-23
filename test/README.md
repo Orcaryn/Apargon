@@ -1,6 +1,6 @@
 # Tests
 
-`pnpm test` runs `run.ts`, on macOS, Linux and Windows: the scripts in this order, the `.papp` files after `daemons.ts`, and `check.ts` last. A step that fails, or still runs after 5 minutes, stops the run. `fixtures.ts` makes `~/.ssh` if missing, clears the last run's results, and picks a folder and a file for `selftest.papp` in Apargon's records, as the user would in the dialog.
+`pnpm test` runs `run.ts`, on macOS, Linux and Windows: the scripts in this order, the `.papp` files after `daemons.ts`, and `check.ts` last. A step that fails, or still runs after 5 minutes, stops the run. `fixtures.ts` makes `~/.ssh` if missing, clears the last run's results, and names a folder and a file that Apargon's pick dialog gives `selftest.papp` under `APARGON_TEST_ALLOW`.
 
 ## `node/`
 

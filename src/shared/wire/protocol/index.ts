@@ -10,9 +10,10 @@ export const WAYLAND_FD = 7;
 
 export type Relay = { port: number; target: string };
 export type MenuState = { approved: string[]; automaticUpdates: boolean };
-export type Pick = { path: string; write: boolean; folder: boolean };
+// A pick to write: a file, or a folder to write in by plain names.
+export type Pick = { path: string; folder: boolean };
 // pappHash: null for a file whose tags ask nothing, or whose changes the user trusts. programsHere: whether the papp process starts its fenced programs inside its own sandbox, or the trampoline does.
-export type PappConfig = { papp: string; permissions: Permissions; pappHash: string | null; own: string; proxy: string | null; relays: Relay[]; requestFd: number; replyFd: number; muxFd: number | null; bounds: Rectangle | null; menu: MenuState; picks: Pick[]; programsHere: boolean };
+export type PappConfig = { papp: string; permissions: Permissions; pappHash: string | null; own: string; proxy: string | null; relays: Relay[]; requestFd: number; replyFd: number; muxFd: number | null; bounds: Rectangle | null; menu: MenuState; programsHere: boolean };
 export type TrayItem = { separator: true } | { label: string; id: string; checked?: boolean; radio?: boolean } | { label: string; submenu: TrayItem[] };
 // Raw pixels, decoded and sized in the papp process: the trampoline, which has network, decodes no image a .papp file sends.
 export type TrayIcon = { width: number; height: number; pixels: string };

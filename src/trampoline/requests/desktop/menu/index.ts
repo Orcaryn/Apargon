@@ -11,7 +11,7 @@ import { menuState, records, settings } from '../../../records/index.ts';
 export function menuEvents(papp: string, openPapp: (file: string) => void, refreshMenus: () => void): Pick<EventHandlers<PappEvents>, 'open' | 'revoke' | 'automaticUpdates' | 'installSkill'> {
   return {
     open: openPapp,
-    // Only approved files, as the menu lists them. Forgetting another file takes its picks and secrets too, so the user confirms.
+    // Only approved files, as the menu lists them. Forgetting another file takes its secrets too, so the user confirms.
     revoke: papps => {
       const { approved } = menuState();
       const revoked = papps.filter(other => approved.includes(other));
@@ -50,7 +50,7 @@ export function menuEvents(papp: string, openPapp: (file: string) => void, refre
   };
 }
 
-// Everything the user gave the .papp file goes with its yes: the picks and the secrets too.
+// Everything the user gave the .papp file goes with its yes: the secrets too.
 function revoke(papps: string[]) {
   for (const papp of papps) {
     const { id } = records.get(papp);
@@ -60,6 +60,6 @@ function revoke(papps: string[]) {
       fs.rmSync(path.join(SECRETS_DATA, `${id}.json`), { force: true });
     }
 
-    records.change(papp, { approval: undefined, x11Approval: undefined, picks: undefined, id: undefined });
+    records.change(papp, { approval: undefined, x11Approval: undefined, id: undefined });
   }
 }

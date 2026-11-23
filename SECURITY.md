@@ -109,9 +109,9 @@ Every hole found was the same: the app asked **another program** to go online fo
 
 The trampoline is the only part with network. It works for a `.papp` file that may be hostile. So:
 
-- It writes only where you picked, or where the tags allow.
+- It writes only where you picked, until the `.papp` file closes, or where the tags allow.
 - It checks the file it opened, not just the name: no links, a plain file, still in the folder you picked.
-- It keeps approvals, picks and secrets in its own data. No `.papp` file may write there, or read the secrets. Secrets are encrypted with Electron's `safeStorage`: your system's secure store, or on Linux without one, a fixed key.
+- It keeps approvals and secrets in its own data. No `.papp` file may write there, or read the secrets. Secrets are encrypted with Electron's `safeStorage`: your system's secure store, or on Linux without one, a fixed key.
 - It keeps approval popups above every `.papp` window, even on-top ones, so a `.papp` file can't cover them.
 - It shows the `.papp` file's output as plain text, never as terminal codes.
 - It refuses a `.papp` file whose name or folder has a line break or another control character.

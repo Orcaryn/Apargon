@@ -3,7 +3,6 @@ import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import type { Line } from '../../../permissions/describe/index.ts';
-import type { Pick } from '../../../shared/wire/protocol/index.ts';
 import { readJson, writeJson } from '../../json/index.ts';
 
 // No Electron here: the Node tests load it.
@@ -14,8 +13,6 @@ type PappRecord = {
   approval?: { hash: string; lines: Line[] };
   // The hash of the bytes the user opened on X11, where Apargon can't keep its promise. Any change asks again.
   x11Approval?: string;
-  // What the user picked in a dialog: to read, to write, or a folder to write in.
-  picks?: Pick[];
   // Where the user left the window.
   window?: Rectangle;
   // Its papp-id, as last opened: its secrets are kept by it.

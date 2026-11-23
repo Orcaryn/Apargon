@@ -21,7 +21,6 @@ const config = {
   muxFd: null,
   bounds: null,
   menu: { approved: [], automaticUpdates: false },
-  picks: [],
   programsHere: true,
 };
 const child = spawn(electron, ['.', papp], { env: { ...process.env, APARGON: JSON.stringify(config) }, stdio: ['inherit', 'inherit', 'pipe'] });

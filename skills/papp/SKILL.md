@@ -33,6 +33,8 @@ Further reading and code: [https://github.com/Orcaryn/Apargon](https://github.co
 <textarea id="text"></textarea>
 <button id="save">Save</button>
 <script type="module">
+  const text = document.getElementById('text');
+  const save = document.getElementById('save');
   const file = `${papp.folder}/notes.txt`;
   text.value = (await papp.exists(file)) ? await papp.readFile(file) : '';
   save.onclick = () => papp.writeFile(file, text.value);
@@ -230,6 +232,7 @@ Put them in `<head>`, before any `<script>`. Each tag lets the app do one more t
 - `content`: a folder the app may change files in. One per tag.
 - `all`, instead of `content`: the app may change any file.
 - Default: it changes only files in `papp.folder` and files the user picks.
+- Prefer a path from the .papp file's folder (`../Archive/`) or a `~/` path over a full one.
 
 ### `papp-net`
 

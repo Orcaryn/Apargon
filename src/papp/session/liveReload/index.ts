@@ -5,7 +5,8 @@ import { isInside } from '../../../permissions/paths/index.ts';
 // Live reload: an edit to a .papp, .css or .js file the .papp file loaded reloads its windows; a file the .papp file may change itself does not, or every save would reload it.
 // Folders are watched, not files: an editor that saves by replacing a file would end a watch on it.
 export function liveReload(papp: string, canChange: (file: string) => boolean, reload: () => void) {
-  const loaded = new Set<string>();
+  // A watch also fires when only a file's attributes change, such as its Finder icon or tags. Those keep the modified time.
+  const modifiedAtLoad = new Map<string, number | undefined>();
   const watched = new Set<string>();
   let pendingReload: NodeJS.Timeout | undefined = undefined;
 
@@ -20,7 +21,7 @@ export function liveReload(papp: string, canChange: (file: string) => boolean, r
       return;
     }
 
-    loaded.add(file);
+    modifiedAtLoad.set(file, fs.statSync(file, { throwIfNoEntry: false })?.mtimeMs);
     let folder = path.dirname(file);
 
     // A dependency may be missing with its parent: watch the nearest existing ancestor.
@@ -36,7 +37,7 @@ export function liveReload(papp: string, canChange: (file: string) => boolean, r
 
     try {
       fs.watch(folder, (_event, name) => {
-        if (name && [...loaded].some(dependency => isInside(dependency, path.join(folder, name)))) {
+        if (name && [...modifiedAtLoad].some(([dependency, modified]) => isInside(dependency, path.join(folder, name)) && fs.statSync(dependency, { throwIfNoEntry: false })?.mtimeMs !== modified)) {
           clearTimeout(pendingReload);
           pendingReload = setTimeout(reload, 100);
         }

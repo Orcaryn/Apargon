@@ -15,7 +15,7 @@ export type PermissionsPlatform = {
   allSocketsLine: string | null;
   // Passed to programs beside the shared list, and to the .papp file's process too.
   programEnv: string[];
-  pageEnv: string[];
+  pappEnv: string[];
   // What the Dock is called here.
   dock: string;
   // Folders searched for a program by name, after PATH.

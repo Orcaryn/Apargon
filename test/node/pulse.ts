@@ -47,20 +47,20 @@ async function send(use: Use[], chunks: Buffer[]) {
   const received: Buffer[] = [];
   const server = net.createServer(socket => socket.on('data', bytes => received.push(bytes)));
   await once(server.listen(0, '127.0.0.1'), 'listening');
-  const page = filterSound(net.connect((server.address() as net.AddressInfo).port, '127.0.0.1'), use);
-  const closed = new Promise(resolve => page.on('close', resolve));
+  const papp = filterSound(net.connect((server.address() as net.AddressInfo).port, '127.0.0.1'), use);
+  const closed = new Promise(resolve => papp.on('close', resolve));
   // Read, as the mux does: the stream closes once both sides end.
-  page.resume();
+  papp.resume();
 
   for (const chunk of chunks) {
-    page.write(chunk);
+    papp.write(chunk);
   }
 
-  page.end();
+  papp.end();
   await closed;
   server.close();
 
-  return { received: Buffer.concat(received), refused: page.errored !== null };
+  return { received: Buffer.concat(received), refused: papp.errored !== null };
 }
 
 test('connecting and reading pass, split across writes', async () => {

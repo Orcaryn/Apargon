@@ -3,7 +3,7 @@ import { once } from 'node:events';
 import http from 'node:http';
 import net from 'node:net';
 import { after, test } from 'node:test';
-import { startProxy } from '../../src/trampoline/pageProcess/proxy/index.ts';
+import { startProxy } from '../../src/trampoline/pappProcess/proxy/index.ts';
 
 const target = http.createServer((_request, response) => response.end('reached')).listen(0, '127.0.0.1');
 await once(target, 'listening');

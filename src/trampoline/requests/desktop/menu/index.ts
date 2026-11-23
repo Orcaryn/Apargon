@@ -2,21 +2,21 @@ import { app, dialog } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import { SECRETS_DATA } from '../../../../shared/data/index.ts';
-import type { EventHandlers, PageEvents } from '../../../../shared/wire/protocol/index.ts';
+import type { EventHandlers, PappEvents } from '../../../../shared/wire/protocol/index.ts';
 import { offerSkill } from '../../../dialogs/skill/index.ts';
 import { TRAMPOLINE_PLATFORM } from '../../../platform/index.ts';
 import { menuState, records, updates } from '../../../records/index.ts';
 
 // What the items of Apargon's menu ask for. refreshMenus: sends every running .papp file's menu what is on disk now.
-export function menuEvents(page: string, openPage: (file: string) => void, refreshMenus: () => void): Pick<EventHandlers<PageEvents>, 'open' | 'revoke' | 'automaticUpdates' | 'installSkill'> {
+export function menuEvents(papp: string, openPapp: (file: string) => void, refreshMenus: () => void): Pick<EventHandlers<PappEvents>, 'open' | 'revoke' | 'automaticUpdates' | 'installSkill'> {
   return {
-    open: openPage,
+    open: openPapp,
     // Only approved files, as the menu lists them. Forgetting another file takes its picks and secrets too, so the user confirms.
-    revoke: pages => {
+    revoke: papps => {
       const { approved } = menuState();
-      const revoked = pages.filter(other => approved.includes(other));
+      const revoked = papps.filter(other => approved.includes(other));
 
-      if (revoked.every(other => other === page)) {
+      if (revoked.every(other => other === papp)) {
         revoke(revoked);
         refreshMenus();
       } else {
@@ -51,15 +51,15 @@ export function menuEvents(page: string, openPage: (file: string) => void, refre
 }
 
 // Everything the user gave the .papp file goes with its yes: the picks and the secrets too.
-function revoke(pages: string[]) {
-  for (const page of pages) {
-    const { id } = records.get(page);
-    TRAMPOLINE_PLATFORM.startAtLogin(page, false);
+function revoke(papps: string[]) {
+  for (const papp of papps) {
+    const { id } = records.get(papp);
+    TRAMPOLINE_PLATFORM.startAtLogin(papp, false);
 
     if (id) {
       fs.rmSync(path.join(SECRETS_DATA, `${id}.json`), { force: true });
     }
 
-    records.change(page, { approval: undefined, unsafeDesktop: undefined, picks: undefined, id: undefined });
+    records.change(papp, { approval: undefined, unsafeDesktop: undefined, picks: undefined, id: undefined });
   }
 }

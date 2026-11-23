@@ -5,7 +5,7 @@ import type { Permissions } from '../../../../permissions/tags/index.ts';
 import { NOTICE_ICON_SIDE, showNotice } from '../../../../shared/notice/index.ts';
 import type { Notice, Tell, TrampolineEvents } from '../../../../shared/wire/protocol/index.ts';
 
-// Where the page's process can't show a notification itself, the trampoline does.
+// Where the papp process can't show a notification itself, the trampoline does.
 export function notifyHandler(permissions: Permissions, receive: (id: string) => Readable, tell: Tell<TrampolineEvents>) {
   return async ({ title, body, buttons, icon }: Notice) => {
     if (!permissions.use.includes('notifications')) {

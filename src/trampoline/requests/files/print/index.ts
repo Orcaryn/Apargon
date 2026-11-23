@@ -5,7 +5,7 @@ import type { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import { TEST_ALLOW } from '../../../../shared/data/index.ts';
 
-// The page makes a PDF; the trampoline, which is outside the sandbox, shows the system print panel on it. The sandbox itself never reaches the print server. The panel is the user's yes, as a save dialog is: so printing needs no tag.
+// The papp process makes a PDF; the trampoline, which is outside the sandbox, shows the system print panel on it. The sandbox itself never reaches the print server. The panel is the user's yes, as a save dialog is: so printing needs no tag.
 export async function printPdf(data: Readable): Promise<boolean> {
   if (TEST_ALLOW) {
     return true;

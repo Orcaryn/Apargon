@@ -8,12 +8,12 @@ export const APP_ROOT = app.isPackaged ? process.resourcesPath : app.getAppPath(
 export const TEST_ALLOW = !app.isPackaged && process.env.APARGON_TEST_ALLOW === '1';
 // Apargon's own data: the approvals, the picks, the window places and the secrets. No .papp file may write here.
 export const DATA = app.getPath('userData');
-export const PAGE_RECORDS = path.join(DATA, 'pages');
+export const PAPP_RECORDS = path.join(DATA, 'papps');
 export const SECRETS_DATA = path.join(DATA, 'secrets');
 // Each .papp file's own folder is in here, the one place it writes without a tag.
 export const OWN_FOLDERS = path.join(os.homedir(), '.apargon');
 
 // Named after the path: the same app after an edit, another for a copy.
-export function pageAppId(page: string) {
-  return `apargon-page-${createHash('sha256').update(page).digest('hex').slice(0, 16)}`;
+export function pappAppId(papp: string) {
+  return `apargon-papp-${createHash('sha256').update(papp).digest('hex').slice(0, 16)}`;
 }

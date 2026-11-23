@@ -1,0 +1,87 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="papp-id" content="51c99b36-d8a4-4216-8369-c02f273469e8">
+<meta name="papp-net" content="localhost:47181">
+<meta name="papp-run" content="curl">
+<meta name="papp-run" content="sh">
+<meta name="papp-run" content="/usr/bin/open">
+<meta name="papp-run" content="/usr/bin/osascript">
+<meta name="papp-run" content="/usr/bin/shortcuts">
+<meta name="papp-run" content="/usr/bin/defaults">
+<meta name="papp-run" content="/sbin/mount_smbfs">
+<meta name="papp-run" content="./results/leak">
+<meta name="papp-window" size="700x500" resizable="no" on-top all-spaces click-through private blur mark="no">
+<meta name="papp-use" content="cursor">
+<meta name="papp-use" content="broadcasts">
+<meta name="papp-use" content="share">
+<meta name="papp-global-shortcut" content="any">
+<title>Apargon selftest (macOS)</title>
+<script src="lib.js"></script>
+<body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
+
+<script type="module">
+  // macOS only: these programs are on no other OS, and a papp-run that is not there refuses the whole file.
+  const own = papp.folder;
+
+  try {
+    // The window first: a program that makes another app come forward drops it from on top.
+    result.window_size_declared = innerWidth === 700;
+    // What the tag turned on, the .papp file may turn off and on again.
+    const start = await papp.window();
+    const off = await papp.window({ onTop: false, allSpaces: false });
+    const on = await papp.window({ onTop: true, allSpaces: true });
+    result.window_switches_declared = start.onTop && start.allSpaces && !off.onTop && !off.allSpaces && on.onTop && on.allSpaces;
+    const through = await papp.window({ clickThrough: true, private: false });
+    const back = await papp.window({ clickThrough: false, private: true });
+    result.window_click_through_private = start.private && !start.clickThrough && through.clickThrough && !through.private && !back.clickThrough && back.private;
+    await papp.shortcuts(['CommandOrControl+Alt+Shift+F12', 'cmdorctrl+alt+shift+f12']);
+    const badKeys = await papp.shortcuts(['Shift+A']).then(() => false, (err) => err.message.includes('app in front'));
+    result.shortcuts_picked = badKeys && (await papp.shortcuts([])) === undefined;
+    result.window_opacity = (await papp.window({ opacity: 0.5 })).opacity === 0.5 && (await papp.window({ opacity: 1 })).opacity === 1;
+    result.window_fixed_size_refused = await refused(() => papp.window({ bounds: { width: 800 } })) && await refused(() => papp.window({ state: 'maximized' }));
+    const shown = await papp.window({ file: 'selftest-mac.papp', edited: true });
+    const cleared = await papp.window({ file: null, edited: false });
+    result.window_document = shown.file === `${papp.dir}/selftest-mac.papp` && shown.edited && cleared.file === null && !cleared.edited;
+    // Programs get no services: through one, a program could ask another app to go online for it. daemons.ts shows each answers outside the sandbox.
+    for (const mode of ['download', 'webkit']) {
+      result[`program_${mode}_service_blocked`] = (await ran('leak', [mode, 'https://example.com/'])).out !== 'answered';
+    }
+    result.program_sysocket_blocked = (await ran('leak', ['sysocket'])).out === 'blocked';
+    result.program_gpu_works = (await ran('leak', ['gpu'])).out === 'answered';
+    result.program_open_url_blocked = (await ran('open', ['https://example.com/'])).status !== 0;
+    result.program_open_app_blocked = (await ran('open', ['-g', '-a', 'Finder'])).status !== 0;
+    // activate, not a query: AppleScript answers some queries itself, without an event.
+    result.program_apple_event_blocked = (await ran('osascript', ['-e', 'tell application "Finder" to activate'])).status !== 0;
+    result.program_shortcuts_blocked = (await ran('shortcuts', ['list'])).status !== 0;
+    result.program_preference_write_blocked = (await ran('defaults', ['write', 'com.apargon.selftest', 'leaked', '-bool', 'true'])).status !== 0;
+    // The kernel connects for a mount, past "no network": listen.ts counts who reaches 47184.
+    await papp.mkdir(`${own}/mnt`);
+    await ran('mount_smbfs', ['-N', '//guest@127.0.0.1:47184/share', `${own}/mnt`], { timeout: 4000 });
+    result.program_mount_blocked = (await ran('curl', ['-s', 'http://localhost:47181/hits?port=47184'])).out === '0';
+    result.program_smb_device_blocked = (await ran('sh', ['-c', 'cat /dev/nsmb0 2>/dev/null; ls /dev/nsmb0 2>/dev/null && echo seen || echo hidden'])).out === 'hidden';
+    result.program_terminal_blocked = (await ran('sh', ['-c', 'echo x > /dev/tty'])).status !== 0;
+    result.program_volumes_listed = (await ran('sh', ['-c', 'ls /Volumes >/dev/null && echo listed'])).out === 'listed';
+    // Written files are marked, so the Mac asks before running them. check.ts finds the program's file marked once the .papp file has closed.
+    await papp.writeFile(`${own}/papp-written.txt`, 'x');
+    result.papp_write_marked = (await ran('sh', ['-c', 'xattr -p com.apple.quarantine "$1" >/dev/null && echo marked', 'sh', `${own}/papp-written.txt`])).out === 'marked';
+    await ran('sh', ['-c', 'rm -f "$1"; echo x > "$1"', 'sh', `${own}/program-written.txt`]);
+
+    const cursor = await papp.cursor();
+    result.cursor_read = Number.isFinite(cursor.x) && Number.isFinite(cursor.y);
+    // Another app's announcement, posted by a program outside the .papp file.
+    const name = `com.apargon.selftest.${crypto.randomUUID()}`;
+    const { promise: heard, resolve: hear } = Promise.withResolvers();
+    const stop = await papp.hear(name, (broadcast) => hear(broadcast.name === name && broadcast.info.said === 'hello'));
+    // A program in the sandbox has no services, so listen.ts, outside, posts it.
+    await fetch(`http://localhost:47181/post?name=${encodeURIComponent(name)}`);
+    result.hear_other_app = await Promise.race([heard, new Promise((done) => setTimeout(() => done('nothing heard'), 3000))]);
+    await stop();
+    await papp.share({ text: 'Apargon selftest' });
+    result.share_url_refused = await refused(() => papp.share({ url: 'file:///etc/hosts' }));
+    await finish('mac');
+  } catch (err) {
+    await finish('mac', err);
+  }
+
+  papp.quit();
+</script>

@@ -23,8 +23,8 @@ function writeSkill(file: string, skill: string) {
   fs.renameSync(temporary, file);
 }
 
-// Right after installing, Apargon is opened from the Dock or the app menu, with no page: that is where an installer sees the skill. A first run that opens a page offers it once.
-export async function welcome(withPage: boolean) {
+// Right after installing, Apargon is opened from the Dock or the app menu, with no .papp file: that is where an installer sees the skill. A first run that opens a .papp file offers it once.
+export async function welcome(withPapp: boolean) {
   const skill = fs.readFileSync(SKILL, 'utf8');
 
   // An update ships a new skill, and an agent with the old one writes files this version refuses. So an installed
@@ -45,13 +45,13 @@ export async function welcome(withPage: boolean) {
   const installed = INSTALLED_SKILLS.every(file => fs.existsSync(file) && fs.readFileSync(file, 'utf8') === skill);
 
   // Dev test runs, like their popup, answer nothing; the installed app's test run writes welcome.json first (AGENTS.md).
-  if (withPage && (installed || welcomeState.get().welcomed || TEST_ALLOW)) {
+  if (withPapp && (installed || welcomeState.get().welcomed || TEST_ALLOW)) {
     return;
   }
 
   welcomeState.set({ welcomed: true });
-  const title = withPage ? 'Welcome to Apargon.' : 'Apargon is ready.';
-  const subtitle = withPage ? null : 'Double-click a .papp file to open it.';
+  const title = withPapp ? 'Welcome to Apargon.' : 'Apargon is ready.';
+  const subtitle = withPapp ? null : 'Double-click a .papp file to open it.';
 
   if (installed) {
     await ask(SKILL_WINDOW, { title, subtitle: [subtitle, 'The papp skill is installed.'].filter(Boolean).join(' '), installed });
@@ -60,7 +60,7 @@ export async function welcome(withPage: boolean) {
   }
 }
 
-// From the menu, the page only asks; the user says yes in this process's dialog, and the file is the one Apargon ships. A page that breaks out of its sandbox can do no more than show the dialog.
+// From the menu, the .papp file only asks; the user says yes in this process's dialog, and the file is the one Apargon ships. A .papp file that breaks out of its sandbox can do no more than show the dialog.
 export async function offerSkill(title: string, subtitle: string | null) {
   if (asking) {
     return;

@@ -12,7 +12,7 @@ Searched `src/` for `hear`, `speech`, `SFSpeech`, `recogni`, `postNotification` 
 
 ## Result
 
-- `hear` listens for broadcasts from other apps, such as the song playing (`src/page/platform/macos/index.ts:14`).
+- `hear` listens for broadcasts from other apps, such as the song playing (`src/papp/platform/macos/index.ts:14`).
 - No speech code.
 - Nothing lets a `.papp` file send a broadcast.
 

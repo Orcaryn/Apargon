@@ -8,8 +8,8 @@ import type { ContainerRequest } from '@microsoft/mxc-sdk/v1';
 import { HOME, isInside } from '../../../permissions/paths/index.ts';
 import { PERMISSIONS_PLATFORM } from '../../../permissions/platform/index.ts';
 import type { Use } from '../../../permissions/tags/index.ts';
-import { APP_ROOT, pageAppId, SECRETS_DATA } from '../../../shared/data/index.ts';
-import type { PageProcess, TrampolinePlatform } from '../index.ts';
+import { APP_ROOT, pappAppId, SECRETS_DATA } from '../../../shared/data/index.ts';
+import type { PappProcess, TrampolinePlatform } from '../index.ts';
 import { startPiped } from '../pipes/index.ts';
 
 const DEVICE_CAPABILITIES: Partial<Record<Use, string>> = { camera: 'webcam', microphone: 'microphone', location: 'location', usb: 'usb', serial: 'serialcommunication', hid: 'humaninterfacedevice', bluetooth: 'bluetooth' };
@@ -37,7 +37,7 @@ export const windows: TrampolinePlatform = {
   unsafeDesktop: false,
   installed: app.isPackaged ? path.dirname(process.execPath) : null,
   async prepare(sandbox) {
-    const { page, permissions, own, protectedFolders, proxyPort } = sandbox;
+    const { papp, permissions, own, protectedFolders, proxyPort } = sandbox;
     const cloudFolders = permissions.use.includes('cloud') ? [] : PERMISSIONS_PLATFORM.cloudFolders(HOME);
     const everything = readableRoots(cloudFolders);
     // papp-write all: every folder but Apargon's own and OneDrive (unless papp-use cloud).
@@ -62,7 +62,7 @@ export const windows: TrampolinePlatform = {
       command: command.map(arg => `"${arg}"`).join(' '),
       environment,
       // Not where Apargon was started from: MXC would grant that folder.
-      workingDirectory: path.dirname(page),
+      workingDirectory: path.dirname(papp),
       containment: { type: 'processcontainer', config: { filesystem: { enumeratePaths: [...parents] }, capabilities: permissions.use.flatMap(name => DEVICE_CAPABILITIES[name] ?? []) } },
       filesystem: { readonlyPaths: [...new Set(readable)], readwritePaths: [...new Set(writable)], deniedPaths: [SECRETS_DATA, ...cloudFolders] },
       // Deny for every .papp file. A proxy on this computer's loopback needs both directions allowed; the firewall rules still let it reach only the proxy.
@@ -84,9 +84,9 @@ export const windows: TrampolinePlatform = {
       close: () => undefined,
     };
   },
-  downloadAddress(page) {
+  downloadAddress(papp) {
     try {
-      return /^(?:HostUrl|ReferrerUrl)=(.+)$/m.exec(fs.readFileSync(`${page}:Zone.Identifier`, 'utf8'))?.[1].trim() ?? '';
+      return /^(?:HostUrl|ReferrerUrl)=(.+)$/m.exec(fs.readFileSync(`${papp}:Zone.Identifier`, 'utf8'))?.[1].trim() ?? '';
     } catch {
       return null;
     }
@@ -98,8 +98,8 @@ export const windows: TrampolinePlatform = {
       // A drive without file streams, like a USB stick, takes no mark.
     }
   },
-  startAtLogin(page, on) {
-    app.setLoginItemSettings({ openAtLogin: on, path: process.execPath, args: [...(app.isPackaged ? [] : [APP_ROOT]), page].map(arg => `"${arg}"`), name: pageAppId(page) });
+  startAtLogin(papp, on) {
+    app.setLoginItemSettings({ openAtLogin: on, path: process.execPath, args: [...(app.isPackaged ? [] : [APP_ROOT]), papp].map(arg => `"${arg}"`), name: pappAppId(papp) });
   },
   // Windows has none. Making a link there needs an administrator or developer mode.
   noFollow: 0,
@@ -150,19 +150,19 @@ function around(folder: string, kept: string[]): string[] {
 }
 
 // Through MXC's library, not its wxc-exec.exe: that one hands the process its standard input only once it closes, so no reply could arrive while it runs.
-async function startContained(request: ContainerRequest): Promise<PageProcess> {
+async function startContained(request: ContainerRequest): Promise<PappProcess> {
   // Loaded here: it loads a Windows library, which the other systems' builds leave out. unsupported() ran first, at start, and said where the library is.
   const { spawn } = await import('@microsoft/mxc-sdk/v1');
   const contained = await spawn(request, { telemetry: { enabled: false } });
   const output = contained.standardOutput!;
-  const page = Object.assign(new EventEmitter(), { requests: output, output, errors: contained.standardError!, replies: contained.standardInput!, mux: null });
+  const pappProcess = Object.assign(new EventEmitter(), { requests: output, output, errors: contained.standardError!, replies: contained.standardInput!, mux: null });
   // wait() settles on process exit, not on consumption of the streams. Attach now, but let the readers drain them before disposing.
-  void Promise.allSettled([contained.wait(), finished(output, { readable: true, writable: false, cleanup: true }), finished(page.errors, { readable: true, writable: false, cleanup: true })])
+  void Promise.allSettled([contained.wait(), finished(output, { readable: true, writable: false, cleanup: true }), finished(pappProcess.errors, { readable: true, writable: false, cleanup: true })])
     .then(results => {
       try {
         contained.dispose();
       } finally {
-        page.emit('close');
+        pappProcess.emit('close');
       }
 
       for (const result of results) {
@@ -173,6 +173,6 @@ async function startContained(request: ContainerRequest): Promise<PageProcess> {
     })
     .catch((err: Error) => console.error(`Apargon: ${err.message}`));
 
-  return page;
+  return pappProcess;
 }
 

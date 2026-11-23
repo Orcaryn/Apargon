@@ -1,0 +1,49 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="papp-id" content="f59fda01-79eb-4568-bef3-5b33863f29aa">
+<meta name="papp-use" content="camera">
+<meta name="papp-use" content="microphone">
+<meta name="papp-use" content="location">
+<meta name="papp-use" content="usb">
+<meta name="papp-use" content="serial">
+<meta name="papp-use" content="hid">
+<meta name="papp-use" content="midi">
+<meta name="papp-use" content="bluetooth">
+<meta name="papp-run" content="tokencaps">
+<title>Apargon selftest for Windows devices</title>
+<script src="lib.js"></script>
+<body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
+
+<script type="module">
+  // tokencaps is built by the Windows workflow: it prints the capabilities in its own token, which it shares with the papp process, and the ones Windows derives from each device's name.
+  // What the devices answer: a CI runner has none, so these are recorded, not checked.
+  const seen = {};
+
+  try {
+    const capabilities = ['webcam', 'microphone', 'location', 'usb', 'serialcommunication', 'humaninterfacedevice', 'bluetooth'];
+    const output = (await papp.run('tokencaps', capabilities)).stdout;
+    const held = [...output.matchAll(/^capability (\S+)/gm)].map(([, sid]) => sid);
+    const derived = Object.fromEntries([...output.matchAll(/^derived (\S+) (\S+)/gm)].map(([, name, sid]) => [name, sid]));
+    for (const name of capabilities) {
+      result[`${name}_capability`] = held.includes(derived[name]);
+    }
+    // The runner has no such devices: each API must answer, with an empty list.
+    result.usb_api = Array.isArray(await navigator.usb.getDevices());
+    result.serial_api = Array.isArray(await navigator.serial.getPorts());
+    result.hid_api = Array.isArray(await navigator.hid.getDevices());
+    result.midi_api = (await navigator.requestMIDIAccess()).inputs !== undefined;
+    seen.bluetooth = await navigator.bluetooth.getAvailability();
+    seen.tokencaps = output.trim().split(/\r?\n/);
+    seen.devices = (await navigator.mediaDevices.enumerateDevices()).map((device) => device.kind);
+    for (const [name, constraints] of Object.entries({ camera: { video: true }, microphone: { audio: true } })) {
+      seen[name] = await navigator.mediaDevices.getUserMedia(constraints).then((stream) => (stream.getTracks().forEach((track) => track.stop()), 'opened'), (err) => err.name);
+    }
+    seen.location = await new Promise((done) => navigator.geolocation.getCurrentPosition(() => done('found'), (err) => done(`error ${err.code}: ${err.message}`), { timeout: 10000 }));
+    await papp.writeFile(`${papp.folder}/devices-win.json`, JSON.stringify(seen, null, 2) + '\n');
+    await finish('win-devices');
+  } catch (err) {
+    await finish('win-devices', err);
+  }
+
+  papp.quit();
+</script>

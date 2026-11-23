@@ -2,7 +2,7 @@ import type { PermissionsPlatform } from '../index.ts';
 
 export const linux: PermissionsPlatform = {
   programEnv: [],
-  pageEnv: 'XDG_RUNTIME_DIR XDG_SESSION_TYPE XDG_CURRENT_DESKTOP XDG_DATA_DIRS XDG_DATA_HOME XDG_CONFIG_HOME XDG_CACHE_HOME GDK_SCALE GDK_DPI_SCALE GTK_IM_MODULE XMODIFIERS XAUTHORITY LANGUAGE'.split(' '),
+  pappEnv: 'XDG_RUNTIME_DIR XDG_SESSION_TYPE XDG_CURRENT_DESKTOP XDG_DATA_DIRS XDG_DATA_HOME XDG_CONFIG_HOME XDG_CACHE_HOME GDK_SCALE GDK_DPI_SCALE GTK_IM_MODULE XMODIFIERS XAUTHORITY LANGUAGE'.split(' '),
   refusedTags: {},
   refusedUses: {
     location: 'On Linux, Apargon can\'t give a .papp file your location: Chromium finds it through a web service.',

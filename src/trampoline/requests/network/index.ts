@@ -1,16 +1,16 @@
 import { shell } from 'electron';
 import type { Permissions } from '../../../permissions/tags/index.ts';
-import type { PageEvents, Tell, TrampolineEvents } from '../../../shared/wire/protocol/index.ts';
+import type { PappEvents, Tell, TrampolineEvents } from '../../../shared/wire/protocol/index.ts';
 import type { byteStreams } from '../../../shared/wire/streams/index.ts';
-import { pageListeners } from './listen/index.ts';
+import { pappListeners } from './listen/index.ts';
 
 // What reaches a .papp file from outside, and the links it opens: its listeners, and a site in papp-net in the user's browser.
 export function networkRequests(permissions: Permissions, bytes: ReturnType<typeof byteStreams>, tell: Tell<TrampolineEvents>) {
-  const listeners = pageListeners(permissions, request => tell('request', request), bytes.send);
+  const listeners = pappListeners(permissions, request => tell('request', request), bytes.send);
 
   return {
     events: {
-      respond: ({ id, status, headers, body }: PageEvents['respond']) => listeners.respond(id, status, headers, bytes.receive(body)),
+      respond: ({ id, status, headers, body }: PappEvents['respond']) => listeners.respond(id, status, headers, bytes.receive(body)),
       openLink: (href: string) => openLink(permissions, href),
     },
     calls: {

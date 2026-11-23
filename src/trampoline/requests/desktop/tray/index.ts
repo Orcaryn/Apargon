@@ -4,12 +4,12 @@ import { cleanTrayItems, trayItems } from '../../../../shared/menuItems/index.ts
 import type { Tell, TrampolineEvents, TrayIcon, TrayItem } from '../../../../shared/wire/protocol/index.ts';
 import { TRAMPOLINE_PLATFORM } from '../../../platform/index.ts';
 
-// As the page's process sizes it: 32 pixels high, at most 64 wide, shown at half that on a sharp screen.
+// As the papp process sizes it: 32 pixels high, at most 64 wide, shown at half that on a sharp screen.
 const ICON_SIDE = 64;
 
-// A menu, not only a click: Linux sends no clicks, and a page in the background is quit from here. A page that takes clicks gets the left one; the right one, or Control and a click, still opens the menu, with Show and Quit.
-export function trayFor(page: string, tell: Tell<TrampolineEvents>) {
-  const name = path.basename(page);
+// A menu, not only a click: Linux sends no clicks, and a .papp file in the background is quit from here. A .papp file that takes clicks gets the left one; the right one, or Control and a click, still opens the menu, with Show and Quit.
+export function trayFor(papp: string, tell: Tell<TrampolineEvents>) {
+  const name = path.basename(papp);
   const apargonIcon = nativeImage.createFromPath(path.join(import.meta.dirname, 'images', 'tray.png'));
   apargonIcon.setTemplateImage(true);
   let tray: Tray | null = null;
@@ -31,7 +31,7 @@ export function trayFor(page: string, tell: Tell<TrampolineEvents>) {
     if (!tray) {
       const made = new Tray(image);
       made.setToolTip(name);
-      // Without a context menu set, Electron opens none itself: these open it where the page keeps the left click.
+      // Without a context menu set, Electron opens none itself: these open it where the .papp file keeps the left click.
       made.on('click', (event, bounds) => clicks && (event.ctrlKey ? made.popUpContextMenu(menu) : tell('trayClick', bounds)));
       made.on('right-click', () => clicks && made.popUpContextMenu(menu));
       tray = made;

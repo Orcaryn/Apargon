@@ -62,13 +62,13 @@ export function noPermissions(id: string): Permissions {
 }
 
 // The tags in the head, as the browser reads them. A tag Apargon can't keep refuses the whole file, and so does a missing papp-id.
-export function declaredPermissions(page: string, html: string, protectedFolders: string[]) {
-  const dir = path.dirname(page);
+export function declaredPermissions(papp: string, html: string, protectedFolders: string[]) {
+  const dir = path.dirname(papp);
   const permissions = noPermissions('');
 
   // The path goes, as it is, into files the OS reads line by line, as Linux's launcher entry: a line break in it would write lines of its own there.
-  if (/\p{Cc}/u.test(page)) {
-    throw new Error(`${JSON.stringify(path.basename(page))} has a line break or another control character in its path. Rename it.`);
+  if (/\p{Cc}/u.test(papp)) {
+    throw new Error(`${JSON.stringify(path.basename(papp))} has a line break or another control character in its path. Rename it.`);
   }
 
   const head = html.replace(/<!--[\s\S]*?-->/g, '').split(/<script\b|<body\b|<\/head\b/i)[0];
@@ -167,7 +167,7 @@ export function declaredPermissions(page: string, html: string, protectedFolders
   }
 
   if (!permissions.id) {
-    throw new Error(`${path.basename(page)} has no papp-id. Add <meta name="papp-id" content="${randomUUID()}"> to its head: it names the app, so an update keeps its data.`);
+    throw new Error(`${path.basename(papp)} has no papp-id. Add <meta name="papp-id" content="${randomUUID()}"> to its head: it names the app, so an update keeps its data.`);
   }
 
   checkTogether(permissions, protectedFolders);

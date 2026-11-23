@@ -16,9 +16,15 @@ Judge everything by one question: **can data leave the computer without the user
 
 ## Words
 
-- Call the `.papp` file the `.papp` file, not the page.
-- The trampoline (`src/trampoline/`) starts first and has network.
-- The page process (`src/page/`) is the sandboxed one.
+A papp is a personal app. The one word covers three things:
+
+- The `.papp` file: the HTML file the user opens.
+- The papp: that file running as an app.
+- The papp process (`src/papp/`): the sandboxed process that runs it, one for each open `.papp` file.
+
+The trampoline (`src/trampoline/`) starts first, has network, and serves every papp. It is not a papp.
+
+"Page" means only a web page, or a name Electron gives. Never call any of the three a page.
 
 ## Rules
 

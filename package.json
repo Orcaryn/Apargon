@@ -51,8 +51,8 @@
     "fileAssociations": [
       {
         "ext": "papp",
-        "name": "papp page",
-        "description": "papp page",
+        "name": "papp file",
+        "description": "papp file",
         "mimeType": "application/x-papp",
         "role": "Editor",
         "rank": "Owner",

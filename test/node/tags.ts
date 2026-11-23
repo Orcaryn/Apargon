@@ -12,7 +12,7 @@ import { windowFeatures } from '../../src/permissions/window/index.ts';
 
 // How tags are read, and the popup line each one makes.
 const dir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'apargon-tags-')));
-const page = path.join(dir, 'case.papp');
+const papp = path.join(dir, 'case.papp');
 const kept = path.join(dir, 'kept');
 fs.mkdirSync(path.join(dir, 'notes'));
 fs.mkdirSync(path.join(kept, 'inside'), { recursive: true });
@@ -20,7 +20,7 @@ fs.writeFileSync(path.join(dir, 'file.txt'), '');
 after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const ID = '4f2c9a1e-7b3d-4c58-9e21-0a6d8f3b5c77';
-const read = (tags: string) => declaredPermissions(page, `<!doctype html><meta name="papp-id" content="${ID}">${tags}<title>x</title>`, [kept]);
+const read = (tags: string) => declaredPermissions(papp, `<!doctype html><meta name="papp-id" content="${ID}">${tags}<title>x</title>`, [kept]);
 
 // Refused with Apargon's own error, which names the reason: any other error, or none, fails.
 function refuses(tags: string, reason: string) {
@@ -50,7 +50,7 @@ test('tags that ask nothing make no popup line, and show beside one that asks', 
 });
 
 suite('papp-id', () => {
-  const bare = (tags: string) => declaredPermissions(page, `<!doctype html>${tags}<title>x</title>`, [kept]);
+  const bare = (tags: string) => declaredPermissions(papp, `<!doctype html>${tags}<title>x</title>`, [kept]);
   test('names the app, and makes no popup line', () => assert.deepEqual(bare(`<meta name="papp-id" content="${ID.toUpperCase()}">`).tags, []));
   test('is lowercased', () => assert.equal(bare(`<meta name="papp-id" content="${ID.toUpperCase()}">`).id, ID));
   test('missing: refused, with a fresh UUID to copy', () => assert.throws(() => bare(''), /has no papp-id.*content="[0-9a-f-]{36}"/));

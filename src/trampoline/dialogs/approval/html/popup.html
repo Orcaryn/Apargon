@@ -256,7 +256,7 @@
 </style>
 
 <header>
-  <h1 id="pageName"></h1>
+  <h1 id="pappName"></h1>
   <p class="where">In <bdi id="folder"></bdi> · <span id="source"></span></p>
   <p class="callout" id="changed" hidden>
     <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
@@ -295,7 +295,7 @@
   function render(popup) {
     source.textContent = popup.source;
     source.classList.toggle('downloaded', popup.downloaded);
-    pageName.textContent = popup.name;
+    pappName.textContent = popup.name;
     folder.textContent = popup.folder;
     changedText.textContent = popup.changed;
     changed.hidden = popup.changed === null;

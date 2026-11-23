@@ -3,13 +3,13 @@ import { createRequire } from 'module';
 import path from 'path';
 import { setTimeout as sleep } from 'timers/promises';
 
-// The page quits when the trampoline dies: its pipe from the trampoline ends. Control: until then, it stays open.
+// The papp process quits when the trampoline dies: its pipe from the trampoline ends. Control: until then, it stays open.
 const electron: string = createRequire(import.meta.url)('electron');
-const page = path.join(import.meta.dirname, 'pages', 'stay.papp');
-const trampoline = spawn(electron, ['.', page], { stdio: 'inherit', env: { ...process.env, APARGON_TEST_ALLOW: '1' } });
+const papp = path.join(import.meta.dirname, 'papps', 'stay.papp');
+const trampoline = spawn(electron, ['.', papp], { stdio: 'inherit', env: { ...process.env, APARGON_TEST_ALLOW: '1' } });
 
-// Apargon's page processes for this page: each names it, and only Chromium's helpers have --type=.
-const pageProcesses = () => {
+// Apargon's papp processes for this .papp file: each names it, and only Chromium's helpers have --type=.
+const pappProcesses = () => {
   const list =
     process.platform === 'win32' ?
       execFileSync('powershell', ['-NoProfile', '-Command', 'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId) $($_.CommandLine)" }'], { encoding: 'utf8' })
@@ -34,18 +34,18 @@ const waitFor = async (done: () => boolean, ms: number) => {
   return true;
 };
 
-const started = await waitFor(() => pageProcesses().length > 0, 60_000);
-const pids = pageProcesses();
+const started = await waitFor(() => pappProcesses().length > 0, 60_000);
+const pids = pappProcesses();
 await sleep(3000);
-const stayed = pageProcesses().length > 0;
+const stayed = pappProcesses().length > 0;
 trampoline.kill('SIGKILL');
-const quit = await waitFor(() => pageProcesses().length === 0, 15_000);
-pageProcesses().forEach(pid => process.kill(pid, 'SIGKILL'));
+const quit = await waitFor(() => pappProcesses().length === 0, 15_000);
+pappProcesses().forEach(pid => process.kill(pid, 'SIGKILL'));
 
 const failure =
-  !started ? 'the page process never started'
-  : !stayed ? 'the page quit with the trampoline still running'
-  : !quit ? 'the page still ran 15 s after the trampoline died'
+  !started ? 'the papp process never started'
+  : !stayed ? 'the papp process quit with the trampoline still running'
+  : !quit ? 'the papp process still ran 15 s after the trampoline died'
   : null;
-console.log(failure ? `trampoline-gone: FAIL, ${failure}` : `trampoline-gone: ok, page ${pids.join(', ')} quit with the trampoline`);
+console.log(failure ? `trampoline-gone: FAIL, ${failure}` : `trampoline-gone: ok, papp process ${pids.join(', ')} quit with the trampoline`);
 process.exit(failure ? 1 : 0);

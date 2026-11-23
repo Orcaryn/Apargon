@@ -1,0 +1,142 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="papp-id" content="1a0b5f5d-291f-47c8-a30a-7c5822fa25e9">
+<meta name="papp-net" content="example.com">
+<meta name="papp-net" content="example.com:80">
+<meta name="papp-net" content="localhost:47181">
+<meta name="papp-net" content="localhost:47183">
+<meta name="papp-listen">
+<meta name="papp-run" content="curl">
+<meta name="papp-run" content="touch">
+<meta name="papp-run" content="cat">
+<meta name="papp-run" content="env">
+<meta name="papp-run" content="sh">
+<meta name="papp-run" content="./bin/greet">
+<meta name="papp-run" content="perl" unfenced>
+<meta name="papp-env" content="APARGON_TEST_ENV">
+<meta name="papp-write" content="./touched/">
+<meta name="papp-use" content="clipboard">
+<meta name="papp-use" content="microphone">
+<title>Apargon selftest (network and programs)</title>
+<script src="lib.js"></script>
+<body style="font: 14px ui-monospace, monospace; padding: 20px">running…</body>
+
+<script type="module">
+  // macOS and Linux. All network goes through Apargon's proxy, to the sites named, and its programs get the same limits.
+  const own = papp.folder;
+  const curl = async (...args) => (await ran('curl', ['-s', '-o', '/dev/null', '-m', '5', '-w', '%{http_code}', ...args])).out;
+  const fetchOk = (url) => fetch(url, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok, () => false);
+  const mac = navigator.userAgent.includes('Macintosh');
+
+  try {
+    result.curl_declared = await curl('https://example.com/') === '200';
+    result.curl_undeclared_blocked = await curl('https://example.net/') !== '200';
+    result.curl_direct_blocked = await curl('--noproxy', '*', 'https://example.com/') !== '200';
+    result.proxy_refuses_other_port = await curl('http://example.com:8080/') === '403';
+    // This computer only by the port a tag names, and through the proxy too.
+    result.local_port_declared = await curl('http://localhost:47181/') === '200';
+    result.local_port_undeclared_blocked = await curl('http://localhost:47182/') === '403';
+    result.local_port_direct_blocked = await curl('--noproxy', '*', 'http://127.0.0.1:47181/') !== '200';
+    // No socket file: another program's could reach the network for it.
+    result.socket_blocked = await curl('--unix-socket', 'results/other.sock', 'http://listener/') !== '200';
+
+    result.read_everywhere = (await ran('sh', ['-c', 'ls ~/.ssh >/dev/null && cat /etc/hosts >/dev/null && echo read'])).out === 'read';
+    result.program_writes_granted = (await ran('touch', ['touched/x.tmp'])).status === 0;
+    await papp.rm('touched/x.tmp');
+    result.program_own_folder_write = (await ran('sh', ['-c', 'touch "$1/program.tmp" && echo wrote', 'sh', own])).out === 'wrote';
+    result.program_outside_write_blocked = (await ran('touch', ['../touched-outside.tmp'])).status !== 0 && (await ran('touch', ['outside.tmp'])).status !== 0;
+    result.program_home_write_blocked = (await ran('sh', ['-c', 'touch ~/apargon-selftest.tmp'])).status !== 0;
+    // A hard link into a writable folder would reach outside it.
+    result.program_hard_link_refused = (await ran('sh', ['-c', 'ln ../../../package.json touched/linked 2>/dev/null && echo linked || echo refused'])).out === 'refused';
+    result.program_bundled_runs = (await ran('greet', ['x'])).out === 'bundled x';
+    // Not the .papp file's pipes to the trampoline: with them, a program could ask it anything as this .papp file.
+    result.program_no_trampoline_fds = (await ran('sh', ['-c', '{ echo >&3 || echo >&5; } 2>/dev/null && echo open || echo closed'])).out === 'closed';
+    result.program_input = (await papp.run('cat', [], { input: 'piped' })).stdout === 'piped';
+    const bytes = (await papp.run('cat', [], { input: new Uint8Array([0, 255, 10, 1]), encoding: null })).stdout;
+    result.program_bytes = bytes instanceof Uint8Array && bytes.join() === '0,255,10,1';
+    const started = Date.now();
+    const timedOut = await papp.run('sh', ['-c', 'sleep 30; echo late'], { timeout: 500 });
+    result.program_timeout = timedOut.signal !== null && timedOut.stdout === '' && Date.now() - started < 5000;
+    // run keeps output whole, up to 64 MB; spawn hands it over as it comes, at the pace the window takes it.
+    result.program_output_large = (await papp.run('sh', ['-c', 'head -c 16777216 /dev/zero'], { encoding: null })).stdout.length === 16777216;
+    result.program_output_limit = await refused(() => papp.run('sh', ['-c', 'yes']));
+    const chunks = [];
+    const lines = await papp.spawn('sh', ['-c', 'echo one; sleep 1; echo two'], { onOutput: (_stream, text) => chunks.push(text) });
+    result.spawn_streams = (await lines.closed).status === 0 && chunks.join('') === 'one\ntwo\n' && chunks[0] === 'one\n';
+    let echoed = '';
+    const cat = await papp.spawn('cat', [], { onOutput: (_stream, text) => (echoed += text) });
+    await cat.write('piped');
+    await cat.end();
+    result.spawn_input = (await cat.closed).status === 0 && echoed === 'piped';
+    const sleeper = await papp.spawn('sh', ['-c', 'sleep 30; echo late']);
+    await sleeper.close();
+    const stopped = await Promise.race([sleeper.closed, new Promise((resolve) => setTimeout(() => resolve(null), 5000))]);
+    result.spawn_kill = stopped !== null && stopped.signal !== null;
+    let streamed = 0;
+    const zeros = await papp.spawn('sh', ['-c', 'head -c 16777216 /dev/zero'], { onOutput: (_stream, text) => (streamed += text.length) });
+    result.spawn_output_large = (await zeros.closed).status === 0 && streamed === 16777216;
+    result.spawn_undeclared_refused = await refused(() => papp.spawn('ls'));
+    result.options_as_args_refused = await refused(() => papp.run('touch', { cwd: '/' }));
+    const env = (await papp.run('env')).stdout;
+    result.program_env_named = env.includes('APARGON_TEST_ENV=passed') && /^HOME=/m.test(env) && /^https?_proxy=http:\/\/127\.0\.0\.1:\d+$/m.test(env);
+    result.program_env_unnamed_left_out = !env.includes('APARGON_TEST_ALLOW=') && !env.includes('APARGON=');
+    result.undeclared_program_refused = await refused(() => papp.run('ls'));
+    // Unfenced: no limits. It writes where the fenced ones may not.
+    const free = `../touched-unfenced-${crypto.randomUUID()}.tmp`;
+    result.unfenced_runs = (await ran('perl', ['-e', `open(my $f, '>', '${free}') or die; print "free"`])).out === 'free' && await papp.exists(free);
+    await ran('perl', ['-e', `unlink '${free}'`]);
+    if (!mac) {
+      result.papp_process_env_unnamed_left_out = (await ran('sh', ['-c', 'tr "\\0" "\\n" < /proc/$PPID/environ 2>/dev/null | grep -c "^APARGON_TEST_ALLOW="'])).out === '0';
+      // The socket filter, as a fenced program meets it: perl, started by sh. refused is the filter's EACCES, not a kind the kernel lacks.
+      const perlSocket = async (call) => (await ran('sh', ['-c', `perl -e 'print ${call} ? "made" : $!{EACCES} ? "refused" : "other: $!"'`])).out;
+      result.socket_internet_made = await perlSocket('socket(my $s, 2, 1, 0)') === 'made';
+      result.socket_netlink_made = await perlSocket('socket(my $s, 16, 3, 0)') === 'made';
+      result.socket_vsock_refused = await perlSocket('socket(my $s, 40, 1, 0)') === 'refused';
+      result.socket_pair_made = await perlSocket('socketpair(my $a, my $b, 1, 1, 0)') === 'made';
+      result.socket_pair_datagram_refused = await perlSocket('socketpair(my $a, my $b, 1, 2, 0)') === 'refused';
+    }
+
+    // Its own listener, which the trampoline holds.
+    const asked = [];
+    const server = await papp.listen({ port: 47183 }, (request) => {
+      asked.push(`${request.method} ${new URL(request.url).pathname}${new URL(request.url).search} ${request.headers['x-probe']} ${new TextDecoder().decode(request.body)}`);
+      return { status: 201, headers: { 'x-answer': 'yes' }, body: 'answered' };
+    });
+    const answer = await fetch('http://localhost:47183/path?q=1', { method: 'POST', headers: { 'x-probe': 'p' }, body: 'hello', signal: AbortSignal.timeout(5000) }).catch((err) => err);
+    const answered = answer instanceof Response ? { url: server.url, status: answer.status, header: answer.headers.get('x-answer'), text: await answer.text(), asked: asked.join() } : { url: server.url, error: String(answer), asked: asked.join() };
+    const expected = { url: 'http://127.0.0.1:47183', status: 201, header: 'yes', text: 'answered', asked: 'POST /path?q=1 p hello' };
+    result.listen_answers = JSON.stringify(answered) === JSON.stringify(expected) || answered;
+    // papp-listen alone is this computer only: listen.ts, outside the sandbox, reaches it on loopback and not on its network address.
+    const reached = await (await fetch('http://localhost:47181/reach?port=47183')).json();
+    result.listen_localhost_only = (reached.loopback === 'connected' && reached.network !== 'connected') || reached;
+    await server.close();
+    result.listen_closed = await server.closed === null && !(await fetchOk('http://localhost:47183/'));
+
+    result.fetch_declared = await fetchOk('https://example.com/');
+    result.fetch_declared_http = await fetchOk('http://example.com/');
+    result.fetch_undeclared_blocked = !(await fetchOk('https://example.net/'));
+    result.fetch_local_declared = await fetchOk('http://localhost:47181/');
+    result.fetch_local_undeclared_blocked = !(await fetchOk('http://localhost:47182/')) && !(await fetchOk('http://127.0.0.1:47181/'));
+    // A raw request over papp.connect, as a database or mail client would speak its own protocol.
+    const talk = async (host, port, options) => {
+      const parts = [];
+      const connection = await papp.connect(host, port, { ...options, onData: (data) => parts.push(new TextDecoder().decode(data)) });
+      await connection.write(`GET / HTTP/1.0\r\nHost: ${host}\r\n\r\n`);
+      await connection.closed;
+      return parts.join('');
+    };
+    result.connect_declared = /^HTTP\/1\.[01] 200/.test(await talk('localhost', 47181));
+    result.connect_tls = /^HTTP\/1\.[01] 200/.test(await talk('example.com', 443, { tls: true }));
+    result.connect_undeclared_refused = (await papp.connect('localhost', 47182).then(() => 'connected', (err) => err.message)).includes('may not connect');
+    result.secrets_per_papp = await papp.getSecret('token') !== 'kept by selftest.papp';
+    await papp.setSecret('token', 'kept by selftest-net.papp');
+    result.clipboard_read_granted = (await navigator.permissions.query({ name: 'clipboard-read' })).state === 'granted';
+    result.microphone_permission_granted = (await navigator.permissions.query({ name: 'microphone' })).state === 'granted';
+    result.camera_permission_denied_without_tag = (await navigator.permissions.query({ name: 'camera' })).state === 'denied';
+    await finish('net');
+  } catch (err) {
+    await finish('net', err);
+  }
+
+  papp.quit();
+</script>

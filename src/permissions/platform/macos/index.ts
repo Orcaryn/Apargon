@@ -3,7 +3,7 @@ import type { PermissionsPlatform } from '../index.ts';
 
 export const macos: PermissionsPlatform = {
   programEnv: [],
-  pageEnv: ['__CF_USER_TEXT_ENCODING'],
+  pappEnv: ['__CF_USER_TEXT_ENCODING'],
   refusedTags: {},
   refusedUses: {},
   useLines: { cloud: 'Read your iCloud and Dropbox files' },

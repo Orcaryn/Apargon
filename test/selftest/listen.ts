@@ -6,8 +6,8 @@ import net from 'net';
 import os from 'os';
 import path from 'path';
 
-// Runs a command while a page's servers listen: a port and a socket file it declares, and a port and a socket file it does not. Windows pages have no socket files.
-const sockets = process.platform === 'win32' ? [] : ['declared.sock', 'other.sock'].map(name => path.join(import.meta.dirname, 'pages', 'results', name));
+// Runs a command while a .papp file's servers listen: a port and a socket file it declares, and a port and a socket file it does not. Windows .papp files have no socket files.
+const sockets = process.platform === 'win32' ? [] : ['declared.sock', 'other.sock'].map(name => path.join(import.meta.dirname, 'papps', 'results', name));
 // A run stopped with Ctrl-C leaves them.
 sockets.forEach(socket => fs.rmSync(socket, { force: true }));
 
@@ -15,7 +15,7 @@ sockets.forEach(socket => fs.rmSync(socket, { force: true }));
 let hits = 0;
 await once(net.createServer(socket => (hits++, socket.destroy())).listen(47184, '127.0.0.1'), 'listening');
 
-// GET /hits counts them. GET /post?name=N posts another app's announcement, on macOS. GET /reach?port=N answers whether this process, outside the sandbox, reaches port N on loopback and on this computer's network address: a page tests its own listener with it.
+// GET /hits counts them. GET /post?name=N posts another app's announcement, on macOS. GET /reach?port=N answers whether this process, outside the sandbox, reaches port N on loopback and on this computer's network address: a .papp file tests its own listener with it.
 const server = async (request: http.IncomingMessage, response: http.ServerResponse) => {
   const url = new URL(request.url!, 'http://listener');
 
@@ -42,7 +42,7 @@ for (const address of [{ port: 47181, host: '127.0.0.1' }, { port: 47182, host: 
 
 const [command, ...args] = process.argv.slice(2);
 const [code] = await once(spawn(command, args, { stdio: 'inherit' }), 'exit');
-// Killed by a signal, the page has no code: a failure.
+// Killed by a signal, the papp process has no code: a failure.
 process.exit(code ?? 1);
 
 // connected, or the error's code.

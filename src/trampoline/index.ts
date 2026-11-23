@@ -1,16 +1,16 @@
 import { app, dialog } from 'electron';
 import fs from 'fs';
-import { PAGE_RECORDS } from '../shared/data/index.ts';
+import { PAPP_RECORDS } from '../shared/data/index.ts';
 import type { Tell, TrampolineEvents } from '../shared/wire/protocol/index.ts';
 import { approve } from './dialogs/approval/index.ts';
 import { welcome } from './dialogs/skill/index.ts';
-import { startPageProcess } from './pageProcess/index.ts';
+import { startPappProcess } from './pappProcess/index.ts';
 import { TRAMPOLINE_PLATFORM } from './platform/index.ts';
 import { menuState } from './records/index.ts';
 import { serveRequests } from './requests/index.ts';
 import { checkForUpdates } from './updates/index.ts';
 
-let openPages = 0;
+let openPapps = 0;
 // Each running .papp file's way to tell its process something.
 const running = new Set<Tell<TrampolineEvents>>();
 // Asked once: old and unsafe systems are refused.
@@ -23,23 +23,23 @@ const refreshMenus = () => {
   running.forEach(tell => tell('refreshMenu', menu));
 };
 
-export async function startTrampoline(pages: string[]) {
+export async function startTrampoline(papps: string[]) {
   // The trampoline has no window of its own: it stays while a .papp file runs, and quits when the last one closes.
   app.on('window-all-closed', () => undefined);
-  fs.mkdirSync(PAGE_RECORDS, { recursive: true });
+  fs.mkdirSync(PAPP_RECORDS, { recursive: true });
 
-  if (!pages.length) {
+  if (!papps.length) {
     await welcome(false);
     app.quit();
   } else {
     await welcome(true);
-    pages.forEach(openPage);
+    papps.forEach(openPapp);
     checkForUpdates();
   }
 }
 
-export async function openPage(file: string) {
-  openPages++;
+export async function openPapp(file: string) {
+  openPapps++;
 
   // One that opened at login, then was deleted, stops opening.
   if (!fs.existsSync(file)) {
@@ -56,8 +56,8 @@ export async function openPage(file: string) {
     const approved = await approve(file);
 
     if (approved) {
-      const started = await startPageProcess(approved);
-      const serving = serveRequests(approved.page, approved.permissions, started, openPage, refreshMenus);
+      const started = await startPappProcess(approved);
+      const serving = serveRequests(approved.papp, approved.permissions, started, openPapp, refreshMenus);
       running.add(serving.tell);
       await new Promise(resolve => started.child.on('close', resolve));
       running.delete(serving.tell);
@@ -66,7 +66,7 @@ export async function openPage(file: string) {
 
       // The .papp file changed while open: it opens again, and the popup asks again.
       if (serving.restarting) {
-        void openPage(approved.page);
+        void openPapp(approved.papp);
       }
     }
   } catch (err) {
@@ -74,9 +74,9 @@ export async function openPage(file: string) {
     dialog.showErrorBox('Apargon', (err as Error).message);
   }
 
-  openPages--;
+  openPapps--;
 
-  if (!openPages) {
+  if (!openPapps) {
     app.quit();
   }
 }

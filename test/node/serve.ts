@@ -6,22 +6,22 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { pathToFileURL } from 'node:url';
 import { describe } from '../../src/permissions/describe/index.ts';
-import { fileServer } from '../../src/page/session/serve/index.ts';
+import { fileServer } from '../../src/papp/session/serve/index.ts';
 import { declaredPermissions } from '../../src/permissions/tags/index.ts';
 
 const dir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'apargon-serve-')));
-const page = path.join(dir, 'page.papp');
+const papp = path.join(dir, 'papp.papp');
 const clip = path.join(dir, 'clip.mp4');
 const approved = '<!doctype html><title>approved</title>';
-fs.writeFileSync(page, approved);
+fs.writeFileSync(papp, approved);
 fs.writeFileSync(clip, Buffer.from(Array.from({ length: 100 }, (_, i) => i)));
 test.after(() => fs.rmSync(dir, { recursive: true }));
 
-const pageHash = createHash('sha256').update(approved).digest('hex');
+const pappHash = createHash('sha256').update(approved).digest('hex');
 const dependencies = new Set<string>();
 const serve = fileServer(
-  page,
-  pageHash,
+  papp,
+  pappHash,
   [],
   file => {
     dependencies.add(file);
@@ -32,15 +32,15 @@ const serve = fileServer(
 const get = (file: string, range?: string) => serve(new Request(pathToFileURL(file), { headers: range ? { range } : {} }));
 
 test('the approved .papp file is served as HTML', async () => {
-  const response = await get(page);
+  const response = await get(papp);
   assert.equal(response.headers.get('content-type'), 'text/html; charset=utf-8');
   assert.equal(await response.text(), approved);
 });
 
 test('a .papp file changed since approval is refused', async () => {
-  fs.writeFileSync(page, 'swapped');
-  const response = await get(page);
-  fs.writeFileSync(page, approved);
+  fs.writeFileSync(papp, 'swapped');
+  const response = await get(papp);
+  fs.writeFileSync(papp, approved);
   assert.equal(response.status, 409);
 });
 

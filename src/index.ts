@@ -1,26 +1,26 @@
 import { app } from 'electron';
 import path from 'path';
-import { PAGE_CONFIG, tellTrampoline } from './page/channel/index.ts';
-import { preparePage, startPage } from './page/index.ts';
-import { openPage, startTrampoline } from './trampoline/index.ts';
+import { PAPP_CONFIG, tellTrampoline } from './papp/channel/index.ts';
+import { preparePapp, startPapp } from './papp/index.ts';
+import { openPapp, startTrampoline } from './trampoline/index.ts';
 
-if (PAGE_CONFIG) {
-  preparePage(PAGE_CONFIG);
+if (PAPP_CONFIG) {
+  preparePapp(PAPP_CONFIG);
 }
 
-const PAGE_FILE = /\.papp$/i;
-const pages = process.argv.filter(arg => PAGE_FILE.test(arg)).map(arg => path.resolve(arg));
+const PAPP_FILE = /\.papp$/i;
+const papps = process.argv.filter(arg => PAPP_FILE.test(arg)).map(arg => path.resolve(arg));
 app.on('open-file', (event, file) => {
-  const page = path.resolve(file);
+  const papp = path.resolve(file);
   event.preventDefault();
 
-  if (PAGE_CONFIG) {
-    tellTrampoline('open', page);
+  if (PAPP_CONFIG) {
+    tellTrampoline('open', papp);
   } else if (app.isReady()) {
-    void openPage(page);
+    void openPapp(papp);
   } else {
-    pages.push(page);
+    papps.push(papp);
   }
 });
 
-void app.whenReady().then(() => (PAGE_CONFIG ? startPage(PAGE_CONFIG) : startTrampoline(pages)));
+void app.whenReady().then(() => (PAPP_CONFIG ? startPapp(PAPP_CONFIG) : startTrampoline(papps)));

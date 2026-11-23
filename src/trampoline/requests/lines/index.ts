@@ -1,9 +1,9 @@
 import path from 'path';
 import readline from 'readline';
-import type { PageProcess } from '../../platform/index.ts';
+import type { PappProcess } from '../../platform/index.ts';
 
 // onRequest: handles a line the process sent as a request. False when the line is no request, but the process's own output.
-export function readLines(page: string, child: PageProcess, onRequest: (line: Record<string, unknown>) => boolean) {
+export function readLines(papp: string, child: PappProcess, onRequest: (line: Record<string, unknown>) => boolean) {
   // Its requests, and its output as plain text: given the terminal itself, it could type commands into the shell that started Apargon.
   new Set([child.requests, child.output, child.errors]).forEach(stream => {
     readline.createInterface({ input: stream }).on('line', line => {
@@ -14,7 +14,7 @@ export function readLines(page: string, child: PageProcess, onRequest: (line: Re
           handled = onRequest(parseLine(line));
         } catch (err) {
           handled = true;
-          console.error(`Apargon: ${path.basename(page)} sent a bad request: ${(err as Error).message}`);
+          console.error(`Apargon: ${path.basename(papp)} sent a bad request: ${(err as Error).message}`);
         }
       }
 

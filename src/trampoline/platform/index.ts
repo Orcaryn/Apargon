@@ -9,7 +9,7 @@ import { macos } from './macos/index.ts';
 import { windows } from './windows/index.ts';
 
 // Where a .papp file writes without a tag, the folders it never writes, and the proxy its network goes through, if it has any.
-export type Sandbox = { page: string; permissions: Permissions; own: string; storage: string; protectedFolders: string[]; proxyPort: number | null };
+export type Sandbox = { papp: string; permissions: Permissions; own: string; storage: string; protectedFolders: string[]; proxyPort: number | null };
 
 export type TrampolinePlatform = {
   // The OS name in the update feed's file name.
@@ -23,12 +23,12 @@ export type TrampolinePlatform = {
   // Builds the sandbox. The limits are set once, here.
   prepare(sandbox: Sandbox): Promise<Prepared>;
   // The address the OS marked a downloaded file with, '' if it marked none, or null for a file made on this computer.
-  downloadAddress(page: string): string | null;
-  pageIcon?(page: string, png: string): void;
+  downloadAddress(papp: string): string | null;
+  pappIcon?(papp: string, png: string): void;
   // Marks a file Apargon wrote for a .papp file, so the OS asks before running it.
   markWritten?(file: string): void;
   // Opens the .papp file each time the user logs in, or no longer.
-  startAtLogin(page: string, on: boolean): void;
+  startAtLogin(papp: string, on: boolean): void;
   // The open flag that refuses a link, so a write never goes where one leads.
   noFollow: number;
   autoUpdates: boolean;
@@ -37,10 +37,10 @@ export type TrampolinePlatform = {
 };
 
 // The .papp file's process, once started. requests and output may be one stream: a line that is no request is output. It emits close once the process is gone.
-export type PageProcess = EventEmitter & { requests: Readable; output: Readable; errors: Readable; replies: Writable; mux: Duplex | null };
+export type PappProcess = EventEmitter & { requests: Readable; output: Readable; errors: Readable; replies: Writable; mux: Duplex | null };
 
 export type Prepared = {
-  start(apargon: string[], env: NodeJS.ProcessEnv): Promise<PageProcess>;
+  start(apargon: string[], env: NodeJS.ProcessEnv): Promise<PappProcess>;
   requestFd: number;
   replyFd: number;
   muxFd: number | null;

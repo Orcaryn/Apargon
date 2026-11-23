@@ -4,7 +4,7 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { Duplex } from 'node:stream';
 import { test } from 'node:test';
-import { connectionApi } from '../../src/page/api/network/connections/index.ts';
+import { connectionApi } from '../../src/papp/api/network/connections/index.ts';
 
 for (const secure of [false, true]) {
   test(`reset cancels a pending ${secure ? 'TLS handshake' : 'CONNECT request'}`, { timeout: 5000 }, async t => {

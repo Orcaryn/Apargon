@@ -7,7 +7,7 @@ description: Use when the user wants an app with a window on their own computer,
 
 ## What it is
 
-A `.papp` file is an ordinary HTML page, plus `<meta>` tags that ask for more. Apargon runs it as a desktop app on macOS, Linux or Windows.
+A papp is a personal app: a `.papp` file that Apargon runs. A `.papp` file is an ordinary HTML page, plus `<meta>` tags that ask for more. Apargon runs it as a desktop app on macOS, Linux or Windows. In code, `papp` is the API Apargon puts on `window`.
 
 Apargon is a reverse browser. A browser gives a page all of the internet and none of your computer. Apargon gives a `.papp` file your files and none of the internet.
 

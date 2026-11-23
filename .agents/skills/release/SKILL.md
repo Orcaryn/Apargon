@@ -27,18 +27,18 @@ Publishing is public and cannot be taken back. Installed copies read the feeds o
 
 ## Version
 
-The new version is `version` in `package.json`, bumped. Before 1.0: `--minor` for new features or a change to what a page may ask for or what the fence allows; `--patch` for fixes only. Propose one with a reason and let the user choose.
+The new version is `version` in `package.json`, bumped. Before 1.0: `--minor` for new features or a change to what a `.papp` file may ask for or what the fence allows; `--patch` for fixes only. Propose one with a reason and let the user choose.
 
 ## Release notes
 
 - Range: `v<current version>..HEAD`. Read the diffs, not only the commit messages.
 - No such tag means this is the first release. Ask the user what the notes should cover.
 - Use only these headings, in this order, and leave out the empty ones:
-  - `### Security`: fixes to the fence, the popup, the tag rules or `pageApi`, and any new gap in `SECURITY.md` under "Not enforced". Say what a page could do before and cannot now, or the reverse.
+  - `### Security`: fixes to the fence, the popup, the tag rules or the `window.papp` API, and any new gap in `SECURITY.md` under "Not enforced". Say what a `.papp` file could do before and cannot now, or the reverse.
   - `### New`
-  - `### Changed`: anything that may break a page that worked before, such as a tag value now refused. Say what the user has to change.
+  - `### Changed`: anything that may break a `.papp` file that worked before, such as a tag value now refused. Say what the user has to change.
   - `### Fixed`
-- Write for people who open pages and people who write them. Tag names and `window.papp` methods are fine; internal names (trampoline, offline process, `bwrapArgs`, paths in `src/`) are not.
+- Write for people who open `.papp` files and people who write them. Tag names and `window.papp` methods are fine; internal names (trampoline, papp process, `bwrapArgs`, paths in `src/`) are not.
 - Claim exactly what the release does. Name the platform when a change is for macOS, Linux or Windows only.
 - One line per bullet, short plain sentences. Run `pnpm exec prettier --write` on the file.
 - Leave out the "watch this repository" footer. `publish` appends it.

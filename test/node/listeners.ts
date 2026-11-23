@@ -5,10 +5,10 @@ import { PassThrough, Readable } from 'node:stream';
 import { buffer } from 'node:stream/consumers';
 import { test } from 'node:test';
 import type { IncomingRequest } from '../../src/shared/wire/protocol/index.ts';
-import { pageListeners } from '../../src/trampoline/requests/network/listen/index.ts';
+import { pappListeners } from '../../src/trampoline/requests/network/listen/index.ts';
 
 test('unlisten acknowledges closure and the port can immediately be reused', { timeout: 5000 }, async t => {
-  const listeners = pageListeners(
+  const listeners = pappListeners(
     { listen: 'localhost' },
     () => {},
     () => 'unread'
@@ -26,7 +26,7 @@ test('unlisten acknowledges closure and the port can immediately be reused', { t
 });
 
 test('shutdown cancels an opening listener and refuses a late start', { timeout: 5000 }, async () => {
-  const listeners = pageListeners(
+  const listeners = pappListeners(
     { listen: 'localhost' },
     () => {},
     () => 'unread'
@@ -38,7 +38,7 @@ test('shutdown cancels an opening listener and refuses a late start', { timeout:
 });
 
 test('a duplicate id cannot overwrite a listener and leak its port', { timeout: 5000 }, async t => {
-  const listeners = pageListeners(
+  const listeners = pappListeners(
     { listen: 'localhost' },
     () => {},
     () => 'unread'
@@ -51,7 +51,7 @@ test('a duplicate id cannot overwrite a listener and leak its port', { timeout: 
 test("a request's body goes to the .papp file as a stream, and its answer comes back as one", { timeout: 5000 }, async t => {
   const bodies = new Map<string, Readable>();
   const asked = Promise.withResolvers<IncomingRequest>();
-  const listeners = pageListeners({ listen: 'localhost' }, asked.resolve, source => (bodies.set('sent', source), 'sent'));
+  const listeners = pappListeners({ listen: 'localhost' }, asked.resolve, source => (bodies.set('sent', source), 'sent'));
   t.after(() => listeners.closeAll());
   const url = await listeners.listen('echo', null);
   const answered = fetch(url, { method: 'POST', body: 'x'.repeat(100_000) });
@@ -65,7 +65,7 @@ test("a request's body goes to the .papp file as a stream, and its answer comes 
 });
 
 test('an answer to a request that is gone gives its stream up', { timeout: 5000 }, async t => {
-  const listeners = pageListeners(
+  const listeners = pappListeners(
     { listen: 'localhost' },
     () => {},
     () => 'unread'
@@ -79,7 +79,7 @@ test('an answer to a request that is gone gives its stream up', { timeout: 5000 
 test('past 32 requests waiting for an answer, the next gets 503', { timeout: 5000 }, async t => {
   const asked: IncomingRequest[] = [];
   const allAsked = Promise.withResolvers<void>();
-  const listeners = pageListeners(
+  const listeners = pappListeners(
     { listen: 'localhost' },
     request => {
       if (asked.push(request) === 32) {

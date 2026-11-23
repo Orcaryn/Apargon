@@ -5,7 +5,7 @@ import type { PermissionsPlatform } from '../index.ts';
 export const windows: PermissionsPlatform = {
   // Not tested yet on Windows, so refused: the release rules.
   programEnv: 'SYSTEMROOT WINDIR SYSTEMDRIVE USERPROFILE HOMEDRIVE HOMEPATH USERNAME APPDATA LOCALAPPDATA TEMP TMP PROGRAMDATA PROGRAMFILES PATHEXT COMSPEC PROCESSOR_ARCHITECTURE NUMBER_OF_PROCESSORS'.split(' '),
-  pageEnv: [],
+  pappEnv: [],
   refusedTags: { socket: 'On Windows, Apargon can\'t give a .papp file papp-socket yet. Remove the tag to open it there.' },
   refusedUses: {},
   useLines: { cloud: 'Read your OneDrive files' },

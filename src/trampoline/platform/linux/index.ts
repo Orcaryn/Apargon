@@ -6,7 +6,7 @@ import os from 'os';
 import path from 'path';
 import { isInside } from '../../../permissions/paths/index.ts';
 import type { Use } from '../../../permissions/tags/index.ts';
-import { pageAppId, SECRETS_DATA } from '../../../shared/data/index.ts';
+import { pappAppId, SECRETS_DATA } from '../../../shared/data/index.ts';
 import { MUX_FD, REPLY_FD, REQUEST_FD, WAYLAND_FD } from '../../../shared/wire/protocol/index.ts';
 import type { Sandbox, TrampolinePlatform } from '../index.ts';
 import { startPiped } from '../pipes/index.ts';
@@ -55,8 +55,8 @@ export const linux: TrampolinePlatform = {
   // An AppImage is one file, often in the home folder. The .deb's folder belongs to root.
   installed: app.isPackaged ? (process.env.APPIMAGE ?? path.dirname(process.execPath)) : null,
   async prepare(sandbox) {
-    const { page, permissions, proxyPort } = sandbox;
-    writeLauncherEntry(page);
+    const { papp, permissions, proxyPort } = sandbox;
+    writeLauncherEntry(papp);
     // papp-system has no sandbox: it reaches the sound server itself, with no relay.
     const sound = !permissions.system && (permissions.use.includes('sound') || permissions.use.includes('microphone'));
     // On X11 the screen is a relay, at 6000 and its number, as X numbers its ports: Chromium connects to it more than once, and when it likes. The user said yes to X11 for this file.
@@ -115,19 +115,19 @@ export const linux: TrampolinePlatform = {
       },
     };
   },
-  downloadAddress(page) {
-    const mark = spawnSync('getfattr', ['--only-values', '-n', 'user.xdg.origin.url', page], { encoding: 'utf8' });
+  downloadAddress(papp) {
+    const mark = spawnSync('getfattr', ['--only-values', '-n', 'user.xdg.origin.url', papp], { encoding: 'utf8' });
 
     return mark.status === 0 ? mark.stdout : null;
   },
-  pageIcon(page, png) {
+  pappIcon(papp, png) {
     fs.mkdirSync(ICONS, { recursive: true });
-    fs.writeFileSync(path.join(ICONS, `${pageAppId(page)}.png`), Buffer.from(png, 'base64'));
-    writeLauncherEntry(page);
+    fs.writeFileSync(path.join(ICONS, `${pappAppId(papp)}.png`), Buffer.from(png, 'base64'));
+    writeLauncherEntry(papp);
   },
   // A copy of the launcher entry, which prepare writes first.
-  startAtLogin(page, on) {
-    const entry = `${pageAppId(page)}.desktop`;
+  startAtLogin(papp, on) {
+    const entry = `${pappAppId(papp)}.desktop`;
 
     if (on) {
       fs.mkdirSync(AUTOSTART, { recursive: true });

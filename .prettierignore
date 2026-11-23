@@ -3,5 +3,5 @@
 assets/
 build/
 pnpm-lock.yaml
-test/selftest/pages/results/
+test/selftest/papps/results/
 src/**/*.ts

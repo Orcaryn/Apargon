@@ -119,7 +119,7 @@ publish() {
 
   {
     cat "release-notes/$VERSION.md"
-    printf '\n---\n\nApargon checks for a new version once a day when a page opens, unless you turned that off under Permissions. If you did, watch this repository to hear about security fixes: **Watch → Custom → Releases**.\n'
+    printf '\n---\n\nApargon checks for a new version once a day when a `.papp` file opens, unless you turned that off under Permissions. If you did, watch this repository to hear about security fixes: **Watch → Custom → Releases**.\n'
   } > dist/release-notes.md
 
   git push --follow-tags

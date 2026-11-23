@@ -24,7 +24,7 @@ const SIZES: Partial<Record<string, number>> = { N: 0, L: 4, B: 1, R: 8, r: 8, a
 export function filterSound(server: net.Socket, use: Use[]) {
   const allowed = new Set([...ALWAYS, ...(use.includes('sound') ? PLAY : []), ...(use.includes('microphone') ? RECORD : [])]);
   let pending = Buffer.alloc(0);
-  const page = new Duplex({
+  const papp = new Duplex({
     allowHalfOpen: true,
     read: () => server.resume(),
     // Passes each whole frame once checked, and keeps the rest for the next write.
@@ -59,16 +59,16 @@ export function filterSound(server: net.Socket, use: Use[]) {
     },
   });
 
-  page.on('error', err => console.error(err.message));
+  papp.on('error', err => console.error(err.message));
   server.on('data', (bytes: Buffer) => {
-    if (!page.push(bytes)) {
+    if (!papp.push(bytes)) {
       server.pause();
     }
   });
-  server.on('end', () => page.push(null));
-  server.on('error', err => page.destroy(err));
+  server.on('end', () => papp.push(null));
+  server.on('error', err => papp.destroy(err));
 
-  return page;
+  return papp;
 }
 
 // A command is tags: its number, its sequence number, then its fields. A part cut short throws too, as Buffer reads past the end.

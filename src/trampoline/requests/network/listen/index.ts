@@ -13,17 +13,17 @@ const REQUESTS_AT_ONCE = 32;
 type Listener = { server: http.Server; abortStart: AbortController; closing: Promise<null> | null };
 
 // The trampoline owns the listeners; the .papp file receives requests and returns answers as data. sendBytes: gives a request's body to the .papp file as a stream, and names it.
-export function pageListeners({ listen: listenScope }: Pick<Permissions, 'listen'>, toPage: (request: IncomingRequest) => void, sendBytes: (source: Readable) => string) {
+export function pappListeners({ listen: listenScope }: Pick<Permissions, 'listen'>, toPapp: (request: IncomingRequest) => void, sendBytes: (source: Readable) => string) {
   const listenersById = new Map<string, Listener>();
   const responsesById = new Map<string, http.ServerResponse>();
   let waitingForAnswer = 0;
-  let pageClosed = false;
+  let pappClosed = false;
 
   return {
     async listen(serverId: string, port: number | null) {
       if (!listenScope) {
         throw new Error('Apargon: this .papp file may not listen. Ask for it with <meta name="papp-listen">, or <meta name="papp-listen" network> for the network too.');
-      } else if (pageClosed) {
+      } else if (pappClosed) {
         throw new Error('Apargon: this .papp file has closed.');
       } else if (typeof serverId !== 'string' || !serverId || listenersById.has(serverId)) {
         throw new Error('Apargon: a listener needs a new, nonempty id.');
@@ -67,7 +67,7 @@ export function pageListeners({ listen: listenScope }: Pick<Permissions, 'listen
             responsesById.delete(requestId);
             body.destroy();
           });
-          toPage({ server: serverId, id: requestId, method: request.method!, url: `http://${request.headers.host ?? '127.0.0.1'}${request.url}`, headers, body: sendBytes(body) });
+          toPapp({ server: serverId, id: requestId, method: request.method!, url: `http://${request.headers.host ?? '127.0.0.1'}${request.url}`, headers, body: sendBytes(body) });
         });
       });
       const listener: Listener = { server, abortStart: new AbortController(), closing: null };
@@ -122,7 +122,7 @@ export function pageListeners({ listen: listenScope }: Pick<Permissions, 'listen
     },
     unlisten: closeListener,
     closeAll() {
-      pageClosed = true;
+      pappClosed = true;
 
       return Promise.all([...listenersById.keys()].map(closeListener));
     },

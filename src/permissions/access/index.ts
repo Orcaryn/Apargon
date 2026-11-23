@@ -4,7 +4,7 @@ import type { Permissions } from '../tags/index.ts';
 // No Electron here: the Node tests load it.
 
 // What a .papp file may change, as its sandbox allows. protectedFolders: Apargon's data, the .papp files' folders and the app.
-export function pageAccess(permissions: Permissions, own: string, protectedFolders: string[]) {
+export function pappAccess(permissions: Permissions, own: string, protectedFolders: string[]) {
   return (file: string) => {
     if (permissions.system || isInside(file, own)) {
       return true;

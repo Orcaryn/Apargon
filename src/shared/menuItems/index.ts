@@ -3,16 +3,16 @@ import type { TrayItem } from '../wire/protocol/index.ts';
 
 // The menu and tray items a .papp file sends, made safe and turned into Electron's. No Electron at run time here: the Node tests load it.
 
-export type PageMenuItem = { separator: true } | { label: string; id?: string; keys?: string; submenu?: PageMenuItem[] };
+export type PappMenuItem = { separator: true } | { label: string; id?: string; keys?: string; submenu?: PappMenuItem[] };
 
-// Labels, keys and ids only: a role or a click of the page's own could do what Apargon's items do.
-export function pageMenuItems(items: PageMenuItem[], onClick: (id: string | undefined) => void): MenuItemConstructorOptions[] {
+// Labels, keys and ids only: a role or a click of the .papp file's own could do what Apargon's items do.
+export function pappMenuItems(items: PappMenuItem[], onClick: (id: string | undefined) => void): MenuItemConstructorOptions[] {
   return items.map(item => {
     if ('separator' in item) {
       return { type: 'separator' };
     }
 
-    return { label: String(item.label), accelerator: item.keys === undefined ? undefined : String(item.keys), submenu: item.submenu && pageMenuItems(item.submenu, onClick), click: () => onClick(item.id) };
+    return { label: String(item.label), accelerator: item.keys === undefined ? undefined : String(item.keys), submenu: item.submenu && pappMenuItems(item.submenu, onClick), click: () => onClick(item.id) };
   });
 }
 
@@ -21,7 +21,7 @@ const TRAY_DEPTH = 3;
 // In all the lists together: 50 in each, 3 deep, would be 125,000 for the trampoline to build.
 const TRAY_TOTAL = 200;
 
-// Label, id, checked and submenu only, and so many: a papp-system page writes the request itself, and could add a role that quits Apargon, or nest items until the trampoline, which every page shares, runs out of stack or time.
+// Label, id, checked and submenu only, and so many: a papp-system .papp file writes the request itself, and could add a role that quits Apargon, or nest items until the trampoline, which every .papp file shares, runs out of stack or time.
 export function cleanTrayItems(items: unknown, depth = 1, total = { items: 0 }): TrayItem[] {
   if (!Array.isArray(items) || items.length > TRAY_ITEMS || depth > TRAY_DEPTH || (total.items += items.length) > TRAY_TOTAL || !items.every(item => typeof item === 'object' && item !== null)) {
     throw new Error(

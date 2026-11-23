@@ -25,8 +25,8 @@ export const macos: TrampolinePlatform = {
   async prepare(sandbox) {
     const { proxyPort, permissions } = sandbox;
     // A temp folder of its own: the shared one holds other apps' files. Chromium takes its own variable for it, Node TMPDIR.
-    const temp = fs.mkdtempSync(path.join(USER_TEMP, 'apargon-page-'));
-    const profile = permissions.system ? null : pageProfile(sandbox, temp);
+    const temp = fs.mkdtempSync(path.join(USER_TEMP, 'apargon-papp-'));
+    const profile = permissions.system ? null : pappProfile(sandbox, temp);
     // Files its programs write are marked when it closes: the ones newer than this.
     const started = path.join(temp, '.started');
     fs.writeFileSync(started, '');
@@ -55,39 +55,39 @@ export const macos: TrampolinePlatform = {
       },
     };
   },
-  // The quarantine mark says the file was downloaded. Spotlight keeps where from, the page last.
-  downloadAddress(page) {
-    if (spawnSync('/usr/bin/xattr', ['-p', 'com.apple.quarantine', page]).status !== 0) {
+  // The quarantine mark says the file was downloaded. Spotlight keeps where from, the .papp file last.
+  downloadAddress(papp) {
+    if (spawnSync('/usr/bin/xattr', ['-p', 'com.apple.quarantine', papp]).status !== 0) {
       return null;
     }
 
-    const whereFroms = spawnSync('/usr/bin/mdls', ['-raw', '-name', 'kMDItemWhereFroms', page], { encoding: 'utf8' }).stdout;
+    const whereFroms = spawnSync('/usr/bin/mdls', ['-raw', '-name', 'kMDItemWhereFroms', papp], { encoding: 'utf8' }).stdout;
 
     return [...whereFroms.matchAll(/"([^"]+)"/g)].at(-1)?.[1] ?? '';
   },
-  pageIcon(page, png) {
+  pappIcon(papp, png) {
     const hash = createHash('sha256').update(png).digest('hex');
 
-    if (fs.lstatSync(page).isSymbolicLink() || spawnSync('/usr/bin/xattr', ['-p', 'com.apargon.icon', page], { encoding: 'utf8' }).stdout.trim() === hash) {
+    if (fs.lstatSync(papp).isSymbolicLink() || spawnSync('/usr/bin/xattr', ['-p', 'com.apargon.icon', papp], { encoding: 'utf8' }).stdout.trim() === hash) {
       return;
     }
 
-    const script = `function run([page, png]) {
+    const script = `function run([papp, png]) {
       ObjC.import('AppKit');
       const image = $.NSImage.alloc.initWithData($.NSData.alloc.initWithBase64EncodedStringOptions(png, 0));
-      $.NSWorkspace.sharedWorkspace.setIconForFileOptions(image, page, 0);
+      $.NSWorkspace.sharedWorkspace.setIconForFileOptions(image, papp, 0);
     }`;
-    spawnSync('/usr/bin/osascript', ['-l', 'JavaScript', '-e', script, page, png]);
-    spawnSync('/usr/bin/xattr', ['-w', 'com.apargon.icon', hash, page]);
+    spawnSync('/usr/bin/osascript', ['-l', 'JavaScript', '-e', script, papp, png]);
+    spawnSync('/usr/bin/xattr', ['-w', 'com.apargon.icon', hash, papp]);
   },
   markWritten(file) {
     spawnSync('/usr/bin/xattr', ['-w', 'com.apple.quarantine', `0083;${Math.floor(Date.now() / 1000).toString(16)};Apargon;${randomUUID().toUpperCase()}`, file]);
   },
   // A launch agent: login items take no arguments, so they could not name the .papp file. Written only when it changes, as macOS tells the user each time.
-  startAtLogin(page, on) {
-    const label = `com.apargon.page.${createHash('sha256').update(page).digest('hex').slice(0, 16)}`;
+  startAtLogin(papp, on) {
+    const label = `com.apargon.papp.${createHash('sha256').update(papp).digest('hex').slice(0, 16)}`;
     const agent = path.join(os.homedir(), 'Library', 'LaunchAgents', `${label}.plist`);
-    const args = [process.execPath, ...(app.isPackaged ? [] : [APP_ROOT]), page].map(arg => `<string>${arg.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</string>`);
+    const args = [process.execPath, ...(app.isPackaged ? [] : [APP_ROOT]), papp].map(arg => `<string>${arg.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</string>`);
     const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict><key>Label</key><string>${label}</string><key>ProgramArguments</key><array>${args.join('')}</array><key>RunAtLoad</key><true/></dict></plist>
@@ -115,7 +115,7 @@ function markNewFiles(folders: string[], since: string) {
 }
 
 // Seatbelt takes the last rule that matches. Reads: every local disk, but not the secrets. Writes: its own folder and papp-write. No network but the proxy. No mounting, no other devices, no opening other apps.
-function pageProfile({ permissions, own, storage, protectedFolders, proxyPort }: Sandbox, temp: string) {
+function pappProfile({ permissions, own, storage, protectedFolders, proxyPort }: Sandbox, temp: string) {
   const quote = (file: string) => {
     if (/["\\\p{Cc}]/u.test(file)) {
       throw new Error(`${file} has a " or a \\ in its name, which the sandbox can't take. Rename it.`);

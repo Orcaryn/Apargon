@@ -10,7 +10,7 @@ import type { Prepared } from '../../platform/index.ts';
 
 // The programs the trampoline starts for a .papp file: an unfenced one on every OS, with no limits, and on macOS every fenced one, as a sandbox can't start a stricter one inside it. Each stops when the .papp file closes.
 // Its input and output are streams: a program that writes faster than the .papp file reads waits, as on any pipe.
-export function programStarter(page: string, permissions: Permissions, prepared: Prepared, tell: Tell<TrampolineEvents>, bytes: ReturnType<typeof byteStreams>) {
+export function programStarter(papp: string, permissions: Permissions, prepared: Prepared, tell: Tell<TrampolineEvents>, bytes: ReturnType<typeof byteStreams>) {
   const running = new Map<string, ChildProcess>();
 
   const stop = (child: ChildProcess) => {
@@ -34,7 +34,7 @@ export function programStarter(page: string, permissions: Permissions, prepared:
         throw new Error('Apargon: here, the .papp file starts its programs itself.');
       }
 
-      const folder = realPath(path.resolve(path.dirname(page), cwd));
+      const folder = realPath(path.resolve(path.dirname(papp), cwd));
       const child = program.unfenced ? spawn(program.file, args, { cwd: folder, env: process.env, detached: true, windowsHide: true }) : prepared.startProgram!(program.file, args, folder, programEnv(process.env, permissions, prepared.proxy));
       running.set(id, child);
       // A program that exits with input unread closes the pipe: the .papp file's stream is given up with it.

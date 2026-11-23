@@ -1,8 +1,8 @@
 import path from 'path';
-import { DATA, PAGE_RECORDS } from '../../shared/data/index.ts';
+import { DATA, PAPP_RECORDS } from '../../shared/data/index.ts';
 import type { MenuState } from '../../shared/wire/protocol/index.ts';
 import { readJson, writeJson } from '../json/index.ts';
-import { pageRecords } from './pageRecords/index.ts';
+import { pappRecords } from './pappRecords/index.ts';
 
 // Apargon's own JSON files. Only the trampoline reads or writes them, through here.
 
@@ -15,7 +15,7 @@ function jsonFile<T extends object>(name: string) {
   };
 }
 
-export const records = pageRecords(PAGE_RECORDS);
+export const records = pappRecords(PAPP_RECORDS);
 export const updates = jsonFile<{ automatic?: boolean; checked?: string; noticed?: string }>('update.json');
 export const welcomeState = jsonFile<{ welcomed?: true }>('welcome.json');
 
@@ -24,7 +24,7 @@ export function menuState(): MenuState {
     approved: records
       .all()
       .filter(saved => saved.approval || saved.picks)
-      .map(saved => saved.page),
+      .map(saved => saved.path),
     automaticUpdates: updates.get().automatic !== false,
   };
 }

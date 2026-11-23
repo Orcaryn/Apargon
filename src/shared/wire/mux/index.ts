@@ -11,7 +11,7 @@ const CREDIT = 5;
 
 // Each stream is half-open, as TCP is: one side may end while the other still sends. Make the sockets with allowHalfOpen.
 // Each stream starts with a window of credit and gets more as the other side's target takes its bytes: a slow target holds at most a window, and slows its own stream only.
-// connectTo: on the trampoline's side, how to reach each target by name. The page's side opens streams with open().
+// connectTo: on the trampoline's side, how to reach each target by name. The papp process opens streams with open().
 export function startMux(channel: Duplex, connectTo: ((target: string) => Duplex | null) | null) {
   const streams = new Map<number, { stream: Duplex; credit: number }>();
   let pending = Buffer.alloc(0);

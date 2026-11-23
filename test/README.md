@@ -33,7 +33,7 @@ The app on real `.papp` files.
 | `trampoline-gone.ts` | the `.papp` file quits when the trampoline dies, and not before                                                                                       |
 | `check.ts`           | every `.papp` file wrote every check for this platform, all true                                                                                      |
 
-### `selftest/pages/`
+### `selftest/papps/`
 
 Each writes `selftest-result-<name>.json` to its own folder, `~/.apargon/<name>`, and `check.ts` reads it there.
 
@@ -48,7 +48,7 @@ Each writes `selftest-result-<name>.json` to its own folder, `~/.apargon/<name>`
 | `selftest-win-programs.papp` | `win-programs` | Windows only: programs, variables, `curl` through the proxy                                                  |
 | `selftest-win-devices.papp`  | `win-devices`  | Windows only: the device capabilities in the sandbox's token, read by `tokencaps`                            |
 
-- `lib.js` holds what every page shares: `result`, `refused`, `ran` and `finish`.
+- `lib.js` holds what every `.papp` file shares: `result`, `refused`, `ran` and `finish`.
 - `stay.papp` asks for nothing and stays open: `trampoline-gone.ts` opens it.
 - `subfolder/` holds a file to read, a frame, and a video to seek.
 - `bin/greet` is the program `selftest-net.papp` ships.
@@ -57,4 +57,4 @@ Each writes `selftest-result-<name>.json` to its own folder, `~/.apargon/<name>`
 - `windows/tokencaps.cs` is the source of `tokencaps`. Build it once, as administrator, onto PATH: `Add-Type -TypeDefinition (Get-Content -Raw test\selftest\windows\tokencaps.cs) -OutputAssembly "$env:SystemRoot\tokencaps.exe" -OutputType ConsoleApplication`.
 - A refusal check passes only on Apargon's own error (`Apargon: …`), or on the one named beside it. Any other error, or none, goes to `refused_wrongly`, which `check.ts` shows.
 - `listen_localhost_only` needs a network address on this computer: offline, `selftest-net` fails.
-- A new check goes in its page and in `check.ts`'s list for its platform.
+- A new check goes in its `.papp` file and in `check.ts`'s list for its platform.

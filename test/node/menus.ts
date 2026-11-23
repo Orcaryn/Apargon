@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { TrayItem } from '../../src/shared/wire/protocol/index.ts';
-import { cleanTrayItems, pageMenuItems, trayItems, type PageMenuItem } from '../../src/shared/menuItems/index.ts';
+import { cleanTrayItems, pappMenuItems, trayItems, type PappMenuItem } from '../../src/shared/menuItems/index.ts';
 
-// Keys Electron reads that a page may write beside its label and id: none may reach Electron.
+// Keys Electron reads that a .papp file may write beside its label and id: none may reach Electron.
 const smuggled = {
   role: 'quit',
   type: 'checkbox',
@@ -18,7 +18,7 @@ const smuggled = {
   after: ['x'],
 };
 const clicked: (string | undefined)[] = [];
-const menu = pageMenuItems(
+const menu = pappMenuItems(
   [
     {
       label: 'Run',
@@ -30,7 +30,7 @@ const menu = pageMenuItems(
         { label: 'Quit', id: 'quit', ...smuggled },
       ],
     },
-  ] as PageMenuItem[],
+  ] as PappMenuItem[],
   id => clicked.push(id)
 );
 (menu[0].click as () => void)();

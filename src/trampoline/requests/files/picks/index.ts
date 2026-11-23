@@ -12,11 +12,11 @@ import { records } from '../../../records/index.ts';
 
 // The user picks in a system dialog: that's a yes, so no tag is needed, and nothing restarts. The place always comes from the dialog, never from the .papp file, and picks are kept beside the approvals, where no .papp file writes.
 // receive: the bytes of a stream the .papp file named. Nothing of a file moves before Apargon asks: a dialog the user cancels costs none.
-export function pickHandlers(page: string, permissions: Permissions, receive: (id: string) => Readable, tell: Tell<TrampolineEvents>) {
+export function pickHandlers(papp: string, permissions: Permissions, receive: (id: string) => Readable, tell: Tell<TrampolineEvents>) {
   const remember = (added: Pick[]) => {
     // A new pick of the same place replaces the old one: it is the user's latest yes.
-    const picks = [...(records.get(page).picks ?? []).filter(old => !added.some(pick => pick.path === old.path)), ...added];
-    records.change(page, { picks });
+    const picks = [...(records.get(papp).picks ?? []).filter(old => !added.some(pick => pick.path === old.path)), ...added];
+    records.change(papp, { picks });
     tell('picks', picks);
   };
 
@@ -26,7 +26,7 @@ export function pickHandlers(page: string, permissions: Permissions, receive: (i
       // This process has no window of its own: without this, its dialog opens behind the .papp file's.
       app.focus({ steal: true });
       const { canceled, filePaths } = await dialog.showOpenDialog({
-        message: `${path.basename(page)} will ${write ? 'change' : 'read'} ${folder ? `${write ? 'files in ' : ''}the folder` : 'the file'}${multiple ? 's' : ''} you pick.`,
+        message: `${path.basename(papp)} will ${write ? 'change' : 'read'} ${folder ? `${write ? 'files in ' : ''}the folder` : 'the file'}${multiple ? 's' : ''} you pick.`,
         buttonLabel: write ? 'Allow Changes' : 'Choose',
         properties: [folder ? 'openDirectory' : 'openFile', 'createDirectory', 'noResolveAliases', ...(multiple ? ['multiSelections' as const] : [])],
       });
@@ -94,7 +94,7 @@ export function pickHandlers(page: string, permissions: Permissions, receive: (i
     // Writes for the .papp file where the user picked: a picked file, or a plain name in a picked folder.
     async writePicked({ file, data, append }: { file: string; data: string; append: boolean }) {
       const target = path.resolve(file);
-      const picks = records.get(page).picks ?? [];
+      const picks = records.get(papp).picks ?? [];
       const asFile = picks.some(pick => pick.write && !pick.folder && pick.path === target);
       const inFolder = picks.find(pick => pick.write && pick.folder && path.dirname(target) === pick.path);
       // A file beside an unfenced program can change what it runs, as a library it loads.

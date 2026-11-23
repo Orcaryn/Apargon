@@ -11,12 +11,12 @@ export const WAYLAND_FD = 7;
 export type Relay = { port: number; target: string };
 export type MenuState = { approved: string[]; automaticUpdates: boolean };
 export type Pick = { path: string; write: boolean; folder: boolean };
-// pageHash: null for a file whose tags ask nothing, or whose changes the user trusts. programsHere: whether the page's process starts its fenced programs inside its own sandbox, or the trampoline does.
-export type PageConfig = { page: string; permissions: Permissions; pageHash: string | null; own: string; proxy: string | null; relays: Relay[]; requestFd: number; replyFd: number; muxFd: number | null; bounds: Rectangle | null; menu: MenuState; picks: Pick[]; programsHere: boolean };
+// pappHash: null for a file whose tags ask nothing, or whose changes the user trusts. programsHere: whether the papp process starts its fenced programs inside its own sandbox, or the trampoline does.
+export type PappConfig = { papp: string; permissions: Permissions; pappHash: string | null; own: string; proxy: string | null; relays: Relay[]; requestFd: number; replyFd: number; muxFd: number | null; bounds: Rectangle | null; menu: MenuState; picks: Pick[]; programsHere: boolean };
 export type TrayItem = { separator: true } | { label: string; id: string; checked?: boolean; radio?: boolean } | { label: string; submenu: TrayItem[] };
-// Raw pixels, decoded and sized in the page's process: the trampoline, which has network, decodes no image a page sends.
+// Raw pixels, decoded and sized in the papp process: the trampoline, which has network, decodes no image a .papp file sends.
 export type TrayIcon = { width: number; height: number; pixels: string };
-export type PageTray = { title: string | null; items: TrayItem[]; icon: TrayIcon | null; click: boolean };
+export type PappTray = { title: string | null; items: TrayItem[]; icon: TrayIcon | null; click: boolean };
 // data: a stream's id.
 export type SavedFile = { name: string; data: string };
 export type PickOptions = { folder: boolean; multiple: boolean; write: boolean };
@@ -45,13 +45,13 @@ export type Calls = {
   print: { args: { data: string }; result: boolean };
 };
 
-export type PageEvents = {
+export type PappEvents = {
   open: string;
   revoke: string[];
   automaticUpdates: boolean;
-  pageIcon: string;
+  pappIcon: string;
   bounds: Rectangle;
-  tray: PageTray;
+  tray: PappTray;
   respond: { id: string; status: number; headers: Record<string, string>; body: string };
   installSkill: undefined;
   openLink: string;
@@ -76,9 +76,9 @@ export type Tell<E> = <K extends keyof E>(event: K, ...args: E[K] extends undefi
 export type EventHandlers<E> = { [K in keyof E]: (args: E[K]) => void };
 export type CallHandlers = { [K in keyof Calls]: (args: Calls[K]['args']) => Promise<Calls[K]['result']> | Calls[K]['result'] };
 
-// A papp-system page can write any line, so nothing here trusts its shape: a name is looked up only among the handlers' own keys, never Object's, and every call gets exactly one answer.
-// False when the line is no event or call: the page's own output, where requests share standard output.
-export function handleLine(line: Record<string, unknown>, events: EventHandlers<PageEvents>, calls: CallHandlers, answer: (answer: Answer) => void, streamLine: (line: StreamLine) => void) {
+// A papp-system .papp file can write any line, so nothing here trusts its shape: a name is looked up only among the handlers' own keys, never Object's, and every call gets exactly one answer.
+// False when the line is no event or call: the papp process's own output, where requests share standard output.
+export function handleLine(line: Record<string, unknown>, events: EventHandlers<PappEvents>, calls: CallHandlers, answer: (answer: Answer) => void, streamLine: (line: StreamLine) => void) {
   const { event, call, id, args } = line;
 
   if (typeof line.stream === 'string') {
@@ -95,7 +95,7 @@ export function handleLine(line: Record<string, unknown>, events: EventHandlers<
   } else if (typeof event === 'string' && !Object.hasOwn(events, event)) {
     throw new Error(`no such event ${event}`);
   } else if (typeof event === 'string') {
-    (events[event as keyof PageEvents] as (args: unknown) => void)(args);
+    (events[event as keyof PappEvents] as (args: unknown) => void)(args);
   } else {
     return false;
   }

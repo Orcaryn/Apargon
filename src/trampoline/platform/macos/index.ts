@@ -150,7 +150,7 @@ function pappProfile({ permissions, own, storage, protectedFolders, proxyPort }:
     ...(permissions.writeAll ?
       ['(deny file-write* (subpath "/Volumes"))', ...(local.length ? [`(allow file-write* ${localVolumes})`] : []), `(deny file-write* ${offLimits})`]
     : ['(deny file-write*)', `(allow file-write* ${[own, storage, temp, ...permissions.write].map(folder => `(subpath ${quote(folder.replace(/[\\/]$/, ''))})`).join(' ')})`]),
-    // Apargon's data holds the approvals, the .papp files' folders hold each other, and the app is the app: none is written, even under papp-write all.
+    // The .papp files' folders hold each other and Apargon's data, and the app is the app: none is written, even under papp-write all.
     `(deny file-write* ${protectedFolders.map(folder => `(subpath ${quote(folder)})`).join(' ')})`,
     `(allow file-write* (subpath ${quote(own)}))`,
     // Last: the devices it may open. No terminal, not even by name: through it the .papp file could type into the shell that started Apargon.

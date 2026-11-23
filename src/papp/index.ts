@@ -3,7 +3,7 @@ import path from 'path';
 import { Worker } from 'worker_threads';
 import { pappAccess } from '../permissions/access/index.ts';
 import { describe } from '../permissions/describe/index.ts';
-import { APP_ROOT, DATA, OWN_FOLDERS } from '../shared/data/index.ts';
+import { APP_ROOT, OWN_FOLDERS } from '../shared/data/index.ts';
 import type { PappConfig } from '../shared/wire/protocol/index.ts';
 import { BYTES_SCHEME, serveApi } from './api/index.ts';
 import { onTrampolineEvent } from './channel/index.ts';
@@ -62,7 +62,7 @@ export async function startPapp({ papp, permissions, pappHash, own, proxy, bound
   }
 
   const dir = path.dirname(papp);
-  const canChange = pappAccess(permissions, own, [DATA, OWN_FOLDERS, ...(app.isPackaged ? [APP_ROOT] : [])]);
+  const canChange = pappAccess(permissions, own, [OWN_FOLDERS, ...(app.isPackaged ? [APP_ROOT] : [])]);
   // The user's picks: as at start, then as the trampoline sends them after each pick.
   let picks = firstPicks;
   const pappSession = createPappSession(papp, permissions, pappHash, canChange);

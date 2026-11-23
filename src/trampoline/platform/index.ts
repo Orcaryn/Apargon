@@ -2,7 +2,7 @@ import type { ChildProcess } from 'child_process';
 import type { EventEmitter } from 'events';
 import type { Duplex, Readable, Writable } from 'stream';
 import type { Permissions } from '../../permissions/tags/index.ts';
-import { DATA, OWN_FOLDERS } from '../../shared/data/index.ts';
+import { OWN_FOLDERS } from '../../shared/data/index.ts';
 import type { Relay } from '../../shared/wire/protocol/index.ts';
 import { linux } from './linux/index.ts';
 import { macos } from './macos/index.ts';
@@ -58,5 +58,5 @@ export type Prepared = {
 // Any other OS gets Linux's, which refuses it.
 export const TRAMPOLINE_PLATFORM: TrampolinePlatform = process.platform === 'darwin' ? macos : process.platform === 'win32' ? windows : linux;
 
-// Folders no tag may hand over: Apargon's data, the .papp files' own folders, and the installed app.
-export const PROTECTED = [DATA, OWN_FOLDERS, TRAMPOLINE_PLATFORM.installed].filter(folder => folder !== null);
+// Folders no tag may hand over: the .papp files' own folders, Apargon's data among them, and the installed app.
+export const PROTECTED = [OWN_FOLDERS, TRAMPOLINE_PLATFORM.installed].filter(folder => folder !== null);

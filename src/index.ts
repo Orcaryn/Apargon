@@ -2,10 +2,15 @@ import { app } from 'electron';
 import path from 'path';
 import { PAPP_CONFIG, tellTrampoline } from './papp/channel/index.ts';
 import { preparePapp, startPapp } from './papp/index.ts';
+import { DATA } from './shared/data/index.ts';
 import { openPapp, startTrampoline } from './trampoline/index.ts';
 
 if (PAPP_CONFIG) {
   preparePapp(PAPP_CONFIG);
+} else {
+  app.setPath('userData', DATA);
+  // Chromium's own files: nothing in them is the user's.
+  app.setPath('sessionData', path.join(DATA, 'cache'));
 }
 
 const PAPP_FILE = /\.papp$/i;

@@ -167,7 +167,7 @@ function bwrapArgs({ permissions, own, protectedFolders }: Sandbox, filtered: bo
     ...(!WAYLAND && process.env.XAUTHORITY ? ['--ro-bind-try', process.env.XAUTHORITY, process.env.XAUTHORITY] : []),
     ...devices.flatMap(file => ['--dev-bind', file, file]),
     ...remoteMounts().flatMap(folder => ['--tmpfs', folder]),
-    // Apargon's data holds the approvals, the .papp files' folders hold each other, and the app is the app: read-only, even under papp-write all.
+    // The .papp files' folders hold each other and Apargon's data, and the app is the app: read-only, even under papp-write all.
     ...protectedFolders.filter(folder => fs.existsSync(folder)).flatMap(folder => ['--ro-bind', folder, folder]),
     ...['--tmpfs', SECRETS_DATA],
     ...[own, ...permissions.write].flatMap(folder => ['--bind', folder, folder]),

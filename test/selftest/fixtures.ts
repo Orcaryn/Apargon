@@ -10,18 +10,13 @@ fs.mkdirSync(path.join(fs.realpathSync.native(os.homedir()), '.ssh'), { recursiv
 fs.mkdirSync(results, { recursive: true });
 fs.mkdirSync(path.join(papps, 'touched'), { recursive: true });
 
-// selftest.papp's picks, as if the user picked them: a folder to write in, emptied each run, and a file. In Apargon's records, in the data folder Electron gives `electron .`.
+// selftest.papp's picks, as if the user picked them: a folder to write in, emptied each run, and a file, written into Apargon's records.
 const picked = path.join(results, 'picked');
 const pickedFile = path.join(results, 'picked-file.txt');
 fs.rmSync(picked, { recursive: true, force: true });
 fs.mkdirSync(picked);
 fs.writeFileSync(pickedFile, '');
-const appData = {
-  darwin: path.join(os.homedir(), 'Library', 'Application Support'),
-  linux: process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), '.config'),
-  win32: process.env.APPDATA!,
-}[process.platform as 'darwin' | 'linux' | 'win32'];
-const records = path.join(appData, 'apargon', 'papps');
+const records = path.join(os.homedir(), '.apargon', '.data', 'papps');
 fs.mkdirSync(records, { recursive: true });
 pappRecords(records).change(fs.realpathSync.native(path.join(papps, 'selftest.papp')), {
   picks: [

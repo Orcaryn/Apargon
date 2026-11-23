@@ -51,7 +51,7 @@ export const linux: TrampolinePlatform = {
 
     return null;
   },
-  unsafeDesktop: X11_DISPLAY !== null,
+  isX11: X11_DISPLAY !== null,
   // An AppImage is one file, often in the home folder. The .deb's folder belongs to root.
   installed: app.isPackaged ? (process.env.APPIMAGE ?? path.dirname(process.execPath)) : null,
   async prepare(sandbox) {

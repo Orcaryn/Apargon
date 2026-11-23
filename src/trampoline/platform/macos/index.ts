@@ -19,7 +19,7 @@ export const macos: TrampolinePlatform = {
   os: 'darwin',
   // Electron itself refuses a macOS older than it supports, and every macOS has sandbox-exec.
   unsupported: async () => null,
-  unsafeDesktop: false,
+  isX11: false,
   // The .app bundle: Apargon.app/Contents/MacOS/Apargon.
   installed: app.isPackaged ? path.resolve(process.execPath, '../../..') : null,
   async prepare(sandbox) {

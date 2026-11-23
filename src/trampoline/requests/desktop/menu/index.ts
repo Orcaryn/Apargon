@@ -60,6 +60,6 @@ function revoke(papps: string[]) {
       fs.rmSync(path.join(SECRETS_DATA, `${id}.json`), { force: true });
     }
 
-    records.change(papp, { approval: undefined, unsafeDesktop: undefined, picks: undefined, id: undefined });
+    records.change(papp, { approval: undefined, x11Approval: undefined, picks: undefined, id: undefined });
   }
 }

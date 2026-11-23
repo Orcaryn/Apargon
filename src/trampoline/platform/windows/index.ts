@@ -34,7 +34,7 @@ export const windows: TrampolinePlatform = {
       return `Apargon needs Windows 11 with ProcessContainer, which this Windows doesn't have (${(err as Error).message}).`;
     }
   },
-  unsafeDesktop: false,
+  isX11: false,
   installed: app.isPackaged ? path.dirname(process.execPath) : null,
   async prepare(sandbox) {
     const { papp, permissions, own, protectedFolders, proxyPort } = sandbox;

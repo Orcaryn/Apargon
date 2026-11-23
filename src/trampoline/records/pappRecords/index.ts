@@ -12,8 +12,8 @@ import { readJson, writeJson } from '../../json/index.ts';
 type PappRecord = {
   // hash: of the bytes the user said yes to, with the popup lines they saw: a change to either asks again. For a file whose changes the user trusts, of the lines alone. lines: only to mark the new ones when it asks again.
   approval?: { hash: string; lines: Line[] };
-  // The hash of the bytes the user opened on a desktop where Apargon can't keep its promise, as X11. Any change asks again.
-  unsafeDesktop?: string;
+  // The hash of the bytes the user opened on X11, where Apargon can't keep its promise. Any change asks again.
+  x11Approval?: string;
   // What the user picked in a dialog: to read, to write, or a folder to write in.
   picks?: Pick[];
   // Where the user left the window.

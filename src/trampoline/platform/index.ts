@@ -16,8 +16,8 @@ export type TrampolinePlatform = {
   os: 'darwin' | 'linux' | 'win32';
   // Why this computer can't open a .papp file safely, or null. Asked once, at start: old and unsafe systems are refused.
   unsupported(): Promise<string | null>;
-  // Whether Apargon can't keep its promise on this desktop, as on X11: then the user is asked first, once per hash of the .papp file's bytes.
-  unsafeDesktop: boolean;
+  // On X11 Apargon can't keep its promise: the user is asked first, once per hash of the .papp file's bytes.
+  isX11: boolean;
   // The installed app, which no tag or pick may change. Null when run from the source.
   installed: string | null;
   // Builds the sandbox. The limits are set once, here.

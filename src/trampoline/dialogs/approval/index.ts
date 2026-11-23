@@ -19,14 +19,14 @@ export async function approve(file: string): Promise<Approved | null> {
   const pappHash = createHash('sha256').update(html).digest('hex');
   const record = records.get(papp);
 
-  if (TRAMPOLINE_PLATFORM.unsafeDesktop && record.unsafeDesktop !== pappHash) {
+  if (TRAMPOLINE_PLATFORM.isX11 && record.x11Approval !== pappHash) {
     if (TEST_ALLOW) {
       console.log(`Apargon: opened on X11 for the test: ${path.basename(papp)}`);
     } else if (!(await ask(path.join(import.meta.dirname, 'html', 'unsafe-desktop.html'), {}))) {
       return null;
     }
 
-    records.change(papp, { unsafeDesktop: pappHash });
+    records.change(papp, { x11Approval: pappHash });
   }
 
   const lines = describe(permissions);

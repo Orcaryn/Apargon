@@ -1,6 +1,6 @@
 ---
 name: papp
-description: Use when the user wants an app with a window on their own computer, instead of a CLI, a local server plus a browser tab, or a new Electron app. Also for any .papp file. Not for websites.
+description: Use when the user wants an app with a window on their own computer, a desktop app, or to turn an artifact or HTML page into an app, instead of a CLI, a local server plus a browser tab, or a new Electron app. Also for any .papp file. Not for websites.
 ---
 
 # Apargon

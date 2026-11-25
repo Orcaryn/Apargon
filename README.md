@@ -1,21 +1,20 @@
 # Apargon
 
-Apargon is a reverse browser for macOS, Linux, and Windows.
+Create desktop apps with any AI, for macOS, Windows, and Linux. Each app opens in its own window, with its own icon, menus, and menu bar or tray icon. It can ask for notifications, global shortcuts, and always-on-top windows.
 
-A browser gets all of the internet and none of your computer. Apargon flips it: an app gets your files and only the sites you allow.
+No account, no cloud. Each app is one `.papp` file on your disk: plain HTML, with `<meta>` tags that ask for any extra permissions. No installer, no server, no build step. Double-click it to run it. Send it to share it.
 
-It reads your local disks, writes only its own folder, and sends nothing off your computer unless you said yes.
+Apargon is a reverse browser. A browser gets all of the internet and none of your computer. 
+Apargon flips it: an app reads your local disks, writes only its own folder, and reaches no site unless you say yes. It runs in a sandboxed window.
 
-Every app is a single `.papp` file: plain HTML, with `<meta>` tags that ask for any extra permissions it needs. No installer, no server, no build step. Double-click it, and it opens in a sandboxed window with its own icon.
-
-A coding agent can write one from a prompt.
+Any coding agent can write one from a prompt: Claude Code, Codex, Cursor, or a local model.
 
 With one file, you can have:
 
-- **Your own daily apps:** an email client locked to your mail server, a personal finance tracker over your bank exports with no internet at all, or a Markdown notes app over a folder you own.
-- **Native desktop tools:** a menu-bar or system-tray app, a floating window on a global shortcut, or a background helper that starts at login and sends notifications.
-- **A desk for your scripts and agents:** drop a `.papp` file beside any folder of Markdown, data, or media to review drafts, play local renders, run a CLI tool, and write your decisions back to disk.
-- **Software for one afternoon:** a side-by-side reviewer for a batch of files or AI rewrites. Use it until the folder is empty, then delete the file.
+- **Your own daily apps:** an email client locked to your mail server, a personal finance tracker over your bank exports with no internet at all, a Markdown notes app over a folder you own, or an order or inbox tracker.
+- **Native desktop tools:** a focus timer in the menu bar, a floating window on a global shortcut, or a folder organizer that runs at login and sends notifications.
+- **A desk for your scripts and agents:** drop a `.papp` file beside any folder of Markdown, data, or media to review drafts, play local renders, run `ffmpeg` or `git`, and write your decisions back to disk.
+- **Software for one afternoon:** a photo culler, or a side-by-side reviewer for a batch of files or AI rewrites. Use it until the folder is empty, then delete the file.
 
 Because every app is an HTML file on your disk, it's malleable software too: open it, change anything you want, save, and the window reloads.
 
@@ -48,7 +47,6 @@ for dir in ~/.claude/skills/papp ~/.agents/skills/papp; do
   curl -fsSL https://apargon.com/.well-known/agent-skills/papp/SKILL.md -o "$dir/SKILL.md"
 done
 ```
-
 ## Example
 
 ```html
@@ -59,6 +57,8 @@ done
 <textarea id="text"></textarea>
 <button id="save">Save</button>
 <script type="module">
+  const text = document.getElementById('text');
+  const save = document.getElementById('save');
   const file = `${papp.folder}/notes.txt`;
   text.value = (await papp.exists(file)) ? await papp.readFile(file) : '';
   save.onclick = () => papp.writeFile(file, text.value);
@@ -69,13 +69,12 @@ done
 
 Without permission tags, a `.papp` file opens immediately. It can read your local disks, write to its own folder, open file pickers, store OS-sealed secrets, set a custom icon, native menus, and tray icon, print, and live-reload on save, with no network.
 
-`<meta>` tags in `<head>` unlock more, one capability at a time:
+`<meta>` tags in `<head>` unlock more, one capability at a time. One folder or one CLI tool doesn't give the app your other files or the internet.
 
-- **Window and desktop:** frameless, transparent, floating, click-through, and screen-share-private windows, notifications, sound, global shortcuts, running in the background, and starting at login.
+- **Window and desktop:** frameless, transparent, always-on-top, click-through, and screen-share-private windows, notifications, sound, global shortcuts, running in the background, and starting at login.
 - **Files, programs, and devices:** write access to specific folders, CLI tools (`git`, `ffmpeg`, scripts) running inside the same sandbox and network fence, Unix sockets, clipboard, camera, microphone, screen capture, location, cloud folders, USB, serial, HID, MIDI, and Bluetooth.
 - **Network:** an exact `host:port` allowlist enforced by Apargon's proxy, plus a local or LAN HTTP server.
 - **No limits:** `papp-system` runs the `.papp` file as an unrestricted Node script in a window when you need what the sandbox can't do.
-
 ```html
 <meta name="papp-id"              content="4f2c9a1e-7b3d-4c58-9e21-0a6d8f3b5c77"> <!-- who it is, always -->
 <meta name="papp-write"           content="~/notes/">                 <!-- change files in one folder; all instead of content for any -->
@@ -90,7 +89,7 @@ Without permission tags, a `.papp` file opens immediately. It can read your loca
 <meta name="papp-system">                                             <!-- everything: Node and the internet -->
 ```
 
-Any tag that lets data leave your computer, changes files outside the app's folder, watches you, or works with its window closed asks in a plain-English popup first. Approvals are pinned to the file's exact bytes and can be revoked at any time.
+Any tag that lets data leave your computer, changes files outside the app's folder, watches you, or works with its window closed asks in a plain-English popup first. Approvals are pinned to the file's exact bytes, unless you choose to trust its changes, and can be revoked at any time.
 
 ## Docs
 

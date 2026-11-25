@@ -2,6 +2,7 @@ import type { Permissions } from '../../permissions/tags/index.ts';
 import { handleLine, type CallHandlers, type EventHandlers, type PappEvents, type Tell, type TrampolineEvents } from '../../shared/wire/protocol/index.ts';
 import { byteStreams } from '../../shared/wire/streams/index.ts';
 import type { StartedPapp } from '../pappProcess/index.ts';
+import { records } from '../records/index.ts';
 import { desktopRequests } from './desktop/index.ts';
 import { fileRequests } from './files/index.ts';
 import { readLines } from './lines/index.ts';
@@ -24,6 +25,8 @@ export function serveRequests(papp: string, permissions: Permissions, { child, p
     ...desktop.events,
     ...network.events,
     programKill: programs.kill,
+    // A script, style or other .papp file it loaded for the first time since the yes: from here on the yes covers these bytes.
+    code: ({ file, hash }) => records.change(papp, { code: { ...records.get(papp).code, [file]: hash } }),
     restart: () => {
       restarting = true;
       tell('forceQuit');

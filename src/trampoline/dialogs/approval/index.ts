@@ -6,11 +6,12 @@ import { describe } from '../../../permissions/describe/index.ts';
 import { HOME } from '../../../permissions/paths/index.ts';
 import { declaredPermissions, type Permissions } from '../../../permissions/tags/index.ts';
 import { TEST_ALLOW } from '../../../shared/data/index.ts';
+import type { Yes } from '../../../shared/wire/protocol/index.ts';
 import { PROTECTED, TRAMPOLINE_PLATFORM } from '../../platform/index.ts';
 import { records } from '../../records/index.ts';
 import { ask } from '../ask/index.ts';
 
-export type Approved = { papp: string; permissions: Permissions; pappHash: string | null };
+export type Approved = { papp: string; permissions: Permissions; yes: Yes | null };
 
 // A file whose tags ask nothing opens at once: it reads, writes its own folder, and has no network. A tag that asks needs the user's yes, and the yes belongs to the file's exact bytes and to what the popup showed: a change to either asks again. A user who then trusts the file's changes is asked only when the popup would show other lines. On X11 every file asks first, the same way, once per hash.
 export async function approve(file: string): Promise<Approved | null> {
@@ -34,17 +35,21 @@ export async function approve(file: string): Promise<Approved | null> {
   const sameId = record.id === permissions.id ? [] : records.all().filter(saved => saved.id === permissions.id).map(saved => saved.path);
 
   if (!lines.length && !sameId.length) {
-    return { papp, permissions, pappHash: null };
+    return { papp, permissions, yes: null };
   }
 
   // The same bytes lead elsewhere once a papp-write folder becomes a link, or PATH finds another program: the popup lines show where.
   const yesToBytes = createHash('sha256').update(pappHash + JSON.stringify(lines)).digest('hex');
   const yesToChanges = createHash('sha256').update(JSON.stringify(lines)).digest('hex');
+  // The yes covers the scripts, styles and other .papp files it loaded too: one that changed, or is gone, asks again.
+  const code = record.code ?? {};
+  // Only a regular file is read: a FIFO would block the trampoline, and every papp with it.
+  const changedCode = Object.keys(code).filter(loaded => !fs.statSync(loaded, { throwIfNoEntry: false })?.isFile() || createHash('sha256').update(fs.readFileSync(loaded)).digest('hex') !== code[loaded]);
 
-  if (!sameId.length && record.approval?.hash === yesToBytes) {
-    return { papp, permissions, pappHash };
+  if (!sameId.length && !changedCode.length && record.approval?.hash === yesToBytes) {
+    return { papp, permissions, yes: { pappHash, code } };
   } else if (!sameId.length && record.approval?.hash === yesToChanges) {
-    return { papp, permissions, pappHash: null };
+    return { papp, permissions, yes: null };
   }
 
   const linesNow = lines.map(line => JSON.stringify(line));
@@ -53,6 +58,7 @@ export async function approve(file: string): Promise<Approved | null> {
     record.approval === undefined || !lines.length ? null
     : linesNow.some(line => !linesBefore.includes(line)) ? 'It asks for more than when you said yes. The new lines are marked.'
     : linesBefore.some(line => !linesNow.includes(line)) ? 'It asks for less than when you said yes.'
+    : changedCode.length && record.approval.hash === yesToBytes ? `${changedCode.map(loaded => path.relative(path.dirname(papp), loaded)).join(', ')} changed since you said yes. It asks for the same things.`
     : 'This file changed since you said yes. It asks for the same things.';
   const downloadAddress = TRAMPOLINE_PLATFORM.downloadAddress(papp);
   const site = downloadAddress === null ? null : (URL.parse(downloadAddress)?.hostname ?? '');
@@ -71,8 +77,8 @@ export async function approve(file: string): Promise<Approved | null> {
   if (answer === null) {
     return null;
   } else if (lines.length) {
-    records.change(papp, { approval: { hash: answer === 'trust' ? yesToChanges : yesToBytes, lines } });
+    records.change(papp, { approval: { hash: answer === 'trust' ? yesToChanges : yesToBytes, lines }, code: undefined });
   }
 
-  return { papp, permissions, pappHash: !lines.length || answer === 'trust' ? null : pappHash };
+  return { papp, permissions, yes: !lines.length || answer === 'trust' ? null : { pappHash, code: {} } };
 }

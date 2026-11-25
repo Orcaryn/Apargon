@@ -5,8 +5,6 @@ import { windows } from './windows/index.ts';
 
 export type PappPlatform = {
   isOffline(): boolean | Promise<boolean>;
-  // Whether this process can show a notification itself; otherwise it asks the trampoline to.
-  notifiesHere: boolean;
   beforeReady?(papp: string): void;
   pin?(win: BrowserWindow, papp: string): void;
   appMenu: boolean;

@@ -6,8 +6,6 @@ import type { PappPlatform } from '../index.ts';
 export const windows: PappPlatform = {
   // Both this computer and one off it: a Windows sandbox can block loopback alone and still have internet.
   isOffline: async () => (await Promise.all([connectError('127.0.0.1', 9), connectError(UNROUTED, 9)])).every(code => code === 'EACCES'),
-  // Windows shows notifications through a service the sandbox may not reach.
-  notifiesHere: false,
   // The taskbar groups windows by app id: each .papp file gets its own button.
   beforeReady(papp) {
     app.setAppUserModelId(pappAppId(papp));

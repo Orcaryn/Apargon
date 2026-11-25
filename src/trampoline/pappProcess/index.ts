@@ -14,7 +14,7 @@ import { menuState, records } from '../records/index.ts';
 // The .papp file's process, running in its sandbox. close: once the process is gone, takes its proxy and its sandbox down.
 export type StartedPapp = { child: PappProcess; prepared: Prepared; own: string; close(): void };
 
-export async function startPappProcess({ papp, permissions, pappHash }: Approved): Promise<StartedPapp> {
+export async function startPappProcess({ papp, permissions, yes }: Approved): Promise<StartedPapp> {
   // Its own folder, by its id: an update, under any name or path, finds its data. The id is kept with the file's record, so a revoke can find its secrets.
   const own = path.join(OWN_FOLDERS, permissions.id);
   const storage = path.join(own, '.electron');
@@ -37,7 +37,7 @@ export async function startPappProcess({ papp, permissions, pappHash }: Approved
   const config: PappConfig = {
     papp,
     permissions,
-    pappHash,
+    yes,
     own,
     proxy: prepared.proxy,
     relays: prepared.relays,

@@ -12,8 +12,10 @@ export type Relay = { port: number; target: string };
 export type MenuState = { approved: string[]; automaticUpdates: boolean };
 // A pick to write: a file, or a folder to write in by plain names.
 export type Pick = { path: string; folder: boolean };
-// pappHash: null for a file whose tags ask nothing, or whose changes the user trusts. programsHere: whether the papp process starts its fenced programs inside its own sandbox, or the trampoline does.
-export type PappConfig = { papp: string; permissions: Permissions; pappHash: string | null; own: string; proxy: string | null; relays: Relay[]; requestFd: number; replyFd: number; muxFd: number | null; bounds: Rectangle | null; menu: MenuState; programsHere: boolean };
+// What the user's yes covers: the .papp file's bytes, and the bytes of each script, style and other .papp file it loaded since, by its path.
+export type Yes = { pappHash: string; code: Record<string, string> };
+// yes: null for a file whose tags ask nothing, or whose changes the user trusts. programsHere: whether the papp process starts its fenced programs inside its own sandbox, or the trampoline does.
+export type PappConfig = { papp: string; permissions: Permissions; yes: Yes | null; own: string; proxy: string | null; relays: Relay[]; requestFd: number; replyFd: number; muxFd: number | null; bounds: Rectangle | null; menu: MenuState; programsHere: boolean };
 export type TrayItem = { separator: true } | { label: string; id: string; checked?: boolean; radio?: boolean } | { label: string; submenu: TrayItem[] };
 // Raw pixels, decoded and sized in the papp process: the trampoline, which has network, decodes no image a .papp file sends.
 export type TrayIcon = { width: number; height: number; pixels: string };
@@ -25,6 +27,8 @@ export type ProgramStart = { id: string; name: string; args: string[]; cwd: stri
 export type ProgramExit = { status: number | null; signal: string | null; error: string | null };
 // Headers by lowercase name, repeats joined with a comma as a browser joins them. body: a stream's id.
 export type IncomingRequest = { server: string; id: string; method: string; url: string; headers: Record<string, string>; body: string };
+// The side, in pixels, of a notification's icon.
+export const NOTICE_ICON_SIDE = 256;
 // icon: the id of a stream of raw pixels, NOTICE_ICON_SIDE each way.
 export type Notice = { title: string; body: string; buttons: string[]; icon: string | null };
 
@@ -40,7 +44,7 @@ export type Calls = {
   listen: { args: { server: string; port: number | null }; result: string };
   // Answered only after the listener and its connections have closed.
   unlisten: { args: { server: string }; result: null };
-  notify: { args: Notice; result: number | null };
+  notify: { args: Notice; result: number | 'click' | null };
   trash: { args: { file: string }; result: null };
   startProgram: { args: ProgramStart; result: { stdout: string; stderr: string } };
   print: { args: { data: string }; result: boolean };
@@ -58,6 +62,7 @@ export type PappEvents = {
   openLink: string;
   programKill: { id: string };
   restart: undefined;
+  code: { file: string; hash: string };
 };
 
 export type TrampolineEvents = {

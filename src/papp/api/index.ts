@@ -19,7 +19,7 @@ import { pappScope, type Scope } from './scope/index.ts';
 export const BYTES_SCHEME = 'papp-bytes';
 
 // What every window of the .papp file shares: the menu bar, the icon as drawn, the proxy, if the .papp file has network, the shortcuts it picked, and the user's picks to write.
-type PappWide = { menus: PappMenus; toFront: () => void; pappIcon: () => NativeImage | null; proxy: string | null; pickShortcuts: (keys: string[]) => void; picks: () => Pick[]; programsHere: boolean };
+type PappWide = { menus: PappMenus; pappIcon: () => NativeImage | null; proxy: string | null; pickShortcuts: (keys: string[]) => void; picks: () => Pick[]; programsHere: boolean };
 
 // Every .papp file gets papp, a papp-system one too.
 export function serveApi(dir: string, own: string, permissions: Permissions, canChange: (file: string) => boolean, pappWide: PappWide) {
@@ -35,7 +35,7 @@ export function serveApi(dir: string, own: string, permissions: Permissions, can
     return papp[call as keyof typeof papp] as (...args: unknown[]) => unknown;
   };
 
-  ipcMain.on('apargon-dir', event => (event.returnValue = { dir, folder: own, token: pappBySender.get(event.sender.id)!.token }));
+  ipcMain.on('apargon-dir', event => (event.returnValue = { dir, folder: own, token: pappBySender.get(event.sender.id)!.token, notifications: permissions.use.includes('notifications') }));
   // papp-bytes://<token>/<call>?args=<JSON list>. A request with a body hands it to the call as a stream, before the arguments. A call that gives a stream answers with its bytes, any other with its value.
   protocol.handle(BYTES_SCHEME, async request => {
     const url = new URL(request.url);
@@ -83,7 +83,7 @@ export function serveApi(dir: string, own: string, permissions: Permissions, can
 }
 
 // window.papp in the window is a mirror of this object.
-function windowPapp(dir: string, permissions: Permissions, scope: Scope, win: BrowserWindow, { menus, toFront, pappIcon, proxy, pickShortcuts, picks, programsHere }: PappWide, options: BrowserWindowConstructorOptions) {
+function windowPapp(dir: string, permissions: Permissions, scope: Scope, win: BrowserWindow, { menus, pappIcon, proxy, pickShortcuts, picks, programsHere }: PappWide, options: BrowserWindowConstructorOptions) {
   const files = fileApi(dir, scope, win, picks);
   const programs = programApi(permissions, programsHere, proxy, scope, win);
   const pappWindow = windowApi(permissions, scope, win, menus, options);
@@ -99,7 +99,7 @@ function windowPapp(dir: string, permissions: Permissions, scope: Scope, win: Br
     ...connections,
     ...system,
     ...secrets,
-    notify: notifyApi(permissions, toFront, pappIcon),
+    notify: notifyApi(permissions, pappIcon),
     tray,
     shortcuts: pickShortcuts,
     // The trampoline started this process with the papp-env names.

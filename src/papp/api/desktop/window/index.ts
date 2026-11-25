@@ -34,7 +34,7 @@ export function windowApi(permissions: Permissions, { where }: Scope, win: Brows
       const offScreen = bounds.x < area.x || bounds.y < area.y || bounds.x + bounds.width > area.x + area.width || bounds.y + bounds.height > area.y + area.height;
 
       if (change.bounds && offScreen) {
-        throw new Error(`Apargon: the window would leave the screen: it must fit within ${area.width} × ${area.height} at ${area.x}, ${area.y}. Read papp.displays() for each screen's work area.`);
+        throw new Error(`Apargon: the window would leave the screen: it must fit within ${area.width} × ${area.height} at ${area.x}, ${area.y}. window.getScreenDetails() gives each screen's work area.`);
       } else if (change.bounds) {
         win.setBounds(bounds);
       }
@@ -132,12 +132,6 @@ export function windowApi(permissions: Permissions, { where }: Scope, win: Brows
         file: win.getRepresentedFilename() === '' ? null : win.getRepresentedFilename(),
         edited: win.isDocumentEdited(),
       };
-    },
-    // Each screen, and where on it a window may go.
-    displays() {
-      const primary = screen.getPrimaryDisplay().id;
-
-      return screen.getAllDisplays().map(({ id, bounds, workArea, scaleFactor }) => ({ bounds, workArea, scaleFactor, primary: id === primary }));
     },
     // Keeps the computer awake, and with display its screen on, until letSleep, or the window closes or reloads.
     keepAwake({ display = false }: { display?: boolean } = {}) {

@@ -50,7 +50,7 @@ export function preparePapp({ papp, own, proxy, permissions, relays, muxFd }: Pa
   app.on('window-all-closed', () => app.quit());
 }
 
-export async function startPapp({ papp, permissions, pappHash, own, proxy, bounds, menu, programsHere }: PappConfig) {
+export async function startPapp({ papp, permissions, yes, own, proxy, bounds, menu, programsHere }: PappConfig) {
   // The offline check: a .papp file never opens with network it wasn't given. papp-system has the internet.
   if (!permissions.system && !(await PAPP_PLATFORM.isOffline())) {
     const refusal = 'This process can still reach the network, so it is not in the sandbox. Refusing to open the .papp file. If APARGON is set in your environment, unset it.';
@@ -65,7 +65,7 @@ export async function startPapp({ papp, permissions, pappHash, own, proxy, bound
   const canChange = pappAccess(permissions, own, [OWN_FOLDERS, ...(app.isPackaged ? [APP_ROOT] : [])]);
   // The user's picks to write, as the trampoline sends them after each pick.
   let picks: Pick[] = [];
-  const pappSession = createPappSession(papp, permissions, pappHash, canChange);
+  const pappSession = createPappSession(papp, permissions, yes, canChange);
   const menus = installMenu(papp, describe(permissions), menu);
   const windows = openWindows(papp, permissions, pappSession, bounds);
   const pappIcon = followFavicon(windows.main, true, permissions.window?.mark ?? true);
@@ -74,7 +74,7 @@ export async function startPapp({ papp, permissions, pappHash, own, proxy, bound
     windows.toFront();
     windows.send('apargon-shortcut', keys);
   });
-  const api = serveApi(dir, own, permissions, canChange, { menus, toFront: windows.toFront, pappIcon, proxy, pickShortcuts, picks: () => picks, programsHere });
+  const api = serveApi(dir, own, permissions, canChange, { menus, pappIcon, proxy, pickShortcuts, picks: () => picks, programsHere });
   windows.load((opened, options) => api.enable(opened, options));
 
   // shutdown: on macOS and Linux; the .papp file gets the event, not time: Apargon does not hold the shutdown back.
@@ -83,7 +83,11 @@ export async function startPapp({ papp, permissions, pappHash, own, proxy, bound
   }
 
   onTrampolineEvent({
-    show: windows.toFront,
+    // The click landed on the trampoline's notification or tray, so macOS made the trampoline the active app.
+    show: () => {
+      app.focus({ steal: true });
+      windows.toFront();
+    },
     quit: () => app.quit(),
     // destroy() skips beforeunload, so no window can stop this quit.
     forceQuit: () => {

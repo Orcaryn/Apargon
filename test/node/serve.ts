@@ -19,14 +19,28 @@ test.after(() => fs.rmSync(dir, { recursive: true }));
 
 const pappHash = createHash('sha256').update(approved).digest('hex');
 const dependencies = new Set<string>();
+const script = path.join(dir, 'app.js');
+const style = path.join(dir, 'app.css');
+const hashOf = (text: string) => createHash('sha256').update(text).digest('hex');
+fs.writeFileSync(style, 'body { color: red }');
+// The yes already covers the style, as the user approved it. The script loads for the first time.
+const kept: Record<string, string> = {};
+let reloads = 0;
 const serve = fileServer(
   papp,
-  pappHash,
+  { pappHash, code: { [style]: hashOf('body { color: red }') } },
   [],
+  () => false,
   file => {
     dependencies.add(file);
   },
+  (file, hash) => {
+    kept[file] = hash;
+  },
   async () => new Response('from Chromium'),
+  () => {
+    reloads++;
+  },
   () => undefined
 );
 const get = (file: string, range?: string) => serve(new Request(pathToFileURL(file), { headers: range ? { range } : {} }));
@@ -51,8 +65,11 @@ test('a .papp file opened without a popup reloads after an edit, until a tag ask
     quiet,
     null,
     [],
+    () => false,
+    () => undefined,
     () => undefined,
     async () => new Response('from Chromium'),
+    () => undefined,
     () => undefined
   );
 
@@ -75,10 +92,18 @@ test('a .papp file whose changes the user trusts reloads after an edit, until it
     trusted,
     null,
     describe(declaredPermissions(trusted, withSite('example.com', 'opened'), [])),
+    () => false,
+    () => undefined,
     () => undefined,
     async () => new Response('from Chromium'),
+    () => undefined,
     () => undefined
   );
+
+  fs.writeFileSync(path.join(dir, 'trusted.js'), 'first');
+  assert.equal((await serveTrusted(new Request(pathToFileURL(path.join(dir, 'trusted.js'))))).status, 200);
+  fs.writeFileSync(path.join(dir, 'trusted.js'), 'edited');
+  assert.equal(await (await serveTrusted(new Request(pathToFileURL(path.join(dir, 'trusted.js'))))).text(), 'edited');
 
   const status = async (html: string) => {
     fs.writeFileSync(trusted, html);
@@ -88,6 +113,28 @@ test('a .papp file whose changes the user trusts reloads after an edit, until it
 
   assert.equal(await status(withSite('example.com', 'edited')), 200);
   assert.equal(await status(withSite('example.org', 'edited')), 409);
+});
+
+// After every test that loads its .papp file: from here on that answers with the notice.
+test('a script or style changed since approval is refused, and then the .papp file is too', async () => {
+  fs.writeFileSync(script, 'first()');
+  const first = await get(script);
+  assert.equal(first.headers.get('content-type'), 'text/javascript');
+  assert.equal(await first.text(), 'first()');
+  assert.equal(kept[script], hashOf('first()'));
+  assert.equal((await get(script)).status, 200);
+  assert.equal((await get(style)).status, 200);
+  assert.equal((await get(papp)).status, 200);
+  assert.equal(reloads, 0);
+
+  fs.writeFileSync(script, 'swapped()');
+  assert.equal((await get(script)).status, 409);
+  assert.equal(reloads, 1);
+  assert.equal(kept[script], hashOf('first()'));
+  assert.equal((await get(papp)).status, 409);
+
+  fs.writeFileSync(style, 'body { color: blue }');
+  assert.equal((await get(style)).status, 409);
 });
 
 test('any local file is served: every .papp file reads the local disks', async () => {

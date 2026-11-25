@@ -7,8 +7,6 @@ import type { PappPlatform } from '../index.ts';
 
 export const linux: PappPlatform = {
   isOffline: inEmptyNetwork,
-  // Notifications need D-Bus, which the fence hides.
-  notifiesHere: false,
   // The window's class on X11 and app id on Wayland, which the desktop matches to the launcher entry the trampoline wrote for this .papp file.
   beforeReady(papp) {
     app.setName(pappAppId(papp));

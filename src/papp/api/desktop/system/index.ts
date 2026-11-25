@@ -27,7 +27,7 @@ export function systemApi(permissions: Permissions, { where }: Scope, win: Brows
     quit() {
       app.quit();
     },
-    // Where the pointer is on the screen, in the points of papp.displays.
+    // Where the pointer is on the screen, in the points of window.getScreenDetails().
     cursor() {
       needUse('cursor', 'see where the mouse is');
 

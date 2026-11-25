@@ -75,7 +75,6 @@
     await fetch(`http://localhost:47181/post?name=${encodeURIComponent(name)}`);
     result.hear_other_app = await Promise.race([heard, new Promise((done) => setTimeout(() => done('nothing heard'), 3000))]);
     await stop();
-    await papp.share({ text: 'Apargon selftest' });
     result.share_url_refused = await refused(() => papp.share({ url: 'file:///etc/hosts' }));
     await finish('mac');
   } catch (err) {

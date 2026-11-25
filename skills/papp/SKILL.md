@@ -21,6 +21,8 @@ Without permission tags, a `.papp` file:
 
 Each permission tag is a yes the user gives in a popup. The promise: a `.papp` file can't send anything off the computer unless the user allowed it.
 
+The page is a Chrome page opened from a file. What such a page can do in Chrome, it can do here, within the limits this skill names. Electron changes one thing: `prompt()` throws.
+
 Further reading and code: [https://github.com/Orcaryn/Apargon](https://github.com/Orcaryn/Apargon)
 
 ## How to use
@@ -48,7 +50,6 @@ Further reading and code: [https://github.com/Orcaryn/Apargon](https://github.co
 - The window shows only the `.papp` file: build it as a single-page app that changes its own view, not as pages that link to each other. A frame may hold a local file, never a web page, and has no `papp`. A link opens in the browser only if its site is in `papp-net`; any other is dropped.
 - `window.open` on its own file opens a second window, such as `window.open('#mini', '', 'size=320x80, frame=no')`. The third argument takes `papp-window` settings for that window; `on-top`, `all-spaces`, `click-through`, `private` and `dock` stay the tag's. A bad setting opens no window.
 - `<title>` is the window's title.
-- `localStorage` and IndexedDB persist, in its own folder.
 - On Windows, Apargon refuses a path that starts with `\\`, has a `:` after the drive letter, or has a name ending in a dot or a space.
 
 ### Icon
@@ -66,7 +67,7 @@ The favicon is the app icon, and on macOS the `.papp` file's icon too. Without o
 
 ### `window.papp`
 
-The `.papp` file reaches files and programs only through `papp`. A relative path starts at the `.papp` file's folder.
+A relative path starts at the `.papp` file's folder.
 
 ```ts
 type Bytes = Uint8Array;
@@ -145,8 +146,8 @@ declare const papp: {
     Promise<Handle<string | null> & { write(data: string | Bytes): Promise<void> }>;
   // file is relative to the .papp file's folder; a new file counts as changed; closed gives null, or the error if the watch stopped on its own
   watch(path: string, callback: (file: string, kind: 'changed' | 'removed') => void, options?: { recursive?: boolean }): Promise<Handle<string | null>>;
-  // needs papp-use notifications; up to 3 buttons; the button's index, or null
-  notify(title: string, body?: string, options?: { buttons?: string[] }): Promise<number | null>;
+  // needs papp-use notifications; up to 3 buttons; the button's index, 'click' for the notification itself, or null when closed
+  notify(title: string, body?: string, options?: { buttons?: string[] }): Promise<number | 'click' | null>;
   // a menu-bar icon with a title of up to 24 characters, and items of your own above Show and Quit
   // null removes the icon; with papp-use background, or with items, the icon stays and only the title goes
   // icon: PNG or JPEG bytes, or a data: URL of one, shown 16 high; null is Apargon's
@@ -168,8 +169,6 @@ declare const papp: {
   // onTop needs papp-window on-top, allSpaces all-spaces, clickThrough click-through, private private, visible: false papp-use background
   // bounds must fit on one screen's work area, and keep the size with resizable="no", as must resizable, maxSize and a maximize; opacity is 0.3 to 1 (not on Linux); a shown window does not take focus
   window(change?: Partial<Omit<WindowState, 'bounds'>> & { bounds?: Partial<Rect> }): Promise<WindowState>;
-  // each screen; workArea leaves out the menu bar, dock and taskbar
-  displays(): Promise<{ bounds: Rect; workArea: Rect; scaleFactor: number; primary: boolean }[]>;
   // keeps the computer awake, with display: true its screen on too, until the function it returns is called, or the window closes or reloads
   keepAwake(options?: { display?: boolean }): Promise<() => Promise<void>>;
   // top-level menus after Apargon's; [] removes them
@@ -181,7 +180,7 @@ declare const papp: {
   power(): Promise<{ idleSeconds: number; onBattery: boolean }>;
   // returns a stop function; shutdown comes as the computer shuts down or the user logs out, with no time to wait for
   onSystem(callback: (event: 'suspend' | 'resume' | 'lock-screen' | 'unlock-screen' | 'on-ac' | 'on-battery' | 'shutdown') => void): () => void;
-  // needs papp-use cursor; where the mouse is on the screen, in the points of papp.displays
+  // needs papp-use cursor; where the mouse is on the screen, in the points of window.getScreenDetails()
   cursor(): Promise<{ x: number; y: number }>;
   // needs papp-use broadcasts (macOS); what an app announces under that name, such as 'com.apple.screenIsLocked' or 'com.spotify.client.PlaybackStateChanged'; returns a stop function
   hear(name: string, callback: (broadcast: { name: string; sender: string; info: Record<string, unknown> }) => void): Promise<() => Promise<void>>;
@@ -299,7 +298,7 @@ Put them in `<head>`, before any `<script>`. Each tag lets the app do one more t
 
 | Feature                                     | What it turns on                               |
 | ------------------------------------------- | ---------------------------------------------- |
-| `notifications`                             | `papp.notify`                                  |
+| `notifications`                             | `Notification` and `papp.notify`               |
 | `sound`                                     | sound; without it, sound is muted              |
 | `clipboard`                                 | reading the clipboard; writing needs no tag    |
 | `camera`, `microphone`, `screen`            | recording them                                 |

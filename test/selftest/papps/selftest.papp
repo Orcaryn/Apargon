@@ -194,8 +194,9 @@
     result.tray_refused = await refused(() => papp.tray('x', 'not a list')) && await refused(() => papp.tray('x', [null]));
     result.progress_set = (await papp.progress(0.5)) === undefined && (await papp.progress(null)) === undefined;
     result.progress_refused = await refused(() => papp.progress(2)) && await refused(() => papp.progress('0.5'));
-    const screens = await papp.displays();
-    const { workArea: area } = screens.find((each) => each.primary);
+    const { screens } = await window.getScreenDetails();
+    const primary = screens.find((each) => each.isPrimary);
+    const area = { x: primary.availLeft, y: primary.availTop, width: primary.availWidth, height: primary.availHeight };
     const placed = await papp.window({ bounds: { x: area.x + 20, y: area.y + 20, width: 640, height: 480 } });
     result.window_bounds_set = placed.bounds.x === area.x + 20 && placed.bounds.width === 640;
     result.window_offscreen_refused = await refused(() => papp.window({ bounds: { x: area.x + area.width - 10 } }));

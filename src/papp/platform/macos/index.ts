@@ -7,7 +7,6 @@ import type { PappPlatform } from '../index.ts';
 
 export const macos: PappPlatform = {
   isOffline: async () => !(await canBindLoopback()),
-  notifiesHere: true,
   processGroups: true,
   programsInheritFds: true,
   appMenu: true,

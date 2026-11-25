@@ -11,6 +11,8 @@ import { readJson, writeJson } from '../../json/index.ts';
 type PappRecord = {
   // hash: of the bytes the user said yes to, with the popup lines they saw: a change to either asks again. For a file whose changes the user trusts, of the lines alone. lines: only to mark the new ones when it asks again.
   approval?: { hash: string; lines: Line[] };
+  // The hash of each script, style and other .papp file it loaded since that yes, by its path: a change to one asks again too.
+  code?: Record<string, string>;
   // The hash of the bytes the user opened on X11, where Apargon can't keep its promise. Any change asks again.
   x11Approval?: string;
   // Where the user left the window.

@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer, webFrame } = require('electron');
 
-const { dir, folder, token } = ipcRenderer.sendSync('apargon-dir');
+const { dir, folder, token, notifications } = ipcRenderer.sendSync('apargon-dir');
 
 const replyValue = reply => {
   if ('error' in reply) {
@@ -53,6 +53,30 @@ const callWithBytes = async (op, parts, ...args) => {
 call('reset');
 // A .papp file's own window.close() skips the window's close event; through the API it closes as the user's does, so a .papp file in the background hides instead. And window.print() goes through papp.print(), which prints in the trampoline, outside the sandbox.
 webFrame.executeJavaScript('window.close = () => papp.closeWindow(); window.print = () => papp.print();');
+// The web's Notification, through papp.notify: the trampoline shows every notification, and Chromium's own would show from the sandbox.
+webFrame.executeJavaScript(`window.Notification = class Notification extends EventTarget {
+  static permission = '${notifications ? 'granted' : 'denied'}';
+  static async requestPermission(callback) {
+    callback?.(Notification.permission);
+    return Notification.permission;
+  }
+  constructor(title, { body = '' } = {}) {
+    super();
+    this.title = title;
+    this.body = body;
+    const emit = type => {
+      const event = new Event(type);
+      this.dispatchEvent(event);
+      this['on' + type]?.(event);
+    };
+    papp.notify(title, body).then(picked => emit(picked === 'click' ? 'click' : 'close'), () => emit('error'));
+    if (Notification.permission === 'granted') queueMicrotask(() => emit('show'));
+  }
+  close() {}
+};
+const queryPermission = navigator.permissions.query.bind(navigator.permissions);
+navigator.permissions.query = async descriptor =>
+  descriptor.name === 'notifications' ? Object.assign(new EventTarget(), { name: 'notifications', state: Notification.permission, onchange: null }) : queryPermission(descriptor);`);
 
 const watchCallbacks = new Map();
 const shortcutCallbacks = new Set();
@@ -255,7 +279,6 @@ const papp = {
   },
   progress: value => call('progress', value),
   window: change => call('window', change),
-  displays: () => call('displays'),
   // The stop function lets this keep-awake go; a close or reload lets every one go.
   keepAwake: async options => {
     const id = await call('keepAwake', options);

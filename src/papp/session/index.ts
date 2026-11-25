@@ -1,20 +1,41 @@
-import { BrowserWindow, desktopCapturer, dialog, net, session } from 'electron';
+import { app, BrowserWindow, desktopCapturer, dialog, net, session } from 'electron';
+import { randomUUID } from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import { describe } from '../../permissions/describe/index.ts';
 import type { Permissions, Use } from '../../permissions/tags/index.ts';
-import { tellTrampoline } from '../channel/index.ts';
+import type { Yes } from '../../shared/wire/protocol/index.ts';
+import { callTrampoline, tellTrampoline, trampolineBytes } from '../channel/index.ts';
 import { liveReload } from './liveReload/index.ts';
 import { fileServer } from './serve/index.ts';
 
-export function createPappSession(papp: string, permissions: Permissions, pappHash: string | null, canChange: (file: string) => boolean) {
+export function createPappSession(papp: string, permissions: Permissions, yes: Yes | null, canChange: (file: string) => boolean) {
   const { use } = permissions;
   const pappSession = session.defaultSession;
   const reloadWindows = () => BrowserWindow.getAllWindows().filter(win => win.webContents.session === pappSession).forEach(win => win.webContents.reloadIgnoringCache());
+  const serve = fileServer(papp, yes, describe(permissions), canChange, liveReload(papp, canChange, reloadWindows), (file, hash) => tellTrampoline('code', { file, hash }), request => net.fetch(request, { bypassCustomProtocolHandlers: true }), reloadWindows, () => tellTrampoline('restart'));
+  pappSession.protocol.handle('file', serve);
 
-  pappSession.protocol.handle('file', fileServer(papp, pappHash, describe(permissions), liveReload(papp, canChange, reloadWindows), request => net.fetch(request, { bypassCustomProtocolHandlers: true }), () => tellTrampoline('restart')));
+  // The sandbox may not write where the user picks. Chromium downloads into Apargon's data folder, and the trampoline saves it on, as papp.save.
+  pappSession.on('will-download', (_event, item) => {
+    const file = path.join(app.getPath('userData'), `download-${randomUUID()}`);
+    item.setSavePath(file);
+    item.once('done', async (_done, state) => {
+      if (state === 'completed') {
+        const bytes = fs.createReadStream(file);
+        await callTrampoline('save', { file: item.getFilename(), data: trampolineBytes.send(bytes) }).catch((err: Error) => dialog.showErrorBox('Apargon', `${item.getFilename()} wasn't saved. ${err.message}`));
+        bytes.destroy();
+      }
+
+      // A cancelled download leaves no file.
+      fs.rmSync(file, { force: true });
+    });
+  });
 
   // Chromium asks for system-exclusive MIDI, which can also change an instrument's settings, for any MIDI access.
   const webPermissions: Partial<Record<Use, string[]>> = { clipboard: ['clipboard-read'], location: ['geolocation'], camera: ['media:video'], microphone: ['media:audio'], screen: ['display-capture'], usb: ['usb'], serial: ['serial'], hid: ['hid'], midi: ['midi', 'midiSysex'], bluetooth: ['bluetooth'] };
-  const allowed = ['clipboard-sanitized-write', 'fullscreen', 'pointerLock', ...use.flatMap(name => webPermissions[name] ?? [])];
+  // These reach nothing off the computer and write nothing outside its folders, so they need no tag, as in Chrome.
+  const allowed = ['clipboard-sanitized-write', 'fullscreen', 'pointerLock', 'screen-wake-lock', 'window-management', 'idle-detection', 'local-fonts', 'keyboardLock', 'persistent-storage', 'speaker-selection', ...use.flatMap(name => webPermissions[name] ?? [])];
   pappSession.setPermissionRequestHandler((_contents, permission, answer, details) => {
     const asked = permission === 'media' && 'mediaTypes' in details ? (details.mediaTypes ?? []).map(type => `media:${type}`) : [permission];
     answer(asked.length > 0 && asked.every(name => allowed.includes(name)));

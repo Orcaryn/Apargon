@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { isInside } from '../../../permissions/paths/index.ts';
@@ -5,8 +6,8 @@ import { isInside } from '../../../permissions/paths/index.ts';
 // Live reload: an edit to a .papp, .css or .js file the .papp file loaded reloads its windows; a file the .papp file may change itself does not, or every save would reload it.
 // Folders are watched, not files: an editor that saves by replacing a file would end a watch on it.
 export function liveReload(papp: string, canChange: (file: string) => boolean, reload: () => void) {
-  // A watch also fires when only a file's attributes change, such as its Finder icon or tags. Those keep the modified time.
-  const modifiedAtLoad = new Map<string, number | undefined>();
+  // A watch also fires when only a file's attributes change, such as its Finder icon or tags. The icon changes the modified time too, so the content is compared.
+  const hashAtLoad = new Map<string, string | undefined>();
   const watched = new Set<string>();
   let pendingReload: NodeJS.Timeout | undefined = undefined;
 
@@ -16,12 +17,21 @@ export function liveReload(papp: string, canChange: (file: string) => boolean, r
     console.error(`Apargon: live reload stopped for ${folder} (${err.message}). Reload the .papp file to try again.`);
   };
 
+  // undefined for a file that isn't there: a dependency may be missing, and an editor that saves by replacing removes it for a moment.
+  const contentHash = (file: string) => {
+    try {
+      return createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+    } catch {
+      return undefined;
+    }
+  };
+
   return (file: string) => {
     if (!/\.(papp|css|js)$/.test(file) || (file !== papp && canChange(file))) {
       return;
     }
 
-    modifiedAtLoad.set(file, fs.statSync(file, { throwIfNoEntry: false })?.mtimeMs);
+    hashAtLoad.set(file, contentHash(file));
     let folder = path.dirname(file);
 
     // A dependency may be missing with its parent: watch the nearest existing ancestor.
@@ -37,7 +47,7 @@ export function liveReload(papp: string, canChange: (file: string) => boolean, r
 
     try {
       fs.watch(folder, (_event, name) => {
-        if (name && [...modifiedAtLoad].some(([dependency, modified]) => isInside(dependency, path.join(folder, name)) && fs.statSync(dependency, { throwIfNoEntry: false })?.mtimeMs !== modified)) {
+        if (name && [...hashAtLoad].some(([dependency, hash]) => isInside(dependency, path.join(folder, name)) && contentHash(dependency) !== hash)) {
           clearTimeout(pendingReload);
           pendingReload = setTimeout(reload, 100);
         }

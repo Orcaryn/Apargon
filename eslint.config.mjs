@@ -22,7 +22,7 @@ const restrictedSyntax = [
 ];
 
 export default defineConfig([
-  { name: 'workspace/ignores', ignores: ['**/node_modules/**', '**/dist/**'] },
+  { name: 'workspace/ignores', ignores: ['**/node_modules/**', '**/dist/**', 'bundle/**'] },
   {
     name: 'workspace/prose',
     files: ['**/*.{js,mjs,cjs,ts}'],

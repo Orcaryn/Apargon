@@ -62,6 +62,7 @@ The favicon is the app icon, and on macOS the `.papp` file's icon too. Without o
 - SVG, PNG, ICO, JPEG, GIF or WebP: a local file, a `data:image/` URL, or a web address whose site is in `papp-net`.
 - With several favicons, an SVG wins, else the one with the most pixels.
 - It is drawn on a white rounded square with an Apargon badge. Use a square image without padding.
+- The Dock or taskbar shows it at once.
 
 ### `window.papp`
 

@@ -7,9 +7,10 @@
   "scripts": {
     "start": "electron . examples/hello.papp",
     "test": "node test/run.ts",
-    "dist": "electron-builder --mac --arm64 --x64",
-    "dist:linux": "electron-builder --linux --x64",
-    "dist:win": "electron-builder --win --x64 --arm64",
+    "bundle": "esbuild src/index.ts --bundle --platform=node --format=esm --packages=external --outfile=bundle/index.js",
+    "dist": "pnpm bundle && electron-builder --mac --arm64 --x64",
+    "dist:linux": "pnpm bundle && electron-builder --linux --x64",
+    "dist:win": "pnpm bundle && electron-builder --win --x64 --arm64",
     "start:net": "APARGON_TEST_ALLOW=1 electron . examples/net.papp",
     "lint": "tsc && eslint .",
     "lint:fix": "eslint . --fix",
@@ -25,6 +26,7 @@
     "@types/node": "^22.20.5",
     "electron": "^45.0.0",
     "electron-builder": "^26.0.0",
+    "esbuild": "^0.28.2",
     "eslint": "^10.13.0",
     "globals": "^17.13.0",
     "prettier": "^3.9.10",
@@ -34,9 +36,13 @@
   "build": {
     "appId": "com.hammer.apargon",
     "productName": "Apargon",
+    "extraMetadata": {
+      "main": "bundle/index.js"
+    },
     "files": [
+      "bundle/**",
       "src/**",
-      "skills/**",
+      "skills/papp/**",
       "!node_modules/@microsoft/mxc-sdk/bin/**",
       "!node_modules/node-pty/**"
     ],
@@ -79,6 +85,9 @@
         "NSBluetoothAlwaysUsageDescription": "A .papp file you opened in Apargon asked to use Bluetooth or a serial port."
       },
       "files": [
+        "bundle/**",
+        "src/**",
+        "skills/papp/**",
         "!node_modules/@microsoft/**",
         "!node_modules/koffi/**",
         "!node_modules/@koromix/**",
@@ -110,6 +119,9 @@
       "maintainer": "HaMMeR",
       "icon": "build/icon.png",
       "files": [
+        "bundle/**",
+        "src/**",
+        "skills/papp/**",
         "!node_modules/@microsoft/**",
         "!node_modules/koffi/**",
         "!node_modules/@koromix/**",
@@ -133,6 +145,9 @@
         }
       ],
       "files": [
+        "bundle/**",
+        "src/**",
+        "skills/papp/**",
         "!node_modules/@koromix/koffi-darwin-*/**"
       ]
     },

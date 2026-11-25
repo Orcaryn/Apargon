@@ -20,7 +20,7 @@ export function preparePapp({ papp, own, proxy, permissions, relays, muxFd }: Pa
   // Linux: the relays listen before Chromium starts, as on X11 it connects to the screen through one. 10 seconds at most. Before ready there is no dialog: the trampoline shows what the process wrote.
   if (muxFd !== null) {
     const ready = new Int32Array(new SharedArrayBuffer(4));
-    new Worker(new URL('./relays/index.ts', import.meta.url), { workerData: { muxFd, relays, ready } });
+    new Worker(path.join(app.getAppPath(), 'src/papp/relays/index.ts'), { workerData: { muxFd, relays, ready } });
     Atomics.wait(ready, 0, 0, 10_000);
 
     if (!Atomics.load(ready, 0)) {

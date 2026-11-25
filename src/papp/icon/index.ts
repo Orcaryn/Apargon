@@ -1,4 +1,4 @@
-import { BrowserWindow, nativeImage, session, type NativeImage } from 'electron';
+import { app, BrowserWindow, nativeImage, session, type NativeImage } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -90,8 +90,8 @@ async function readFavicon(win: BrowserWindow, url: string) {
 }
 
 async function drawIcon(favicons: string[], marked: boolean) {
-  const html = fs.readFileSync(path.join(import.meta.dirname, 'html', 'icon.html')).toString('base64');
-  const badge = marked ? `data:image/svg+xml;base64,${fs.readFileSync(path.join(import.meta.dirname, 'images', 'badge.svg')).toString('base64')}` : null;
+  const html = fs.readFileSync(path.join(app.getAppPath(), 'src/papp/icon/html/icon.html')).toString('base64');
+  const badge = marked ? `data:image/svg+xml;base64,${fs.readFileSync(path.join(app.getAppPath(), 'src/papp/icon/images/badge.svg')).toString('base64')}` : null;
   // Not the .papp file's session, so not one of its windows.
   const win = new BrowserWindow({ show: false, webPreferences: { session: session.fromPartition('icon'), sandbox: true, contextIsolation: true } });
 

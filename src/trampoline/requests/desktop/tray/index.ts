@@ -1,4 +1,4 @@
-import { Menu, nativeImage, Tray } from 'electron';
+import { app, Menu, nativeImage, Tray } from 'electron';
 import path from 'path';
 import { cleanTrayItems, trayItems } from '../../../../shared/menuItems/index.ts';
 import type { Tell, TrampolineEvents, TrayIcon, TrayItem } from '../../../../shared/wire/protocol/index.ts';
@@ -10,7 +10,7 @@ const ICON_SIDE = 64;
 // A menu, not only a click: Linux sends no clicks, and a .papp file in the background is quit from here. A .papp file that takes clicks gets the left one; the right one, or Control and a click, still opens the menu, with Show and Quit.
 export function trayFor(papp: string, tell: Tell<TrampolineEvents>) {
   const name = path.basename(papp);
-  const apargonIcon = nativeImage.createFromPath(path.join(import.meta.dirname, 'images', 'tray.png'));
+  const apargonIcon = nativeImage.createFromPath(path.join(app.getAppPath(), 'src/trampoline/requests/desktop/tray/images/tray.png'));
   apargonIcon.setTemplateImage(true);
   let tray: Tray | null = null;
   let menu = Menu.buildFromTemplate([]);

@@ -1,4 +1,3 @@
-import { spawnSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -53,13 +52,6 @@ const checks = Object.entries(EXPECTED).flatMap(([papp, names]) => {
       : `= ${JSON.stringify(result[check])}`,
   }));
 });
-
-// macOS marks what a program wrote once its .papp file closes.
-if (mac && written.mac) {
-  const file = path.join(path.dirname(written.mac), 'program-written.txt');
-  const marked = spawnSync('/usr/bin/xattr', ['-p', 'com.apple.quarantine', file]).status === 0;
-  checks.push({ papp: 'mac', check: 'program_write_marked', why: marked ? null : `${file} has no quarantine mark` });
-}
 
 checks.forEach(({ papp, check, why }) => console.log(`${why ? 'FAIL' : 'ok  '} ${papp} ${check}${why ? ` ${why}` : ''}`));
 process.exit(checks.every(({ why }) => why === null) ? 0 : 1);

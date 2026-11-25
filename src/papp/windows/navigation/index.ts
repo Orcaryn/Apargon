@@ -16,11 +16,11 @@ export function navigation(papp: string) {
     }
   };
 
-  // The window shows only the .papp file: no other page. A frame may hold a local file, or what the .papp file made itself. A link the user follows opens in the browser, if its site is in papp-net.
+  // The window shows only the .papp file: no other page. A frame may hold a local file, what the .papp file made itself, or a page of Chromium's own, such as its PDF viewer: a .papp file can't add an extension. A link the user follows opens in the browser, if its site is in papp-net.
   const stayOnPapp = (event: Electron.Event<{ url: string; isMainFrame: boolean }>) => {
     const protocol = URL.parse(event.url)?.protocol;
 
-    if (event.isMainFrame ? !isPapp(event.url) : !['file:', 'about:', 'data:', 'blob:'].includes(protocol ?? '')) {
+    if (event.isMainFrame ? !isPapp(event.url) : !['file:', 'about:', 'data:', 'blob:', 'chrome-extension:'].includes(protocol ?? '')) {
       event.preventDefault();
 
       if (event.isMainFrame) {

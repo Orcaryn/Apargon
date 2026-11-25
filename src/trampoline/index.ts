@@ -64,7 +64,7 @@ export async function openPapp(file: string) {
       serving.close();
       started.close();
 
-      // The .papp file changed while open: it opens again, and the popup asks again.
+      // Restart: it opens again, and the popup asks again if the file changed.
       if (serving.restarting) {
         void openPapp(approved.papp);
       }

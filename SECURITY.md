@@ -51,10 +51,7 @@ Every hole found was the same: the app asked **another program** to go online fo
 - Devices: `/dev/null`, `/dev/zero`, `/dev/random`, `/dev/urandom`, `/dev/fd`, `/dev/dtracehelper`, `/dev/autofs_nowait`. With `papp-use serial`, `/dev/cu.*` too. No terminal.
 - System services stay open only for Electron's own process. The `.papp` file runs inside a sandboxed renderer with only `papp.*` (no Node, no native code), and every sandboxed program it starts runs without those services.
 - Programs: the trampoline starts them under the same profile, plus no Mach services (`mach-lookup`, `mach-per-user-lookup`, `mach-cross-domain-lookup`, `mach-register`) except `com.apple.MTLCompilerService` (for local GPU shaders), no IOKit property writes (`iokit-set-properties`), no kernel control sockets (`system-socket`) and no NECP (`necp-client-open`).
-- Files marked as downloaded, so the Mac asks before running them:
-  - A new file, a copy, or a file you picked or saved: at once.
-  - Every file changed in its own folder and its `papp-write` folders while it ran, whoever wrote it: when the `.papp` file closes.
-  - Not marked: what was written under `papp-write all`.
+- Files marked as downloaded, so the Mac asks before running them: a new file or a copy the `.papp` file makes, and a file you picked or saved. What its programs write is not marked.
 
 ### Linux
 

@@ -27,9 +27,6 @@ export const macos: TrampolinePlatform = {
     // A temp folder of its own: the shared one holds other apps' files. Chromium takes its own variable for it, Node TMPDIR.
     const temp = fs.mkdtempSync(path.join(USER_TEMP, 'apargon-papp-'));
     const profile = permissions.system ? null : pappProfile(sandbox, temp);
-    // Files its programs write are marked when it closes: the ones newer than this.
-    const started = path.join(temp, '.started');
-    fs.writeFileSync(started, '');
     const programProfile = permissions.system ? null : `${profile}\n; Programs get no Mach services (except the offline Metal shader compiler), IOKit property writes, kernel control sockets or NECP.\n(deny mach-lookup mach-per-user-lookup mach-cross-domain-lookup mach-register iokit-set-properties system-socket necp-client-open)\n(allow mach-lookup (xpc-service-name "com.apple.MTLCompilerService"))\n`;
 
     return {
@@ -44,8 +41,6 @@ export const macos: TrampolinePlatform = {
       programsHere: false,
       startProgram: (file, args, cwd, env) => spawn('/usr/bin/sandbox-exec', ['-p', programProfile!, file, ...args], { cwd, env: { ...env, TMPDIR: temp }, detached: true }),
       close() {
-        markNewFiles(permissions.system || permissions.writeAll ? [] : [sandbox.own, ...permissions.write], started);
-
         // A folder the process left read-only, or a program still writing there, makes this fail. Logged, not thrown.
         try {
           fs.rmSync(temp, { recursive: true });
@@ -104,15 +99,6 @@ export const macos: TrampolinePlatform = {
   autoUpdates: true,
   trayClicks: true,
 };
-
-// What its programs wrote, as macOS marks a download, so the Mac asks before running it. Not its Electron data.
-function markNewFiles(folders: string[], since: string) {
-  const mark = `0083;${Math.floor(Date.now() / 1000).toString(16)};Apargon;${randomUUID().toUpperCase()}`;
-
-  for (const folder of folders.map(each => each.replace(/\/$/, '')).filter(each => fs.existsSync(each))) {
-    spawnSync('/usr/bin/find', [folder, '-path', path.join(folder, '.electron'), '-prune', '-o', '-type', 'f', '-newer', since, '-exec', '/usr/bin/xattr', '-w', 'com.apple.quarantine', mark, '{}', '+']);
-  }
-}
 
 // Seatbelt takes the last rule that matches. Reads: every local disk, but not the secrets. Writes: its own folder and papp-write. No network but the proxy. No mounting, no other devices, no opening other apps.
 function pappProfile({ permissions, own, storage, protectedFolders, proxyPort }: Sandbox, temp: string) {

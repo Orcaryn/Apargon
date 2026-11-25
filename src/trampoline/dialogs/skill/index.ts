@@ -9,7 +9,7 @@ import { ask } from '../ask/index.ts';
 
 // Inside app.asar, so on macOS the build hash covers it.
 const SKILL = path.join(app.getAppPath(), 'skills/papp/SKILL.md');
-const SKILL_WINDOW = path.join(import.meta.dirname, 'html', 'skill.html');
+const SKILL_WINDOW = path.join(app.getAppPath(), 'src/trampoline/dialogs/skill/html/skill.html');
 // Where coding agents look for the skill.
 const INSTALLED_SKILLS = ['.claude', '.agents'].map(agents => path.join(os.homedir(), agents, 'skills/papp/SKILL.md'));
 let asking = false;

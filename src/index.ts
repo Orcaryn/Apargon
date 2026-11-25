@@ -1,4 +1,4 @@
-import { app } from 'electron';
+import { app, dialog } from 'electron';
 import path from 'path';
 import { PAPP_CONFIG, tellTrampoline } from './papp/channel/index.ts';
 import { preparePapp, startPapp } from './papp/index.ts';
@@ -28,4 +28,13 @@ app.on('open-file', (event, file) => {
   }
 });
 
-void app.whenReady().then(() => (PAPP_CONFIG ? startPapp(PAPP_CONFIG) : startTrampoline(papps)));
+void app.whenReady().then(() =>
+  PAPP_CONFIG ?
+    // A papp process that fails to start has no window to close, and no way to hear that the trampoline is gone.
+    startPapp(PAPP_CONFIG).catch((err: Error) => {
+      console.error(`Apargon: ${err.message}`);
+      dialog.showErrorBox('Apargon', err.message);
+      app.exit(1);
+    })
+  : startTrampoline(papps)
+);

@@ -53,7 +53,7 @@ export function fileServer(papp: string, pappHash: string | null, linesAtOpen: L
 
     if (!fs.statSync(file, { throwIfNoEntry: false })) {
       return file === papp
-        ? notice(404, `${name} isn't there any more.`, `It was moved, renamed or deleted from ${path.dirname(papp).replace(/&/g, '&amp;').replace(/</g, '&lt;')}. Put it back to reload, or open it from its new place.`, false)
+        ? notice(404, `${name} isn't there any more.`, `It was moved, renamed or deleted from:<br>${path.dirname(papp).replace(/&/g, '&amp;').replace(/</g, '&lt;')}<br>Put it back to reload, or open it from its new place.`, false)
         : new Response(`Apargon: there is no file at ${file}\n`, { status: 404 });
     } else if (PAPP_FILE.test(file)) {
       // Read once: the bytes checked are the bytes the window renders.
@@ -74,8 +74,11 @@ export function fileServer(papp: string, pappHash: string | null, linesAtOpen: L
         }
 
         if (changedSinceYes || asksSomethingElse) {
+          // 204 keeps the page that asked: no page loads into a window the trampoline is about to close.
           if (url.searchParams.has('restart')) {
             restart();
+
+            return new Response(null, { status: 204 });
           }
 
           return changedSinceYes

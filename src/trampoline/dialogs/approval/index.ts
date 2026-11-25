@@ -1,3 +1,4 @@
+import { app } from 'electron';
 import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
@@ -22,7 +23,7 @@ export async function approve(file: string): Promise<Approved | null> {
   if (TRAMPOLINE_PLATFORM.isX11 && record.x11Approval !== pappHash) {
     if (TEST_ALLOW) {
       console.log(`Apargon: opened on X11 for the test: ${path.basename(papp)}`);
-    } else if (!(await ask(path.join(import.meta.dirname, 'html', 'unsafe-desktop.html'), {}))) {
+    } else if (!(await ask(path.join(app.getAppPath(), 'src/trampoline/dialogs/approval/html/unsafe-desktop.html'), {}))) {
       return null;
     }
 
@@ -65,7 +66,7 @@ export async function approve(file: string): Promise<Approved | null> {
     lines: lines.map((line, i) => ({ ...line, isNew: !linesBefore.includes(linesNow[i]) })),
     tags: permissions.tags,
   };
-  const answer = TEST_ALLOW ? 'allow' : await ask(path.join(import.meta.dirname, 'html', 'popup.html'), popup);
+  const answer = TEST_ALLOW ? 'allow' : await ask(path.join(app.getAppPath(), 'src/trampoline/dialogs/approval/html/popup.html'), popup);
 
   if (answer === null) {
     return null;

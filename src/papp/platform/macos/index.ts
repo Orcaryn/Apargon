@@ -23,7 +23,8 @@ export const macos: PappPlatform = {
   },
   // The trampoline sets the file's icon: this process may not write there.
   showIcon(_win, icon, madeHere) {
-    app.dock?.setIcon(icon);
+    // The Dock holds its icon at 32 bytes a pixel: 32 MB at 1024 pixels a side, 2 MB at 256.
+    app.dock?.setIcon(icon.resize({ width: 256, height: 256 }));
 
     if (madeHere) {
       tellTrampoline('pappIcon', icon.toPNG().toString('base64'));

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, screen, type Rectangle, type Session } from 'electron';
+import { app, BrowserWindow, dialog, screen, type Rectangle, type Session } from 'electron';
 import path from 'path';
 import type { Permissions } from '../../permissions/tags/index.ts';
 import { windowFeatures, type WindowSettings } from '../../permissions/window/index.ts';
@@ -17,7 +17,7 @@ export function openWindows(papp: string, permissions: Permissions, pappSession:
   }
 
   const webSecurity = !permissions.net.length;
-  const preload = path.join(import.meta.dirname, '..', 'api', 'preload', 'preload.cjs');
+  const preload = path.join(app.getAppPath(), 'src/papp/api/preload/preload.cjs');
   const webPreferences: Electron.WebPreferences =
     permissions.system ?
       { session: pappSession, nodeIntegration: true, contextIsolation: false, sandbox: false, webSecurity, preload }
@@ -61,6 +61,25 @@ export function openWindows(papp: string, permissions: Permissions, pappSession:
   };
 
   const { isPapp, stayOnPapp } = navigation(papp);
+  // A renderer that crashed or ran out of memory leaves its windows blank. One question, however many windows it took down.
+  let asking = false;
+  app.on('render-process-gone', async (_event, contents, details) => {
+    if (asking || quitting || details.reason === 'clean-exit' || contents.session !== pappSession) {
+      return;
+    }
+
+    asking = true;
+    const { response } = await dialog.showMessageBox({ type: 'error', message: `${path.basename(papp)} stopped working.`, buttons: ['Reload', 'Quit'] });
+    asking = false;
+
+    if (response === 1) {
+      // destroy() skips beforeunload, so a window that still works can't stop this quit.
+      all().forEach(other => other.destroy());
+      app.quit();
+    } else {
+      all().filter(dead => dead.webContents.isCrashed()).forEach(dead => dead.webContents.reload());
+    }
+  });
 
   return {
     main: win,

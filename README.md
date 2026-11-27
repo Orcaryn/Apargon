@@ -1,13 +1,15 @@
 # Apargon
 
-Create desktop apps with any AI, for macOS, Windows, and Linux. Each app opens in its own window, with its own icon, menus, and menu bar or tray icon. It can ask for notifications, global shortcuts, and always-on-top windows.
+Create desktop apps with any AI, for macOS, Windows, and Linux.
 
-No account, no cloud. Each app is one `.papp` file on your disk: plain HTML, with `<meta>` tags that ask for any extra permissions. No installer, no server, no build step. Double-click it to run it. Send it to share it.
+1. Describe your app to any coding agent and ask for a papp (Personal App).
+2. Double-click the `.papp` file.
+3. Approve the permissions.
+4. It runs.
 
-Apargon is a reverse browser. A browser gets all of the internet and none of your computer. 
-Apargon flips it: an app reads your local disks, writes only its own folder, and reaches no site unless you say yes. It runs in a sandboxed window.
+Each app is a single HTML file on your disk, without a build step, accounts, or cloud services. 
 
-Any coding agent can write one from a prompt: Claude Code, Codex, Cursor, or a local model.
+Apargon works like a reverse browser: apps can read your local files, and stay offline unless you allow a site.
 
 With one file, you can have:
 
@@ -47,6 +49,7 @@ for dir in ~/.claude/skills/papp ~/.agents/skills/papp; do
   curl -fsSL https://apargon.com/.well-known/agent-skills/papp/SKILL.md -o "$dir/SKILL.md"
 done
 ```
+
 ## Example
 
 ```html
@@ -75,6 +78,7 @@ Without permission tags, a `.papp` file opens immediately. It can read your loca
 - **Files, programs, and devices:** write access to specific folders, CLI tools (`git`, `ffmpeg`, scripts) running inside the same sandbox and network fence, Unix sockets, clipboard, camera, microphone, screen capture, location, cloud folders, USB, serial, HID, MIDI, and Bluetooth.
 - **Network:** an exact `host:port` allowlist enforced by Apargon's proxy, plus a local or LAN HTTP server.
 - **No limits:** `papp-system` runs the `.papp` file as an unrestricted Node script in a window when you need what the sandbox can't do.
+
 ```html
 <meta name="papp-id"              content="4f2c9a1e-7b3d-4c58-9e21-0a6d8f3b5c77"> <!-- who it is, always -->
 <meta name="papp-write"           content="~/notes/">                 <!-- change files in one folder; all instead of content for any -->
